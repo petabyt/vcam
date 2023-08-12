@@ -38,7 +38,9 @@ typedef struct ptpcontainer {
 
 typedef enum vcameratype {
 	GENERIC_PTP,
-	NIKON_D750
+	NIKON_D750,
+	CANON_1300D,
+	FUJI_X_A2,
 } vcameratype;
 
 typedef struct vcamera {

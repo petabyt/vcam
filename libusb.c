@@ -101,7 +101,7 @@ int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 
 	GPPort *port = malloc(sizeof(GPPort));
 	C_MEM (port->pl = calloc (1, sizeof (GPPortPrivateLibrary)));
-	port->pl->vcamera = vcamera_new(GENERIC_PTP);
+	port->pl->vcamera = vcamera_new(CANON_1300D);
 	port->pl->vcamera->init(port->pl->vcamera);
 
 	(*dev_handle)->dev = port;

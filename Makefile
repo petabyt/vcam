@@ -9,6 +9,11 @@ $(SO_FILES): CFLAGS=$(SO_CFLAGS)
 main: main.o libusb.so
 	$(CC) main.o -lcamlib $(CFLAGS) -o main $(LDFLAGS) -lusb
 
+bins:
+	xxd -i bin/* > data.h
+
+vcamera.o: canon.c
+
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -shared -o libusb.so
 

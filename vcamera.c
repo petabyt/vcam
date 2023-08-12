@@ -20,6 +20,9 @@
  */
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
+#ifndef VUSB_BIN_DIR
+	#define VUSB_BIN_DIR "bin"
+#endif
 #include "config.h"
 #include <gphoto2/gphoto2-port-library.h>
 #include <gphoto2/gphoto2-port-portability.h>
@@ -197,25 +200,8 @@ ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
 	cam->seqnr++;
 }
 
-#define PTP_RC_OK					0x2001
-#define PTP_RC_GeneralError 				0x2002
-#define PTP_RC_SessionNotOpen          		 	0x2003
-#define PTP_RC_OperationNotSupported    		0x2005
-#define PTP_RC_InvalidStorageId				0x2008
-#define PTP_RC_InvalidObjectHandle			0x2009
-#define PTP_RC_DevicePropNotSupported			0x200A
-#define PTP_RC_InvalidObjectFormatCode			0x200B
-#define PTP_RC_StoreFull				0x200C
-#define PTP_RC_ObjectWriteProtected			0x200D
-#define PTP_RC_StoreReadOnly				0x200E
-#define PTP_RC_AccessDenied				0x200F
-#define PTP_RC_NoThumbnailPresent			0x2010
-#define PTP_RC_StoreNotAvailable			0x2013
+#include "ptp.h"
 #define PTP_RC_SpecificationByFormatUnsupported         0x2014
-#define PTP_RC_InvalidParentObject			0x201A
-#define PTP_RC_InvalidDevicePropFormat			0x201B
-#define PTP_RC_InvalidParameter				0x201D
-#define PTP_RC_SessionAlreadyOpened     		0x201E
 
 #define CHECK_PARAM_COUNT(x)											\
 	if (ptp->nparams != x) {										\
@@ -258,18 +244,28 @@ static int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp);
 static int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp);
 static int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp);
 
-static struct ptp_function {
+struct ptp_function {
 	int	code;
 	int	(*write)(vcamera *cam, ptpcontainer *ptp);
 	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
-} ptp_functions_generic[] = {
+};
+
+#ifdef CANON_VUSB
+	#include "canon.c"
+#endif
+
+#ifdef FUJI_VUSB
+	#include "fuji.c"
+#endif
+
+static struct ptp_function ptp_functions_generic[] = {
 	{0x1001,	ptp_deviceinfo_write, 		NULL			},
 	{0x1002,	ptp_opensession_write, 		NULL			},
 	{0x1003,	ptp_closesession_write, 	NULL			},
 	{0x1004,	ptp_getstorageids_write, 	NULL			},
 	{0x1005,	ptp_getstorageinfo_write, 	NULL			},
 	{0x1006,	ptp_getnumobjects_write, 	NULL			},
-	{0x1007,	ptp_getobjecthandles_write, 	NULL			},
+	{0x1007,	ptp_getobjecthandles_write, NULL			},
 	{0x1008,	ptp_getobjectinfo_write, 	NULL			},
 	{0x1009,	ptp_getobject_write, 		NULL			},
 	{0x100A,	ptp_getthumb_write, 		NULL			},
@@ -292,6 +288,12 @@ static struct ptp_map_functions {
 } ptp_functions[] = {
 	{GENERIC_PTP,	ptp_functions_generic,		sizeof(ptp_functions_generic)/sizeof(ptp_functions_generic[0])},
 	{NIKON_D750,	ptp_functions_nikon_dslr,	sizeof(ptp_functions_nikon_dslr)/sizeof(ptp_functions_nikon_dslr[0])},
+#ifdef CANON_VUSB
+	{CANON_1300D,	ptp_functions_canon,		sizeof(ptp_functions_canon)/sizeof(ptp_functions_canon[0])},
+#endif
+#ifdef FUJI_VUSB
+	{FUJI_X_A2,	ptp_functions_fuji_x_a2,		sizeof(ptp_functions_fuji_x_a2)/sizeof(ptp_functions_fuji_x_a2[0])},
+#endif
 };
 
 typedef union _PTPPropertyValue {
@@ -638,11 +640,21 @@ ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	imageformats[0] = 0x3801;
 	x += put_16bit_le_array(data+x,imageformats,1);	/* ImageFormats */
 
-	x += put_string(data+x,"GP");	/* Manufacturer */
-	x += put_string(data+x,"VC");	/* Model */
-	x += put_string(data+x,"2.5.11");/* DeviceVersion */
-	x += put_string(data+x,"0.1");	/* DeviceVersion */
-	x += put_string(data+x,"1");	/* SerialNumber */
+	switch (cam->type) {
+	case CANON_1300D:
+		x += put_string(data+x,"Canon Inc.");	/* Manufacturer */
+		x += put_string(data+x,"Canon EOS Rebel T6");	/* Model */
+		x += put_string(data+x,"3-1.2.0");/* DeviceVersion */
+		x += put_string(data+x,"3-1.2.0");	/* DeviceVersion */
+		x += put_string(data+x,"828af56");	/* SerialNumber */
+		break;		
+	default:
+		x += put_string(data+x,"GP");	/* Manufacturer */
+		x += put_string(data+x,"VC");	/* Model */
+		x += put_string(data+x,"2.5.11");/* DeviceVersion */
+		x += put_string(data+x,"0.1");	/* DeviceVersion */
+		x += put_string(data+x,"1");	/* SerialNumber */
+	}
 
 	ptp_senddata(cam,0x1001,data,x);
 	free (data);
@@ -1358,6 +1370,14 @@ ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
+	#ifdef FUJI_VUSB
+	if (cam->type == FUJI_X_A2) {
+		if (!fuji_get_property(cam, ptp)) {
+			return 1;
+		}
+	}
+	#endif
+
 	for (i=0;i<sizeof(ptp_properties)/sizeof(ptp_properties[0]);i++) {
 		if (ptp_properties[i].code == ptp->params[0])
 			break;
@@ -1386,6 +1406,15 @@ ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
+
+	#ifdef FUJI_VUSB
+	if (fuji_set_prop_supported(ptp->params[0])) {
+		ptp_response (cam, PTP_RC_DevicePropNotSupported, 0);
+		return 1;
+	} else {
+		return 1;
+	}
+	#endif
 
 	for (i=0;i<sizeof(ptp_properties)/sizeof(ptp_properties[0]);i++) {
 		if (ptp_properties[i].code == ptp->params[0])
@@ -1538,6 +1567,10 @@ ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
+
+	#ifdef FUJI_VUSB
+		return fuji_set_property(cam, ptp, data, len);
+	#endif
 
 	for (i=0;i<sizeof(ptp_properties)/sizeof(ptp_properties[0]);i++) {
 		if (ptp_properties[i].code == ptp->params[0])
