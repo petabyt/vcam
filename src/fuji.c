@@ -15,6 +15,7 @@ static int fuji_set_prop_supported(int code) {
 	int codes[] = {
 		PTP_PC_FUJI_FunctionMode,
 		PTP_PC_FUJI_RemoteVersion,
+		PTP_PC_FUJI_ImageExploreVersion,
 	};
 
 	for (int i = 0; i < ((int)(sizeof(codes) / sizeof(codes[0]))); i++) {
@@ -35,6 +36,8 @@ static int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *dat
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		fuji_info.remote_version = uint[0];
+		break;
+	case PTP_PC_FUJI_ImageExploreVersion:
 		break;
 	}
 
@@ -64,38 +67,43 @@ static int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 }
 
 static int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
+
 	int data = -1;
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_EventsList:
 		return fuji_send_events(cam, ptp);
 	case PTP_PC_FUJI_ObjectCount:
-		data = 1;
-		ptp_senddata (cam, ptp->code, &data, 4);
+		data = 2;
+		ptp_senddata (cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_FunctionMode:
 		data = fuji_info.function_mode;
-		ptp_senddata (cam, ptp->code, &data, 4);
+		ptp_senddata (cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_CameraState:
 		data = fuji_info.camera_state;
-		ptp_senddata (cam, ptp->code, &data, 4);
+		ptp_senddata (cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_ImageGetVersion:
 		data = 1;
-		ptp_senddata (cam, ptp->code, &data, 4);
+		ptp_senddata (cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_ImageExploreVersion:
+	case PTP_PC_FUJI_ImageExploreVersion: {
+		data = 2;
+		ptp_senddata (cam, ptp->code, (unsigned char *)&data, 4); }
+		break; 
 	case PTP_PC_FUJI_RemoteImageExploreVersion:
 	case PTP_PC_FUJI_ImageGetLimitedVersion:
 	case PTP_PC_FUJI_CompressionCutOff:
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		data = 0;
-		ptp_senddata (cam, ptp->code, &data, 0);
+		ptp_senddata (cam, ptp->code, (unsigned char *)&data, 0);
 		break;
 	default:
-		ptp_response (cam, PTP_RC_GeneralError, 0);
-		return 1;
+		tester_log("Unknown %X\n", ptp->params[0]);
+		//ptp_response (cam, PTP_RC_GeneralError, 0);
+		//return 1;
 	}
 
 	ptp_response (cam, PTP_RC_OK, 0);

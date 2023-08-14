@@ -9,9 +9,11 @@
 void gp_log(GPLogLevel level, const char *domain, const char *format, ...) {
     va_list args;
     va_start(args, format);
-    vprintf(format, args);
+    char buffer[1024];
+    vsnprintf(buffer, 1024, format, args);
     va_end(args);
-	puts("");
+
+    puts(buffer);
 }
 
 void gp_log_with_source_location(GPLogLevel level, const char *file, int line, const char *func, const char *format, ...) {
