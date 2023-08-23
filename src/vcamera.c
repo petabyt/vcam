@@ -22,7 +22,7 @@
 #define _DARWIN_C_SOURCE
 
 #ifndef VUSB_BIN_DIR
-	#define VUSB_BIN_DIR "sd"
+	#define VUSB_BIN_DIR "bin/"
 #endif
 
 #include "config.h"
@@ -51,31 +51,33 @@
 #include <gphoto2/gphoto2-port-log.h>
 
 #include "libgphoto2_port/i18n.h"
-
 #include "gphoto2/gphoto2-port-portability.h"
+
+#include "canon.h"
+#include "fuji.h"
 
 #define CHECK(result) {int r=(result); if (r<0) return (r);}
 
-static int ptp_inject_interrupt(vcamera*cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
+int ptp_inject_interrupt(vcamera*cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
-static uint32_t get_32bit_le(unsigned char *data) {
+uint32_t get_32bit_le(unsigned char *data) {
 	return	data[0]	| (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
 }
 
-static uint16_t get_16bit_le(unsigned char *data) {
+uint16_t get_16bit_le(unsigned char *data) {
 	return	data[0]	| (data[1] << 8);
 }
 
-static uint8_t get_8bit_le(unsigned char *data) {
+uint8_t get_8bit_le(unsigned char *data) {
 	return data[0];
 }
 
-static int8_t get_i8bit_le(unsigned char *data) {
+int8_t get_i8bit_le(unsigned char *data) {
 	return data[0];
 }
 
 
-static int put_64bit_le(unsigned char *data, uint64_t x) {
+int put_64bit_le(unsigned char *data, uint64_t x) {
 	data[0] = x & 0xff;
 	data[1] = (x>>8) & 0xff;
 	data[2] = (x>>16) & 0xff;
@@ -87,7 +89,7 @@ static int put_64bit_le(unsigned char *data, uint64_t x) {
 	return 8;
 }
 
-static int put_32bit_le(unsigned char *data, uint32_t x) {
+int put_32bit_le(unsigned char *data, uint32_t x) {
 	data[0] = x & 0xff;
 	data[1] = (x>>8) & 0xff;
 	data[2] = (x>>16) & 0xff;
@@ -95,18 +97,18 @@ static int put_32bit_le(unsigned char *data, uint32_t x) {
 	return 4;
 }
 
-static int put_16bit_le(unsigned char *data, uint16_t x) {
+int put_16bit_le(unsigned char *data, uint16_t x) {
 	data[0] = x & 0xff;
 	data[1] = (x>>8) & 0xff;
 	return 2;
 }
 
-static int put_8bit_le(unsigned char *data, uint8_t x) {
+int put_8bit_le(unsigned char *data, uint8_t x) {
 	data[0] = x;
 	return 1;
 }
 
-static int put_string(unsigned char *data, char *str) {
+int put_string(unsigned char *data, char *str) {
 	int i;
 
 	if (!str) {	/* empty string, just has length 0 */
@@ -123,7 +125,7 @@ static int put_string(unsigned char *data, char *str) {
 	return 1+(strlen(str)+1)*2;
 }
 
-static char * get_string(unsigned char *data) {
+char * get_string(unsigned char *data) {
 	int	i, len;
 	char	*x;
 
@@ -138,7 +140,7 @@ static char * get_string(unsigned char *data) {
 }
 
 
-static int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt) {
+int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt) {
 	int x = 0, i;
 
 	x += put_32bit_le (data,cnt);
@@ -147,7 +149,7 @@ static int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt) {
 	return x;
 }
 
-static int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt) {
+int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt) {
 	int x = 0, i;
 
 	x += put_32bit_le (data,cnt);
@@ -156,7 +158,7 @@ static int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt) {
 	return x;
 }
 
-static void
+void
 ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes) {
 	unsigned char	*offset;
 	int size = bytes + 12;
@@ -176,7 +178,7 @@ ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes) {
 	memcpy(offset+12,data,bytes);
 }
 
-static void
+void
 ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
 	unsigned char	*offset;
 	int 		i, x = 0;
@@ -202,8 +204,7 @@ ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
 	cam->seqnr++;
 }
 
-#include "ptp.h"
-#define PTP_RC_SpecificationByFormatUnsupported         0x2014
+#include <ptp.h>
 
 #define CHECK_PARAM_COUNT(x)											\
 	if (ptp->nparams != x) {										\
@@ -232,30 +233,25 @@ ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
 		return 1;							\
 	}
 
-static int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char*data, unsigned int len);
-static int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp);
-static int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp);
-
-struct ptp_function {
-	int	code;
-	int	(*write)(vcamera *cam, ptpcontainer *ptp);
-	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
-};
+int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char*data, unsigned int len);
+int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp);
 
 #include "data.h"
 
@@ -264,46 +260,11 @@ struct ptp_function {
 #endif
 
 #ifdef FUJI_VUSB
-	#include "fuji.c"
+	extern int ptp_functions_fuji_size;
+	extern struct ptp_function ptp_functions_fuji_x_a2[];
 #endif
 
-static struct ptp_function ptp_functions_generic[] = {
-	{0x1001,	ptp_deviceinfo_write, 		NULL			},
-	{0x1002,	ptp_opensession_write, 		NULL			},
-	{0x1003,	ptp_closesession_write, 	NULL			},
-	{0x1004,	ptp_getstorageids_write, 	NULL			},
-	{0x1005,	ptp_getstorageinfo_write, 	NULL			},
-	{0x1006,	ptp_getnumobjects_write, 	NULL			},
-	{0x1007,	ptp_getobjecthandles_write, NULL			},
-	{0x1008,	ptp_getobjectinfo_write, 	NULL			},
-	{0x1009,	ptp_getobject_write, 		NULL			},
-	{0x100A,	ptp_getthumb_write, 		NULL			},
-	{0x100B,	ptp_deleteobject_write, 	NULL			},
-	{0x100E,	ptp_initiatecapture_write, 	NULL			},
-	{0x1014,	ptp_getdevicepropdesc_write, 	NULL			},
-	{0x1015,	ptp_getdevicepropvalue_write, 	NULL			},
-	{0x1016,	ptp_setdevicepropvalue_write, 	ptp_setdevicepropvalue_write_data	},
-	{0x9999,	ptp_vusb_write, 		NULL			},
-};
-
-static struct ptp_function ptp_functions_nikon_dslr[] = {
-	{0x90c2,	ptp_nikon_setcontrolmode_write, NULL			},
-};
-
-static struct ptp_map_functions {
-	vcameratype		type;
-	struct ptp_function	*functions;
-	unsigned int		nroffunctions;
-} ptp_functions[] = {
-	{GENERIC_PTP,	ptp_functions_generic,		sizeof(ptp_functions_generic)/sizeof(ptp_functions_generic[0])},
-	{NIKON_D750,	ptp_functions_nikon_dslr,	sizeof(ptp_functions_nikon_dslr)/sizeof(ptp_functions_nikon_dslr[0])},
-#ifdef CANON_VUSB
-	{CANON_1300D,	ptp_functions_canon,		sizeof(ptp_functions_canon)/sizeof(ptp_functions_canon[0])},
-#endif
-#ifdef FUJI_VUSB
-	{FUJI_X_A2,	ptp_functions_fuji_x_a2,		sizeof(ptp_functions_fuji_x_a2)/sizeof(ptp_functions_fuji_x_a2[0])},
-#endif
-};
+#include "opcodes.h"
 
 typedef union _PTPPropertyValue {
 	char            *str;   /* common string, malloced */
@@ -356,7 +317,7 @@ typedef struct _PTPDevicePropDesc PTPDevicePropDesc;
 // We need these (modified) helpers from ptp.c.
 // Perhaps vcamera.c should be moved to camlibs/ptp2 for easier sharing
 // in the future.
-static void
+void
 ptp_free_devicepropvalue(uint16_t dt, PTPPropertyValue* dpd)
 {
 	if (dt == /* PTP_DTC_STR */ 0xFFFF) {
@@ -366,7 +327,7 @@ ptp_free_devicepropvalue(uint16_t dt, PTPPropertyValue* dpd)
 	}
 }
 
-static void
+void
 ptp_free_devicepropdesc(PTPDevicePropDesc* dpd)
 {
 	uint16_t i;
@@ -388,24 +349,24 @@ ptp_free_devicepropdesc(PTPDevicePropDesc* dpd)
 	}
 }
 
-static int ptp_battery_getdesc(vcamera*,PTPDevicePropDesc*);
-static int ptp_battery_getvalue(vcamera*,PTPPropertyValue*);
-static int ptp_imagesize_getdesc(vcamera*,PTPDevicePropDesc*);
-static int ptp_imagesize_getvalue(vcamera*,PTPPropertyValue*);
-static int ptp_datetime_getdesc(vcamera*,PTPDevicePropDesc*);
-static int ptp_datetime_getvalue(vcamera*,PTPPropertyValue*);
-static int ptp_datetime_setvalue(vcamera*,PTPPropertyValue*);
-static int ptp_shutterspeed_getdesc(vcamera*,PTPDevicePropDesc*);
-static int ptp_shutterspeed_getvalue(vcamera*,PTPPropertyValue*);
-static int ptp_shutterspeed_setvalue(vcamera*,PTPPropertyValue*);
-static int ptp_fnumber_getdesc(vcamera*,PTPDevicePropDesc*);
-static int ptp_fnumber_getvalue(vcamera*,PTPPropertyValue*);
-static int ptp_fnumber_setvalue(vcamera*,PTPPropertyValue*);
-static int ptp_exposurebias_getdesc(vcamera*,PTPDevicePropDesc*);
-static int ptp_exposurebias_getvalue(vcamera*,PTPPropertyValue*);
-static int ptp_exposurebias_setvalue(vcamera*,PTPPropertyValue*);
+int ptp_battery_getdesc(vcamera*,PTPDevicePropDesc*);
+int ptp_battery_getvalue(vcamera*,PTPPropertyValue*);
+int ptp_imagesize_getdesc(vcamera*,PTPDevicePropDesc*);
+int ptp_imagesize_getvalue(vcamera*,PTPPropertyValue*);
+int ptp_datetime_getdesc(vcamera*,PTPDevicePropDesc*);
+int ptp_datetime_getvalue(vcamera*,PTPPropertyValue*);
+int ptp_datetime_setvalue(vcamera*,PTPPropertyValue*);
+int ptp_shutterspeed_getdesc(vcamera*,PTPDevicePropDesc*);
+int ptp_shutterspeed_getvalue(vcamera*,PTPPropertyValue*);
+int ptp_shutterspeed_setvalue(vcamera*,PTPPropertyValue*);
+int ptp_fnumber_getdesc(vcamera*,PTPDevicePropDesc*);
+int ptp_fnumber_getvalue(vcamera*,PTPPropertyValue*);
+int ptp_fnumber_setvalue(vcamera*,PTPPropertyValue*);
+int ptp_exposurebias_getdesc(vcamera*,PTPDevicePropDesc*);
+int ptp_exposurebias_getvalue(vcamera*,PTPPropertyValue*);
+int ptp_exposurebias_setvalue(vcamera*,PTPPropertyValue*);
 
-static struct ptp_property {
+struct ptp_property {
 	int	code;
 	int	(*getdesc )(vcamera *cam, PTPDevicePropDesc*);
 	int	(*getvalue)(vcamera *cam, PTPPropertyValue*);
@@ -428,10 +389,10 @@ struct ptp_dirent {
 	struct ptp_dirent 	*next;
 };
 
-static struct ptp_dirent *first_dirent = NULL;
-static uint32_t	ptp_objectid = 0;
+struct ptp_dirent *first_dirent = NULL;
+uint32_t	ptp_objectid = 0;
 
-static void *read_file(struct ptp_dirent *cur) {
+void *read_file(struct ptp_dirent *cur) {
 	FILE *file = fopen(cur->fsname, "rb");
 	if (!file) {
 		gp_log (GP_LOG_ERROR,__FUNCTION__, "could not open %s", cur->fsname);
@@ -451,7 +412,7 @@ static void *read_file(struct ptp_dirent *cur) {
 	return data;
 }
 
-static void
+void
 read_directories(const char *path, struct ptp_dirent *parent) {
 	struct ptp_dirent	*cur;
 	gp_system_dir		dir;
@@ -482,14 +443,14 @@ read_directories(const char *path, struct ptp_dirent *parent) {
 	gp_system_closedir(dir);
 }
 
-static void
+void
 free_dirent(struct ptp_dirent *ent) {
 	free (ent->name);
 	free (ent->fsname);
 	free (ent);
 }
 
-static void
+void
 read_tree(const char *path) {
 	struct	ptp_dirent *root = NULL, *dir, *dcim = NULL;
 
@@ -524,7 +485,7 @@ read_tree(const char *path) {
 	}
 }
 
-static int
+int
 ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
@@ -537,7 +498,7 @@ ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_opensession_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
@@ -556,7 +517,7 @@ ptp_opensession_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_closesession_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
 	CHECK_SEQUENCE_NUMBER();
@@ -571,7 +532,7 @@ ptp_closesession_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char	*data;
 	int		x = 0, i, cnt, vendor;
@@ -671,7 +632,7 @@ ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp) {
 	int			cnt;
 	struct ptp_dirent	*cur;
@@ -693,7 +654,7 @@ ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp) {
 	if (ptp->nparams >= 2) {
 		if (ptp->params[1] != 0) {
 			gp_log (GP_LOG_ERROR,__FUNCTION__, "currently can not handle OFC selection (0x%04x)", ptp->params[1]);
-			ptp_response (cam, PTP_RC_SpecificationByFormatUnsupported, 0);
+			ptp_response (cam, PTP_RC_SpecByFormatUnsupported, 0);
 			return 1;
 		}
 	}
@@ -742,7 +703,7 @@ ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char 		*data;
 	int			x = 0, cnt;
@@ -765,7 +726,7 @@ ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
 	if (ptp->nparams >= 2) {
 		if (ptp->params[1] != 0) {
 			gp_log (GP_LOG_ERROR,__FUNCTION__, "currently can not handle OFC selection (0x%04x)", ptp->params[1]);
-			ptp_response (cam, PTP_RC_SpecificationByFormatUnsupported, 0);
+			ptp_response (cam, PTP_RC_SpecByFormatUnsupported, 0);
 			return 1;
 		}
 	}
@@ -837,7 +798,7 @@ ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char 	*data;
 	int		x = 0;
@@ -858,7 +819,7 @@ ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char 	*data;
 	int		x = 0;
@@ -889,7 +850,17 @@ ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
+	#ifdef FUJI_VUSB
+		return fuji_get_partial_object(cam, ptp);
+	#endif
+
+	ptp_response(cam,PTP_RC_GeneralError,0);
+
+	return 1;
+}
+
+int
 ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	struct ptp_dirent	*cur;
 	unsigned char		*data;
@@ -904,6 +875,10 @@ ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
+
+	#ifdef FUJI_VUSB
+		return fuji_get_object_info(cam, ptp);
+	#endif
 
 	cur = first_dirent;
 	while (cur) {
@@ -1023,7 +998,7 @@ ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getobject_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char 		*data;
 	struct ptp_dirent	*cur;
@@ -1054,7 +1029,7 @@ ptp_getobject_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char 		*data;
 	struct ptp_dirent	*cur;
@@ -1065,6 +1040,10 @@ ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
+
+	#ifdef FUJI_VUSB
+		return fuji_get_thumb(cam, ptp);
+	#endif
 
 	cur = first_dirent;
 	while (cur) {
@@ -1113,10 +1092,10 @@ ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp) {
 	struct ptp_dirent	*cur, *newcur, *dir, *dcim = NULL;
-	static int		capcnt = 98;
+	int		capcnt = 98;
 	char			buf[10];
 
 	CHECK_SEQUENCE_NUMBER();
@@ -1202,7 +1181,7 @@ ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp) {
 	struct ptp_dirent	*cur, *xcur;
 
@@ -1269,7 +1248,7 @@ ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp) {
 }
 
 
-static int
+int
 put_propval (unsigned char *data, uint16_t type, PTPPropertyValue *val) {
 	switch (type) {
 	case 0x1:	return put_8bit_le (data, val->i8);
@@ -1284,7 +1263,7 @@ put_propval (unsigned char *data, uint16_t type, PTPPropertyValue *val) {
 	return 0;
 }
 
-static int
+int
 get_propval (unsigned char *data, unsigned int len, uint16_t type, PTPPropertyValue *val) {
 #define CHECK_SIZE(x) if (len < x) return 0;
 	switch (type) {
@@ -1318,7 +1297,7 @@ get_propval (unsigned char *data, unsigned int len, uint16_t type, PTPPropertyVa
 #undef CHECK_SIZE
 }
 
-static int
+int
 ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp) {
 	int			i, x = 0;
 	unsigned char		*data;
@@ -1368,7 +1347,7 @@ ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char*		data;
 	int			i, x = 0;
@@ -1408,7 +1387,7 @@ ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	int			i;
 
@@ -1439,10 +1418,10 @@ ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 }
 
 /* magic opcode for our driver, to inject commands */
-static int
+int
 ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
-	static int		capcnt = 98;
-	static int		timeout = 1;
+	int		capcnt = 98;
+	int		timeout = 1;
 
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
@@ -1567,7 +1546,7 @@ ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int
+int
 ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	int			i;
 	PTPPropertyValue	val;
@@ -1608,7 +1587,7 @@ ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char
 
 
 /**************************  Properties *****************************************************/
-static int
+int
 ptp_battery_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	desc->DevicePropertyCode	= 0x5001;
 	desc->DataType			= 2;	/* uint8 */
@@ -1623,14 +1602,14 @@ ptp_battery_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-static int
+int
 ptp_battery_getvalue (vcamera* cam, PTPPropertyValue *val) {
 	val->u8 = 50;
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5001, 0xffffffff);
 	return 1;
 }
 
-static int
+int
 ptp_imagesize_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	desc->DevicePropertyCode		= 0x5003;
 	desc->DataType				= 0xffff;	/* STR */
@@ -1648,14 +1627,14 @@ ptp_imagesize_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-static int
+int
 ptp_imagesize_getvalue (vcamera* cam, PTPPropertyValue *val) {
 	val->str = strdup("640x480");
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5003, 0xffffffff);
 	return 1;
 }
 
-static int
+int
 ptp_shutterspeed_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	desc->DevicePropertyCode		= 0x500D;
 	desc->DataType				= 0x0006;	/* UINT32 */
@@ -1680,14 +1659,14 @@ ptp_shutterspeed_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-static int
+int
 ptp_shutterspeed_getvalue (vcamera* cam, PTPPropertyValue *val) {
 	val->u32 = cam->shutterspeed;
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x500d, 0xffffffff);
 	return 1;
 }
 
-static int
+int
 ptp_shutterspeed_setvalue (vcamera* cam, PTPPropertyValue *val) {
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x500d, 0xffffffff);
 	gp_log (GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->u32);
@@ -1695,7 +1674,7 @@ ptp_shutterspeed_setvalue (vcamera* cam, PTPPropertyValue *val) {
 	return 1;
 }
 
-static int
+int
 ptp_fnumber_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	desc->DevicePropertyCode		= 0x5007;
 	desc->DataType				= 0x0004;	/* UINT16 */
@@ -1729,14 +1708,14 @@ ptp_fnumber_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-static int
+int
 ptp_fnumber_getvalue (vcamera* cam, PTPPropertyValue *val) {
 	val->u16 = cam->fnumber;
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5007, 0xffffffff);
 	return 1;
 }
 
-static int
+int
 ptp_fnumber_setvalue (vcamera* cam, PTPPropertyValue *val) {
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5007, 0xffffffff);
 	gp_log (GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->u16);
@@ -1744,7 +1723,7 @@ ptp_fnumber_setvalue (vcamera* cam, PTPPropertyValue *val) {
 	return 1;
 }
 
-static int
+int
 ptp_exposurebias_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	desc->DevicePropertyCode		= 0x5010;
 	desc->DataType				= 0x0003;	/* INT16 */
@@ -1773,14 +1752,14 @@ ptp_exposurebias_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-static int
+int
 ptp_exposurebias_getvalue (vcamera* cam, PTPPropertyValue *val) {
 	val->i16 = cam->exposurebias;
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5010, 0xffffffff);
 	return 1;
 }
 
-static int
+int
 ptp_exposurebias_setvalue (vcamera* cam, PTPPropertyValue *val) {
 	ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5010, 0xffffffff);
 	gp_log (GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->i16);
@@ -1789,7 +1768,7 @@ ptp_exposurebias_setvalue (vcamera* cam, PTPPropertyValue *val) {
 }
 
 
-static int
+int
 ptp_datetime_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	struct tm		*tm;
 	time_t			xtime;
@@ -1808,7 +1787,7 @@ ptp_datetime_getdesc (vcamera* cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-static int
+int
 ptp_datetime_getvalue (vcamera* cam, PTPPropertyValue *val) {
 	struct tm		*tm;
 	time_t			xtime;
@@ -1823,7 +1802,7 @@ ptp_datetime_getvalue (vcamera* cam, PTPPropertyValue *val) {
 }
 
 
-static int
+int
 ptp_datetime_setvalue (vcamera* cam, PTPPropertyValue *val) {
 	gp_log (GP_LOG_DEBUG, __FUNCTION__, "got %s as value", val->str);
 	return 1;
@@ -1832,15 +1811,15 @@ ptp_datetime_setvalue (vcamera* cam, PTPPropertyValue *val) {
 
 /********************************************************************************************/
 
-static int vcam_init(vcamera* cam) {
+int vcam_init(vcamera* cam) {
 	return GP_OK;
 }
 
-static int vcam_exit(vcamera* cam) {
+int vcam_exit(vcamera* cam) {
 	return GP_OK;
 }
 
-static int vcam_open(vcamera* cam, const char *port) {
+int vcam_open(vcamera* cam, const char *port) {
 #ifdef FUZZING
 	char *s = strchr(port,':');
 
@@ -1868,7 +1847,7 @@ static int vcam_open(vcamera* cam, const char *port) {
 	return GP_OK;
 }
 
-static int vcam_close(vcamera* cam) {
+int vcam_close(vcamera* cam) {
 #ifdef FUZZING
 	if (cam->fuzzf) {
 		fclose (cam->fuzzf);
@@ -1881,7 +1860,7 @@ static int vcam_close(vcamera* cam) {
 	return GP_OK;
 }
 
-static void
+void
 vcam_process_output(vcamera *cam) {
 	ptpcontainer	ptp;
 	int		i, j;
@@ -1946,6 +1925,8 @@ vcam_process_output(vcamera *cam) {
 
 	cam->nroutbulk -= ptp.size;
 
+	printf("Processing call for opcode 0x%X\n", ptp.code);
+	
 	/* call the opcode handler */
 	for (j=0;j<sizeof(ptp_functions)/sizeof(ptp_functions[0]);j++) {
 		struct ptp_function *funcs = ptp_functions[j].functions;
@@ -1979,7 +1960,7 @@ vcam_process_output(vcamera *cam) {
 #endif
 }
 
-static int
+int
 vcam_read(vcamera*cam, int ep, unsigned char *data, int bytes) {
 	unsigned int	toread = bytes;
 
@@ -2048,7 +2029,7 @@ vcam_read(vcamera*cam, int ep, unsigned char *data, int bytes) {
 	return toread;
 }
 
-static int vcam_write(vcamera*cam, int ep, const unsigned char *data, int bytes) {
+int vcam_write(vcamera*cam, int ep, const unsigned char *data, int bytes) {
 	/*gp_log_data("vusb", data, bytes, "data, vcam_write");*/
 	if (!cam->outbulk) {
 		cam->outbulk = malloc(bytes);
@@ -2070,9 +2051,9 @@ struct ptp_interrupt {
 	struct ptp_interrupt	*next;
 };
 
-static struct ptp_interrupt *first_interrupt;
+struct ptp_interrupt *first_interrupt;
 
-static int
+int
 ptp_inject_interrupt(vcamera*cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
 	struct ptp_interrupt	*interrupt, **pint;
 	struct timeval		now;
@@ -2123,7 +2104,7 @@ ptp_inject_interrupt(vcamera*cam, int when, uint16_t code, int nparams, uint32_t
 	return 1;
 }
 
-static int
+int
 vcam_readint(vcamera*cam, unsigned char *data, int bytes, int timeout) {
 	struct timeval		now, end;
 	int 			newtimeout, tocopy;

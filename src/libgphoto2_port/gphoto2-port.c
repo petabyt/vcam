@@ -321,8 +321,8 @@ gp_port_reset (GPPort *port)
 	C_PARAMS (port);
 	CHECK_INIT (port);
 
-	CHECK_SUPP (port, "reset", port->pc->ops->reset);
-        CHECK_RESULT (port->pc->ops->reset(port));
+	CHECK_SUPP (port, "usb_reset", port->pc->ops->usb_reset);
+        CHECK_RESULT (port->pc->ops->usb_reset(port));
 
 	return (GP_OK);
 }

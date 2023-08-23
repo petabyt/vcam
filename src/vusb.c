@@ -342,7 +342,7 @@ gp_port_library_operations (void)
 	ops->close	= gp_port_vusb_close;
 	ops->read	= gp_port_vusb_read;
 	ops->write	= gp_port_vusb_write;
-	ops->reset	= gp_port_vusb_reset;
+	ops->usb_reset	= gp_port_vusb_reset;
 
         ops->check_int 	= gp_port_vusb_check_int;
         ops->update 	= gp_port_vusb_update;

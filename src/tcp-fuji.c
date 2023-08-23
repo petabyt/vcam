@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include <ptp.h>
 
@@ -17,9 +18,9 @@
 #include <gphoto2/gphoto2-port-log.h>
 #include <libgphoto2_port/i18n.h>
 
-void tester_log() {
-	
-}
+//#define TCP_NOISY
+
+int fuji_open_remote_port = 0;
 
 struct _GPPortPrivateLibrary {
 	int	isopen;
@@ -29,7 +30,7 @@ struct _GPPortPrivateLibrary {
 static GPPort *port = NULL;
 
 uint8_t socket_init_resp[] = {0x44, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x8, 0x70, 0xb0, 0x61, 0xa, 0x8b, 0x45, 0x93,
-	0xb2, 0xe7, 0x93, 0x57, 0xdd, 0x36, 0xe0, 0x50, 0x58, 0x0, 0x2d, 0x0, 0x41, 0x0, 0x32, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+	0xb2, 0xe7, 0x93, 0x57, 0xdd, 0x36, 0xe0, 0x50, 'X', 0x0, '-', 0x0, 'T', 0x0, '2', 0x0, '0', 0x0, 0x0, 0x0, 0x0, 0x0,
 	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, };
 
 int ptpip_connection_init() {
@@ -63,7 +64,9 @@ int ptpip_cmd_write(void *to, int length) {
 
 	C_PARAMS (port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
+#ifdef TCP_NOISY
 	printf("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
+#endif
 	return rc;
 }
 
@@ -78,22 +81,24 @@ int ptpip_cmd_read(void *to, int length) {
 
 	C_PARAMS (port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
+#ifdef TCP_NOISY
 	printf("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
-
+#endif
 	return rc;
 }
 
-int tcp_recieve_all(int clientSocket) {
+int tcp_recieve_all(int client_socket) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
-	ssize_t size = recv(clientSocket, &packet_length, sizeof(uint32_t), 0);
+	ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
+
 	if (size < 0) {
 		perror("Error reading data from socket");
 		return -1;
 	}
 
 	if (size != 4) {
-		printf("Couldn't read length\n");
+		printf("Couldn't read 4 bytes, only got %d\n", size);
 		return -1;
 	}
 
@@ -102,12 +107,17 @@ int tcp_recieve_all(int clientSocket) {
 	((uint32_t *)buffer)[0] = packet_length;
 
 	// Continue reading the rest of the data
-	size += recv(clientSocket, buffer + size, packet_length - 4, 0);
+	size += recv(client_socket, buffer + size, packet_length - 4, 0);
+
+	// for (int i = 0; i < size; i++) {
+		// printf("%02X ", buffer[i]);
+	// } puts("");
+	
 	if (size < 0) {
 		perror("Error reading data from socket");
 		return -1;
 	} else if (size != packet_length) {
-		printf("Couldn't read the rest of the packet\n");
+		printf("Couldn't read the rest of the packet, only got %d\n", size);
 		return -1;
 	}
 
@@ -122,10 +132,12 @@ int tcp_recieve_all(int clientSocket) {
 	// Detect data phase from vcam
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
 	if (port->pl->vcamera->nrinbulk == 0 && c->code != 0x0) {
+#ifdef TCP_NOISY
 		printf("Doing data phase response\n");
+#endif
 		free(buffer);
 
-		size = recv(clientSocket, &packet_length, sizeof(uint32_t), 0);
+		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 		if (size != sizeof(uint32_t)) {
 			printf("Failed to recieve 4 bytes of data phase response\n");
 			return -1;
@@ -134,7 +146,7 @@ int tcp_recieve_all(int clientSocket) {
 		// Same trick from the recv part
 		buffer = malloc(size + packet_length);
 		((uint32_t *)buffer)[0] = packet_length;
-		rc = recv(clientSocket, buffer + size, packet_length - size, 0);
+		rc = recv(client_socket, buffer + size, packet_length - size, 0);
 		if (rc != packet_length - size) {
 			printf("Failed to recieve data phase response\n");
 			return -1;
@@ -157,11 +169,11 @@ int tcp_recieve_all(int clientSocket) {
 	return 0;   
 }
 
-int tcp_send_all(int clientSocket) {
+int tcp_send_all(int client_socket) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_read(&packet_length, 4);
 	if (size != 4) {
-		printf("vcam failed to provide 4 bytes\n", size);
+		printf("send_all: vcam failed to provide 4 bytes\n", size);
 		return -1;
 	}
 
@@ -176,7 +188,7 @@ int tcp_send_all(int clientSocket) {
 	}
 
 	// And finally send our response to the initiator
-	size = send(clientSocket, buffer, packet_length, 0);
+	size = send(client_socket, buffer, packet_length, 0);
 	if (size <= 0) {
 		perror("Error sending data to client");
 		return -1;
@@ -185,12 +197,12 @@ int tcp_send_all(int clientSocket) {
 	// As per spec, data phase must have a 12 byte packet following
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
 	if (c->type == PTP_PACKET_TYPE_DATA && c->code != 0x0) {
-		free(buffer);
 
 		// Read packet length
 		size = ptpip_cmd_read(&packet_length, 4);
 		if (size != 4) {
-			printf("vcam failed to provide 4 bytes\n", size);
+			printf("response packet: vcam failed to provide 4 bytes\n", size);
+			printf("Code: %X\n", c->code);
 			return -1;
 		}
 
@@ -205,7 +217,7 @@ int tcp_send_all(int clientSocket) {
 		}
 
 		// And finally send our response to the initiator
-		size = send(clientSocket, buffer, packet_length, 0);
+		size = send(client_socket, buffer, packet_length, 0);
 		if (size <= 0) {
 			perror("Error sending data to client");
 			return -1;
@@ -215,68 +227,118 @@ int tcp_send_all(int clientSocket) {
 	return 0;
 }
 
-int main() {
-	int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+int new_ptp_tcp_socket(int port) {
+	int server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-	if (serverSocket == -1) {
+	if (server_socket == -1) {
 		perror("Socket creation failed");
 		exit(EXIT_FAILURE);
+	}
+
+	int true = 1;
+	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
 	}
 
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
 	serverAddress.sin_addr.s_addr = INADDR_ANY;
-	serverAddress.sin_port = htons(55740);
+	serverAddress.sin_port = htons(port);
 
-	if (bind(serverSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
+	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
 		perror("Binding failed");
-		close(serverSocket);
+		close(server_socket);
 		return -1;
 	}
 
-	if (listen(serverSocket, 5) == -1) {
+	if (listen(server_socket, 5) == -1) {
 		perror("Listening failed");
-		close(serverSocket);
+		close(server_socket);
 		return -1;
 	}
 
-	printf("Server listening on port 55740...\n");
+	printf("Socket listening on port %d...\n", port);	
 
-	struct sockaddr_in clientAddress;
-	socklen_t clientAddressLength = sizeof(clientAddress);
-	int clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddress, &clientAddressLength);
+	return server_socket;
+}
 
-	if (clientSocket == -1) {
-		perror("Accept failed");
-		close(serverSocket);
-		return -1;
-	}
+void *fuji_accept_remote_ports_thread(void *arg) {
+	int event_socket = new_ptp_tcp_socket(55741);
+	int video_socket = new_ptp_tcp_socket(55742);
 
-	printf("Connection accepted from %s:%d\n", inet_ntoa(clientAddress.sin_addr), ntohs(clientAddress.sin_port));
+	struct sockaddr_in client_address_event;
+	socklen_t client_address_length_event = sizeof(client_address_event);
+	int client_socket_event = accept(event_socket, (struct sockaddr *)&client_address_event, &client_address_length_event);	
+
+	printf("Event port connection accepted from %s:%d\n", inet_ntoa(client_address_event.sin_addr), ntohs(client_address_event.sin_port));
+
+	struct sockaddr_in client_address_video;
+	socklen_t client_address_length_video = sizeof(client_address_video);
+	int client_socket_video = accept(video_socket, (struct sockaddr *)&client_address_video, &client_address_length_video);	
+
+	printf("Video port connection accepted from %s:%d\n", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
 
 	while (1) {
-		if (tcp_recieve_all(clientSocket)) {
+		puts("Sleeping for remote ports");
+		usleep(1000000);
+	}
+
+	return (void *)0;
+}
+
+static void fuji_accept_remote_ports() {
+	pthread_t thread;
+
+	if (pthread_create(&thread, NULL, fuji_accept_remote_ports_thread, NULL)) {
+		return;
+	}
+
+	printf("Started new thread to accept remote ports\n");
+}
+
+int main() {
+	int server_socket = new_ptp_tcp_socket(55740);
+
+	struct sockaddr_in client_address;
+	socklen_t client_address_length = sizeof(client_address);
+	int client_socket = accept(server_socket, (struct sockaddr *)&client_address, &client_address_length);
+
+	if (client_socket == -1) {
+		perror("Accept failed");
+		close(server_socket);
+		return -1;
+	}
+
+	printf("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+
+	while (1) {
+		if (tcp_recieve_all(client_socket)) {
 			goto err;
 		}
 	
 		// Now the app has sent the data, and is waiting for a response.
 
 		// Read packet length
-		if (tcp_send_all(clientSocket)) {
+		if (tcp_send_all(client_socket)) {
 			goto err;
+		}
+
+		if (fuji_open_remote_port == 1) {
+			fuji_accept_remote_ports();
+			fuji_open_remote_port++;
 		}
 	}
 
-	close(clientSocket);
+	close(client_socket);
 	printf("Connection closed\n");
-	close(serverSocket);
+	close(server_socket);
 
 	return 0;
 
 	err:;
 	puts("Connection forced down");
-	close(clientSocket);
-	close(serverSocket);
+	close(client_socket);
+	close(server_socket);
 	return -1;
 }

@@ -81,4 +81,10 @@ typedef struct vcamera {
 
 vcamera *vcamera_new(vcameratype);
 
+struct ptp_function {
+	int	code;
+	int	(*write)(vcamera *cam, ptpcontainer *ptp);
+	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
+};
+
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */
