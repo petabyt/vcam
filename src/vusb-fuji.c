@@ -1,35 +1,102 @@
+#include <android/log.h>
+#include <errno.h>
+#include <jni.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
-#include <android/log.h>
-#include <jni.h>
 
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
 #include "vusb/config.h"
 #include <gphoto2/gphoto2-port-library.h>
-#include <vcamera.h>
-#include <gphoto2/gphoto2-port.h>
-#include <gphoto2/gphoto2-port-result.h>
 #include <gphoto2/gphoto2-port-log.h>
+#include <gphoto2/gphoto2-port-result.h>
+#include <gphoto2/gphoto2-port.h>
 #include <libgphoto2_port/i18n.h>
+#include <vcamera.h>
 
 struct _GPPortPrivateLibrary {
-	int	isopen;
-	vcamera	*vcamera;
+	int isopen;
+	vcamera *vcamera;
 };
 
 static GPPort *port = NULL;
 
-uint8_t socket_init_resp[] = {0x44, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x8, 0x70, 0xb0, 0x61, 0xa, 0x8b, 0x45, 0x93,
-	0xb2, 0xe7, 0x93, 0x57, 0xdd, 0x36, 0xe0, 0x50, 0x58, 0x0, 0x2d, 0x0, 0x41, 0x0, 0x32, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-	0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, };
+uint8_t socket_init_resp[] = {
+    0x44,
+    0x0,
+    0x0,
+    0x0,
+    0x2,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x8,
+    0x70,
+    0xb0,
+    0x61,
+    0xa,
+    0x8b,
+    0x45,
+    0x93,
+    0xb2,
+    0xe7,
+    0x93,
+    0x57,
+    0xdd,
+    0x36,
+    0xe0,
+    0x50,
+    0x58,
+    0x0,
+    0x2d,
+    0x0,
+    0x41,
+    0x0,
+    0x32,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+    0x0,
+};
 
 int ptpip_connection_init() {
 	android_err("Allocated vusb connection");
 	port = malloc(sizeof(GPPort));
-	C_MEM (port->pl = calloc (1, sizeof (GPPortPrivateLibrary)));
+	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(FUJI_X_A2);
 	port->pl->vcamera->init(port->pl->vcamera);
 
@@ -52,11 +119,11 @@ int ptpip_cmd_write(void *to, int length) {
 
 		ptpip_connection_init();
 
-		// Pretend like we read the packet	
+		// Pretend like we read the packet
 		return length;
 	}
 
-	C_PARAMS (port && port->pl && port->pl->vcamera);
+	C_PARAMS(port && port->pl && port->pl->vcamera);
 	return port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
 }
 
@@ -71,14 +138,14 @@ int ptpip_cmd_read(void *to, int length) {
 		return length;
 	}
 
-	C_PARAMS (port && port->pl && port->pl->vcamera);
+	C_PARAMS(port && port->pl && port->pl->vcamera);
 	return port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
 }
 
 int ptpip_event_send(struct PtpRuntime *r, void *data, int size) {
-    return -1;
+	return -1;
 }
 
 int ptpip_event_read(struct PtpRuntime *r, void *data, int size) {
-    return -1;
+	return -1;
 }

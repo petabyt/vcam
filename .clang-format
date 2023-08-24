@@ -1,0 +1,6 @@
+ColumnLimit: 0
+UseTab: Always
+IndentWidth: 8
+TabWidth: 8
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: None

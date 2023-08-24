@@ -23,7 +23,6 @@
 
 #include "libgphoto2_port/i18n.h"
 
-
 /**
  * gp_port_result_as_string:
  * @result: a gphoto2 error code
@@ -35,8 +34,7 @@
  * Return value: a string representation of a gphoto2 error code
  **/
 const char *
-gp_port_result_as_string (int result)
-{
+gp_port_result_as_string(int result) {
 	switch (result) {
 	case GP_OK:
 		return _("No error");
@@ -48,7 +46,7 @@ gp_port_result_as_string (int result)
 		return _("Bad parameters");
 	case GP_ERROR_NOT_SUPPORTED:
 		return _("Unsupported operation");
-	case  GP_ERROR_FIXED_LIMIT_EXCEEDED:
+	case GP_ERROR_FIXED_LIMIT_EXCEEDED:
 		return _("Fixed limit exceeded");
 	case GP_ERROR_TIMEOUT:
 		return _("Timeout reading from or writing to the port");

@@ -1,6 +1,6 @@
 // Test basic opcode, get device properties
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 

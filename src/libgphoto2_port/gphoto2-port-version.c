@@ -23,103 +23,101 @@
 
 #include <gphoto2/gphoto2-port-version.h>
 
-const char **gp_port_library_version(GPVersionVerbosity verbose)
-{
+const char **gp_port_library_version(GPVersionVerbosity verbose) {
 	/* we could also compute/parse the short strings from the long
 	   ones, but the current method is easier for now :-) */
 	static const char *shrt[] =
-		{
-			PACKAGE_VERSION,
-			"iolibs: " IOLIB_LIST,
+	{
+		PACKAGE_VERSION,
+		"iolibs: " IOLIB_LIST,
 #ifdef HAVE_CC
-			HAVE_CC,
+		HAVE_CC,
 #else
-			"unknown cc",
+		"unknown cc",
 #endif
 #ifdef HAVE_LTDL
-			"ltdl",
+		"ltdl",
 #else
-			"no ltdl",
+		"no ltdl",
 #endif
 #ifdef HAVE_LIBEXIF
-			"EXIF",
+		"EXIF",
 #else
-			"no EXIF",
+		"no EXIF",
 #endif
 #if defined(HAVE_LIBUSB) || defined(HAVE_LIBUSB1) || defined(HAVE_LIBUSB_WIN32)
-			"USB",
+		"USB",
 #else
-			"no USB",
+		"no USB",
 #endif
 #ifdef HAVE_SERIAL
-			"serial "
+		"serial "
 
 #ifdef HAVE_RESMGR
-			"resmgr locking",
+		"resmgr locking",
 #elif defined(HAVE_TTYLOCK)
-			"ttylock locking",
+		"ttylock locking",
 #elif defined(HAVE_LOCKDEV)
-			"lockdev locking",
+		"lockdev locking",
 #else
-			"without locking",
+		"without locking",
 #endif
 
 #else
-			"no serial",
+		"no serial",
 #endif
-			NULL
-		};
+		NULL
+	};
 	static const char *verb[] =
-		{
-			PACKAGE_VERSION,
-			"iolibs: " IOLIB_LIST,
+	    {
+		PACKAGE_VERSION,
+		"iolibs: " IOLIB_LIST,
 #ifdef HAVE_CC
-			HAVE_CC " (C compiler used)",
+		HAVE_CC " (C compiler used)",
 #else
-			"unknown (C compiler used)",
+		"unknown (C compiler used)",
 #endif
 #ifdef HAVE_LTDL
-			"ltdl (for portable loading of iolibs)",
+		"ltdl (for portable loading of iolibs)",
 #else
-			"no ltdl (for portable loading of iolibs)",
+		"no ltdl (for portable loading of iolibs)",
 #endif
 #ifdef HAVE_LIBEXIF
-			"EXIF (for vusb)",
+		"EXIF (for vusb)",
 #else
-			"no EXIF (for vusb)",
+		"no EXIF (for vusb)",
 #endif
 #ifdef HAVE_LIBUSB_WIN32
-			"USB (libusb-win32, for USB cameras)",
+		"USB (libusb-win32, for USB cameras)",
 #elif defined(HAVE_LIBUSB1)
-			"USB (libusb1, for USB cameras)",
+		"USB (libusb1, for USB cameras)",
 #elif defined(HAVE_LIBUSB)
-			"USB (libusb0, for USB cameras)",
+		"USB (libusb0, for USB cameras)",
 #else
-			"no USB (for USB cameras)",
+		"no USB (for USB cameras)",
 #endif
 #ifdef HAVE_SERIAL
-			"serial (for serial cameras)",
+		"serial (for serial cameras)",
 #else
-			"no serial (for serial cameras)",
+		"no serial (for serial cameras)",
 #endif
 #ifdef HAVE_RESMGR
-			"resmgr (serial port access and locking)",
+		"resmgr (serial port access and locking)",
 #else
-			"no resmgr (serial port access and locking)",
+		"no resmgr (serial port access and locking)",
 #endif
 #ifdef HAVE_TTYLOCK
-			"ttylock (serial port locking)",
+		"ttylock (serial port locking)",
 #else
-			"no ttylock (serial port locking)",
+		"no ttylock (serial port locking)",
 #endif
 #ifdef HAVE_LOCKDEV
-			"lockdev (serial port locking)",
+		"lockdev (serial port locking)",
 #else
-			"no lockdev (serial port locking)",
+		"no lockdev (serial port locking)",
 #endif
-			NULL
-		};
-	return((verbose == GP_VERSION_VERBOSE)?verb:shrt);
+		NULL};
+	return ((verbose == GP_VERSION_VERBOSE) ? verb : shrt);
 }
 
 /*
