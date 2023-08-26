@@ -26,6 +26,7 @@
 #define FUZZ_PTP
 
 #include <stdio.h>
+#include <stdint.h>
 
 typedef struct ptpcontainer {
 	unsigned int size;
@@ -86,5 +87,8 @@ struct ptp_function {
 	int	(*write)(vcamera *cam, ptpcontainer *ptp);
 	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
 };
+
+void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes);
+void ptp_response(vcamera *cam, uint16_t code, int nparams, ...);
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */
