@@ -2095,7 +2095,7 @@ int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 	if (!first_interrupt) {
 #ifdef FUZZING
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-		usleep(timeout * 1000);
+		//usleep(timeout * 1000);
 #endif
 		/* this emulates plugged out devices during fuzzing */
 		if (cam->fuzzf && feof(cam->fuzzf))
@@ -2113,14 +2113,14 @@ int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 	}
 	if (first_interrupt->triggertime.tv_sec > end.tv_sec) {
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-		usleep(1000 * timeout);
+		//usleep(1000 * timeout);
 #endif
 		return GP_ERROR_TIMEOUT;
 	}
 	if ((first_interrupt->triggertime.tv_sec == end.tv_sec) &&
 	    (first_interrupt->triggertime.tv_usec > end.tv_usec)) {
 #ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-		usleep(1000 * timeout);
+		//usleep(1000 * timeout);
 #endif
 		return GP_ERROR_TIMEOUT;
 	}

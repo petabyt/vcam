@@ -1,5 +1,7 @@
+// emulator for non-standard Fujifilm PTP/USB over TCP
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
@@ -21,9 +23,20 @@
 #define FUJI_DUMMY_OBJ_INFO_CUT "bin/fuji/fuji_generic_object_info1.bin"
 #define FUJI_DUMMY_JPEG_FULL "bin/fuji/jpeg-full.jpg"
 #define FUJI_DUMMY_JPEG_COMPRESSED "bin/fuji/jpeg-compressed.jpg"
+#define FUJI_DUMMY_LV_JPEG "bin/fuji/lv_stream"
 
 // Copied from README @ https://github.com/malc0mn/ptp-ip
 char fuji_device_info_x_t1[] = {0x8, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0, 0x0, 0x12, 0x50, 0x4, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0, 0x2, 0x0, 0x4, 0x0, 0x14, 0x0, 0x0, 0x0, 0xc, 0x50, 0x4, 0x0, 0x1, 0x2, 0x0, 0x9, 0x80, 0x2, 0x2, 0x0, 0x9, 0x80, 0xa, 0x80, 0x24, 0x0, 0x0, 0x0, 0x5, 0x50, 0x4, 0x0, 0x1, 0x2, 0x0, 0x2, 0x0, 0x2, 0xa, 0x0, 0x2, 0x0, 0x4, 0x0, 0x6, 0x80, 0x1, 0x80, 0x2, 0x80, 0x3, 0x80, 0x6, 0x0, 0xa, 0x80, 0xb, 0x80, 0xc, 0x80, 0x36, 0x0, 0x0, 0x0, 0x10, 0x50, 0x3, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x13, 0x0, 0x48, 0xf4, 0x95, 0xf5, 0xe3, 0xf6, 0x30, 0xf8, 0x7d, 0xf9, 0xcb, 0xfa, 0x18, 0xfc, 0x65, 0xfd, 0xb3, 0xfe, 0x0, 0x0, 0x4d, 0x1, 0x9b, 0x2, 0xe8, 0x3, 0x35, 0x5, 0x83, 0x6, 0xd0, 0x7, 0x1d, 0x9, 0x6b, 0xa, 0xb8, 0xb, 0x26, 0x0, 0x0, 0x0, 0x1, 0xd0, 0x4, 0x0, 0x1, 0x1, 0x0, 0x2, 0x0, 0x2, 0xb, 0x0, 0x1, 0x0, 0x2, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5, 0x0, 0x6, 0x0, 0x7, 0x0, 0x8, 0x0, 0x9, 0x0, 0xa, 0x0, 0xb, 0x0, 0x78, 0x0, 0x0, 0x0, 0x2a, 0xd0, 0x6, 0x0, 0x1, 0xff, 0xff, 0xff, 0xff, 0x0, 0x19, 0x0, 0x80, 0x2, 0x19, 0x0, 0x90, 0x1, 0x0, 0x80, 0x20, 0x3, 0x0, 0x80, 0x40, 0x6, 0x0, 0x80, 0x80, 0xc, 0x0, 0x80, 0x0, 0x19, 0x0, 0x80, 0x64, 0x0, 0x0, 0x40, 0xc8, 0x0, 0x0, 0x0, 0xfa, 0x0, 0x0, 0x0, 0x40, 0x1, 0x0, 0x0, 0x90, 0x1, 0x0, 0x0, 0xf4, 0x1, 0x0, 0x0, 0x80, 0x2, 0x0, 0x0, 0x20, 0x3, 0x0, 0x0, 0xe8, 0x3, 0x0, 0x0, 0xe2, 0x4, 0x0, 0x0, 0x40, 0x6, 0x0, 0x0, 0xd0, 0x7, 0x0, 0x0, 0xc4, 0x9, 0x0, 0x0, 0x80, 0xc, 0x0, 0x0, 0xa0, 0xf, 0x0, 0x0, 0x88, 0x13, 0x0, 0x0, 0x0, 0x19, 0x0, 0x0, 0x0, 0x32, 0x0, 0x40, 0x0, 0x64, 0x0, 0x40, 0x0, 0xc8, 0x0, 0x40, 0x14, 0x0, 0x0, 0x0, 0x19, 0xd0, 0x4, 0x0, 0x1, 0x1, 0x0, 0x1, 0x0, 0x2, 0x2, 0x0, 0x0, 0x0, 0x1, 0x0, 0x1e, 0x0, 0x0, 0x0, 0x7c, 0xd1, 0x6, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x4, 0x4, 0x2, 0x3, 0x1, 0x0, 0x0, 0x0, 0x0, 0x7, 0x7, 0x9, 0x10, 0x1, 0x0, 0x0, 0x0};
+
+struct FujiPropEventSend {
+	uint16_t code;
+	uint32_t value;
+};
+
+#define CAM_STATE_READY 0
+#define CAM_STATE_IDLE 1
+#define CAM_STATE_FIRST_REMOTE 2
+#define CAM_STATE_IDLE_REMOTE 3
 
 static struct FujiInfo {
 	int function_mode;
@@ -33,9 +46,12 @@ static struct FujiInfo {
 	int compress_small;
 	int no_compressed;
 
-	uint8_t sent_first_events;
+	uint8_t camera_internal_state;
 
 	FILE *partial_fp;
+
+	struct FujiPropEventSend *event_stack;
+	int event_stack_length;
 } fuji_info = {
     .function_mode = 2,
     .camera_state = FUJI_START_CAM_STATE,
@@ -44,7 +60,9 @@ static struct FujiInfo {
     .compress_small = 0,
     .no_compressed = 0,
     .partial_fp = NULL,
-    .sent_first_events = 0,
+    .camera_internal_state = 0,
+    .event_stack = NULL,
+    .event_stack_length = 0
 };
 
 static int send_partial_object(char *path, vcamera *cam, ptpcontainer *ptp) {
@@ -183,21 +201,33 @@ int fuji_set_prop_supported(int code) {
 	}
 
 	printf("Request to set unknown property %X\n", code);
+	exit(1);
 
 	return 1;
+}
+
+void fuji_stack_add_events(uint16_t code, uint32_t value) {
+	fuji_info.event_stack[fuji_info.event_stack_length].code = code;
+	fuji_info.event_stack[fuji_info.event_stack_length].value = value;
+	fuji_info.event_stack_length++;
 }
 
 int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
 
-	printf("Set property %X -> %X\n", ptp->params[0], uint[0]);
+	// TODO: More asserts for len
+
+	printf("Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_FunctionMode:
+		assert(len == 2);
 		fuji_info.function_mode = uint[0];
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
+		assert(len == 4);
+		assert(uint[0] == 0x2000B);
 		fuji_info.remote_version = uint[0];
 		break;
 	case PTP_PC_FUJI_ImageExploreVersion:
@@ -206,9 +236,20 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		fuji_info.compress_small = uint16[0];
 		break;
 	case PTP_PC_FUJI_NoCompression:
+		assert(uint16[0] == 1 || uint16[0] == 2);
 		fuji_info.no_compressed = uint16[0];
 		break;
 	case PTP_PC_FUJI_RemoteImageExploreVersion:
+		assert(len == 4);
+		break;
+	case PTP_PC_FUJI_CameraState:
+		assert(len == 2);
+		fuji_stack_add_events(PTP_PC_FUJI_CameraState, uint16[0]);
+		fuji_stack_add_events(PTP_PC_FUJI_SelectedImgsMode, 1);
+		fuji_stack_add_events(PTP_PC_FUJI_ObjectCount, fuji_info.obj_count);
+		fuji_stack_add_events(PTP_PC_FUJI_Unknown_D52F, 1);
+		fuji_stack_add_events(PTP_PC_FUJI_Unknown_D400, 1);
+		fuji_stack_add_events(PTP_PC_FUJI_ObjectCount, fuji_info.obj_count);
 		break;
 	}
 
@@ -217,40 +258,86 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	return 1;
 }
 
+// Helper func only for fuji_send_events
+static void add_events(struct PtpFujiEvents *ev, struct FujiPropEventSend *p, size_t length) {
+	for (int i = 0; i < length; i++) {
+		ev->events[ev->length].code = p[i].code;
+		ev->events[ev->length].value = p[i].value;
+		ev->length++;
+	}
+}
+
 int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
-	struct PtpFujiEvents *ev = malloc(200);
+	struct PtpFujiEvents *ev = malloc(2048);
 	memset(ev, 0, 200);
 
-	if (fuji_info.sent_first_events == 0) {
+	if (fuji_info.event_stack == NULL) {
+		fuji_info.event_stack = malloc(sizeof(struct FujiPropEventSend) * 100);
+	}
+
+	
+	// Fill in stack from previous
+	for (int i = 0; i < fuji_info.event_stack_length; i++) {
+		printf("Popping event from stack\n");
+		ev->events[ev->length].code = fuji_info.event_stack[i].code;
+		ev->events[ev->length].value = fuji_info.event_stack[i].value;
+		ev->length++;
+	}
+	fuji_info.event_stack_length = 0;
+
+	if (fuji_info.camera_internal_state == 0) {
 		ev->events[ev->length].code = PTP_PC_FUJI_CameraState;
 		ev->events[ev->length].value = fuji_info.camera_state;
-		ev->length++;
-
-#ifdef FUJI_USE_REMOTE_MODE
-		ev->events[ev->length].code = PTP_PC_FUJI_SelectedImgsMode;
-		ev->events[ev->length].value = 1;
-		ev->length++;
-#endif
-
-		ev->events[ev->length].code = PTP_PC_FUJI_ObjectCount;
-		ev->events[ev->length].value = fuji_info.obj_count;
-		ev->length++;
-
-#ifdef FUJI_USE_REMOTE_MODE
-		ev->events[ev->length].code = PTP_PC_FUJI_Unknown_D52F;
-		ev->events[ev->length].value = 1;
-		ev->length++;
-
-		ev->events[ev->length].code = PTP_PC_FUJI_Unknown_D400;
-		ev->events[ev->length].value = 1;
 		ev->length++;
 
 		ev->events[ev->length].code = PTP_PC_FUJI_ObjectCount2;
 		ev->events[ev->length].value = fuji_info.obj_count;
 		ev->length++;
-#endif
 
-		fuji_info.sent_first_events = 1;
+		ev->events[ev->length].code = PTP_PC_FUJI_ObjectCount;
+		ev->events[ev->length].value = fuji_info.obj_count;
+		ev->length++;
+
+		// Properties sent over on init, by newer cams
+		struct FujiPropEventSend newer_remote_props[] = {
+			{PTP_PC_FUJI_SelectedImgsMode, 1},
+			{PTP_PC_FUJI_Unknown_D52F, 1},
+			{PTP_PC_FUJI_Unknown_D400, 1},
+		};
+
+		#ifdef FUJI_USE_REMOTE_MODE
+		add_events(ev, newer_remote_props, sizeof(newer_remote_props) / sizeof(newer_remote_props[0]));
+		#endif
+
+		fuji_info.camera_internal_state = 1;
+	}
+
+	if (fuji_info.camera_internal_state == CAM_STATE_IDLE_REMOTE) {
+		struct FujiPropEventSend remote_props[] = {
+			{PTP_PC_FUJI_DeviceError, 0},
+			{PTP_PC_FlashMode, 0x800a},
+			{PTP_PC_CaptureDelay, 0},
+			{PTP_PC_FUJI_CaptureRemaining, 0x761},
+			{PTP_PC_FUJI_MovieRemainingTime, 0x19d1},
+			{PTP_PC_ExposureProgramMode, 0x3},
+			{PTP_PC_FUJI_BatteryLevel, 0xa},
+			{PTP_PC_FUJI_Quality, 0x4},
+			{PTP_PC_FUJI_ImageAspectRatio, 0xa},
+			{PTP_PC_FUJI_ExposureIndex, 0x80003200},
+			{PTP_PC_FUJI_MovieISO, 0x80003200},
+			{PTP_PC_FUJI_ShutterSpeed2, 0xffffffff},
+			{PTP_PC_FUJI_CommandDialMode, 0x0},
+			{PTP_PC_FNumber, 0xa},
+			{PTP_PC_ExposureBiasCompensation, 0x0},
+			{PTP_PC_WhiteBalance, 0x2},
+			{PTP_PC_FUJI_FilmSimulation, 0x6},
+			{PTP_PC_FocusMode, 0x8001},
+			{PTP_PC_FUJI_FocusMeteringMode, 0x03020604},
+			{PTP_PC_FUJI_AFStatus, 0x0},
+			{PTP_PC_FUJI_DriveMode, 0xa}
+		};
+
+		add_events(ev, remote_props, sizeof(remote_props) / sizeof(remote_props[0]));		
 	}
 
 	printf("Sending %d events\n", ev->length);
@@ -301,9 +388,16 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
+#ifdef FUJI_USE_REMOTE_MODE
 		data = FUJI_REMOTE_VERSION;
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
+		break;
+#endif
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
+	case PTP_PC_FUJI_StorageID:
+		data = 0;
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 2);
 	default:
 		printf("Unknown %X\n", ptp->params[0]);
 		//ptp_response (cam, PTP_RC_GeneralError, 0);
@@ -316,9 +410,14 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 
 extern int fuji_open_remote_port;
 int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
-	//ptp_senddata (cam, ptp->code, (unsigned char *)fuji_device_info_x_t1, sizeof(fuji_device_info_x_t1));
-
+	printf("Opening remote ports\n");
 	fuji_open_remote_port++;
+
+	if (ptp->code == PTP_OC_InitiateOpenCapture) {
+		fuji_info.camera_internal_state = CAM_STATE_IDLE_REMOTE;
+	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
+		fuji_info.camera_internal_state = CAM_STATE_IDLE_REMOTE;		
+	} 
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
@@ -331,4 +430,26 @@ int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp) {
 	ptp_response(cam, PTP_RC_OK, 0);
 
 	return 0;
+}
+
+int ptp_fuji_liveview(int socket) {
+	puts("Broadcasting liveview");
+	FILE *file = fopen(FUJI_DUMMY_LV_JPEG, "rb");
+	if (file == NULL) {
+		puts("File not found");
+		exit(-1);
+	}
+
+	fseek(file, 0, SEEK_END);
+	long file_size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	char *buffer = malloc(file_size);
+	fread(buffer, 1, file_size, file);
+
+	fclose(file);
+
+	int rc = send(socket, buffer, file_size, 0);
+
+	free(buffer);
 }

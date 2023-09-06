@@ -1,3 +1,5 @@
+// Fujifilm PTP/IP/USB TCP I/O interface
+// Cameras 2014-2017
 #include <arpa/inet.h>
 #include <errno.h>
 #include <pthread.h>
@@ -17,6 +19,10 @@
 #include <gphoto2/gphoto2-port.h>
 #include <libgphoto2_port/i18n.h>
 #include <vcamera.h>
+
+#ifndef FUJI_VUSB
+#error "FUJI_VUSB should be defined"
+#endif
 
 //#define TCP_NOISY
 
@@ -263,6 +269,8 @@ int new_ptp_tcp_socket(int port) {
 	return server_socket;
 }
 
+int ptp_fuji_liveview(int socket);
+
 void *fuji_accept_remote_ports_thread(void *arg) {
 	int event_socket = new_ptp_tcp_socket(55741);
 	int video_socket = new_ptp_tcp_socket(55742);
@@ -279,8 +287,11 @@ void *fuji_accept_remote_ports_thread(void *arg) {
 
 	printf("Video port connection accepted from %s:%d\n", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
 
+	ptp_fuji_liveview(client_socket_video);
+
 	while (1) {
-		puts("Sleeping for remote ports");
+		puts("Writing liveview");
+		
 		usleep(1000000);
 	}
 
