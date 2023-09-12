@@ -1,3 +1,6 @@
+#ifndef VCAM_OPCODES_H
+#define VCAM_OPCODES_H
+
 // Standard USB opcodes
 struct ptp_function ptp_functions_generic[] = {
 	{0x1001,	ptp_deviceinfo_write, 		NULL			},
@@ -200,3 +203,5 @@ struct ptp_map_functions {
 	{FUJI_X_A2,	ptp_functions_fuji_x_a2,		sizeof(ptp_functions_fuji_x_a2)/sizeof(ptp_functions_fuji_x_a2[0])},
 #endif
 };
+
+#endif

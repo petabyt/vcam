@@ -1,6 +1,7 @@
 // Macros for different fuji models
 
 #define FUJI_X_T20
+//#define FUJI_X_A2
 
 #ifdef FUJI_X_A2
 	#define FUJI_IMAGE_GET_VERSION 1

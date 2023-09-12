@@ -1,6 +1,9 @@
 #include "ptp.h"
 
-#include "data.h"
+extern unsigned char bin_eos_events_bin[];
+extern unsigned int bin_eos_events_bin_len;
+extern unsigned char eos_lv_jpg[];
+extern unsigned int eos_lv_jpg_size;
 
 static struct EosInfo {
 	int first_events;
@@ -70,6 +73,23 @@ static int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigne
 		eos_info.queue[eos_info.queue_length].code = dat[1];
 		eos_info.queue[eos_info.queue_length].data = dat[2];
 		eos_info.queue_length++;
+	}
+
+	ptp_response(cam, PTP_RC_OK, 0);
+	return 1;
+}
+
+static int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
+	if (ptp->code == PTP_OC_EOS_RemoteReleaseOff) {
+		gp_log(GP_LOG_DEBUG, __FUNCTION__, "Shutter up");
+	} else if (ptp->code == PTP_OC_EOS_RemoteReleaseOn) {
+		if (ptp->params[0] == 1) {
+			gp_log(GP_LOG_DEBUG, __FUNCTION__, "Shutter half down");
+			usleep(1000 * 2000);
+		} else if (ptp->params[0] == 2) {
+			gp_log(GP_LOG_DEBUG, __FUNCTION__, "Shutter full down");
+			usleep(1000 * 200);
+		}
 	}
 
 	ptp_response(cam, PTP_RC_OK, 0);

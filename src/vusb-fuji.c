@@ -109,7 +109,6 @@ int ptpip_connection_init() {
 }
 
 int ptpip_cmd_write(void *to, int length) {
-	CAMLIB_SLEEP(5);
 	static int first_write = 1;
 
 	if (first_write) {
@@ -128,7 +127,6 @@ int ptpip_cmd_write(void *to, int length) {
 }
 
 int ptpip_cmd_read(void *to, int length) {
-	CAMLIB_SLEEP(5);
 	static int left_of_init_packet = sizeof(socket_init_resp);
 
 	if (left_of_init_packet) {

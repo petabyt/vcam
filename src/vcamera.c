@@ -25,14 +25,7 @@
 #define VUSB_BIN_DIR "bin/"
 #endif
 
-#include "config.h"
-#include <gphoto2/gphoto2-port-library.h>
-#include <gphoto2/gphoto2-port-portability.h>
-
-#ifdef HAVE_LIBEXIF
-#include <libexif/exif-data.h>
-#endif
-
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -44,24 +37,23 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "vcamera.h"
-
-#include <gphoto2/gphoto2-port-log.h>
-#include <gphoto2/gphoto2-port-result.h>
-#include <gphoto2/gphoto2-port.h>
-
-#include "gphoto2/gphoto2-port-portability.h"
-#include "libgphoto2_port/i18n.h"
+#include "gphoto.h"
 
 #include "canon.h"
 #include "fuji.h"
 
-#define CHECK(result)               \
-	{                           \
-		int r = (result);   \
-		if (r < 0)          \
-			return (r); \
-	}
+#include <ptp.h>
+
+#ifdef CANON_VUSB
+#include "canon.c"
+#endif
+
+#ifdef FUJI_VUSB
+extern int ptp_functions_fuji_size;
+extern struct ptp_function ptp_functions_fuji_x_a2[];
+#endif
+
+#include "opcodes.h"
 
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
@@ -205,119 +197,6 @@ void ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
 	cam->seqnr++;
 }
 
-#include <ptp.h>
-
-#define CHECK_PARAM_COUNT(x)                                                                                          \
-	if (ptp->nparams != x) {                                                                                      \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "%X: params should be %d, but is %d", ptp->code, x, ptp->nparams); \
-		ptp_response(cam, PTP_RC_GeneralError, 0);                                                            \
-		return 1;                                                                                             \
-	}
-
-// Check the transaction ID
-#if 0
-#define CHECK_SEQUENCE_NUMBER()                                                                                   \
-	if (ptp->seqnr != cam->seqnr) {                                                                           \
-		/* not clear if normal cameras react like this */                                                 \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr); \
-		ptp_response(cam, PTP_RC_GeneralError, 0);                                                        \
-		return 1;                                                                                         \
-	}
-#endif
-
-#define CHECK_SEQUENCE_NUMBER() \
-	;                       \
-	;                       \
-	;
-
-#define CHECK_SESSION()                                                    \
-	if (!cam->session) {                                               \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open"); \
-		ptp_response(cam, PTP_RC_SessionNotOpen, 0);               \
-		return 1;                                                  \
-	}
-
-int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
-int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp);
-
-#include "data.h"
-
-#ifdef CANON_VUSB
-#include "canon.c"
-#endif
-
-#ifdef FUJI_VUSB
-extern int ptp_functions_fuji_size;
-extern struct ptp_function ptp_functions_fuji_x_a2[];
-#endif
-
-#include "opcodes.h"
-
-typedef union _PTPPropertyValue {
-	char *str; /* common string, malloced */
-	uint8_t u8;
-	int8_t i8;
-	uint16_t u16;
-	int16_t i16;
-	uint32_t u32;
-	int32_t i32;
-	uint64_t u64;
-	int64_t i64;
-	/* XXXX: 128 bit signed and unsigned missing */
-	struct array {
-		uint32_t count;
-		union _PTPPropertyValue *v; /* malloced, count elements */
-	} a;
-} PTPPropertyValue;
-
-struct _PTPPropDescRangeForm {
-	PTPPropertyValue MinimumValue;
-	PTPPropertyValue MaximumValue;
-	PTPPropertyValue StepSize;
-};
-typedef struct _PTPPropDescRangeForm PTPPropDescRangeForm;
-
-/* Property Describing Dataset, Enum Form */
-
-struct _PTPPropDescEnumForm {
-	uint16_t NumberOfValues;
-	PTPPropertyValue *SupportedValue; /* malloced */
-};
-typedef struct _PTPPropDescEnumForm PTPPropDescEnumForm;
-
-/* Device Property Describing Dataset (DevicePropDesc) */
-
-struct _PTPDevicePropDesc {
-	uint16_t DevicePropertyCode;
-	uint16_t DataType;
-	uint8_t GetSet;
-	PTPPropertyValue FactoryDefaultValue;
-	PTPPropertyValue CurrentValue;
-	uint8_t FormFlag;
-	union {
-		PTPPropDescEnumForm Enum;
-		PTPPropDescRangeForm Range;
-	} FORM;
-};
-typedef struct _PTPDevicePropDesc PTPDevicePropDesc;
-
 // We need these (modified) helpers from ptp.c.
 // Perhaps vcamera.c should be moved to camlibs/ptp2 for easier sharing
 // in the future.
@@ -348,23 +227,6 @@ void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd) {
 		}
 	}
 }
-
-int ptp_battery_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_battery_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_imagesize_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_imagesize_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_datetime_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_datetime_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_datetime_setvalue(vcamera *, PTPPropertyValue *);
-int ptp_shutterspeed_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_shutterspeed_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_shutterspeed_setvalue(vcamera *, PTPPropertyValue *);
-int ptp_fnumber_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_fnumber_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_fnumber_setvalue(vcamera *, PTPPropertyValue *);
-int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
 
 struct ptp_property {
 	int code;
@@ -1859,24 +1721,47 @@ void vcam_process_output(vcamera *cam) {
 	if (ptp.size < 12) { /* No ptp command can be less than 12 bytes */
 		/* not clear if normal cameras react like this */
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "input size was %d, minimum is 12", ptp.size);
-		ptp_response(cam, PTP_RC_GeneralError, 0);
-		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-		cam->nroutbulk -= ptp.size;
-		return;
-	}
-	/* ptp:  4 byte size, 2 byte opcode, 2 byte type, 4 byte serial number */
-	ptp.type = get_16bit_le(cam->outbulk + 4);
-	ptp.code = get_16bit_le(cam->outbulk + 6);
-	ptp.seqnr = get_32bit_le(cam->outbulk + 8);
 
-	if ((ptp.type != 1) && (ptp.type != 2)) { /* We want either CMD or DATA phase. */
-		/* not clear if normal cameras react like this */
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "expected CMD or DATA, but type was %d", ptp.type);
+		// Does this work on PTP/IP?
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
 		cam->nroutbulk -= ptp.size;
 		return;
 	}
+
+	int has_data_phase = 0;
+	if (cam->is_ptp_ip) {
+		/* uint32_t length;
+		uint32_t type;
+		uint32_t data_phase;
+		uint16_t code;
+		uint32_t transaction; */
+		ptp.type = get_32bit_le(cam->outbulk + 4);
+		has_data_phase = get_32bit_le(cam->outbulk + 8);
+		ptp.code = get_32bit_le(cam->outbulk + 12);
+		ptp.seqnr = get_32bit_le(cam->outbulk + 14);
+	} else {
+		/* ptp:  4 byte size, 2 byte opcode, 2 byte type, 4 byte serial number */
+		ptp.type = get_16bit_le(cam->outbulk + 4);
+		ptp.code = get_16bit_le(cam->outbulk + 6);
+		ptp.seqnr = get_32bit_le(cam->outbulk + 8);
+	}
+
+	if (cam->is_ptp_ip) {
+		// Don't know how to else to react to this
+		assert(ptp.type != PTPIP_COMMAND_REQUEST);
+	} else {
+		/* We want either CMD or DATA phase. */
+		if ((ptp.type != PTP_PACKET_TYPE_COMMAND) && (ptp.type != PTP_PACKET_TYPE_DATA)) {
+			/* not clear if normal cameras react like this */
+			gp_log(GP_LOG_ERROR, __FUNCTION__, "expected CMD or DATA, but type was %d", ptp.type);
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
+			cam->nroutbulk -= ptp.size;
+			return;
+		}
+	}
+
 	if ((ptp.code & 0x7000) != 0x1000) {
 		/* not clear if normal cameras react like this */
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "OPCODE 0x%04x does not start with 0x1 or 0x9", ptp.code);
@@ -1885,28 +1770,40 @@ void vcam_process_output(vcamera *cam) {
 		cam->nroutbulk -= ptp.size;
 		return;
 	}
-	if (ptp.type == 1) {
-		if ((ptp.size - 12) % 4) {
-			/* not clear if normal cameras react like this */
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "SIZE-12 is not divisible by 4, but is %d", ptp.size - 12);
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-			cam->nroutbulk -= ptp.size;
-			return;
+
+	if (ptp.type == PTP_PACKET_TYPE_COMMAND) {
+		if (cam->is_ptp_ip) {
+			ptp.nparams = (ptp.size - 18) / 4;
+			for (i = 0; i < ptp.nparams; i++) {
+				ptp.params[i] = get_32bit_le(cam->outbulk + 18 + i * 4);
+			}
+		} else {
+			if ((ptp.size - 12) % 4) {
+				/* not clear if normal cameras react like this */
+				gp_log(GP_LOG_ERROR, __FUNCTION__, "SIZE-12 is not divisible by 4, but is %d", ptp.size - 12);
+				ptp_response(cam, PTP_RC_GeneralError, 0);
+				memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
+				cam->nroutbulk -= ptp.size;
+				return;
+			}
+
+			if ((ptp.size - 12) / 4 >= 6) {
+				/* not clear if normal cameras react like this */
+				gp_log(GP_LOG_ERROR, __FUNCTION__, "(SIZE-12)/4 is %d, exceeds maximum arguments", (ptp.size - 12) / 4);
+				ptp_response(cam, PTP_RC_GeneralError, 0);
+				memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
+				cam->nroutbulk -= ptp.size;
+				return;
+			}
+
+			ptp.nparams = (ptp.size - 12) / 4;
+			for (i = 0; i < ptp.nparams; i++) {
+				ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
+			}
 		}
-		if ((ptp.size - 12) / 4 >= 6) {
-			/* not clear if normal cameras react like this */
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "(SIZE-12)/4 is %d, exceeds maximum arguments", (ptp.size - 12) / 4);
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-			cam->nroutbulk -= ptp.size;
-			return;
-		}
-		ptp.nparams = (ptp.size - 12) / 4;
-		for (i = 0; i < ptp.nparams; i++)
-			ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
 	}
 
+	// We have read the first packet, dicard it
 	cam->nroutbulk -= ptp.size;
 
 	printf("Processing call for opcode 0x%X\n", ptp.code);
@@ -2014,7 +1911,6 @@ int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes) {
 }
 
 int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes) {
-	/*gp_log_data("vusb", data, bytes, "data, vcam_write");*/
 	if (!cam->outbulk) {
 		cam->outbulk = malloc(bytes);
 	} else {
