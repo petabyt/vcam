@@ -19,7 +19,7 @@
 #include <libgphoto2_port/i18n.h>
 #include <vcamera.h>
 
-//#define TCP_NOISY
+#define TCP_NOISY
 
 void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength);
 void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength);
@@ -64,9 +64,15 @@ int ptpip_cmd_write(void *to, int length) {
 	// First packet from the app, info about device
 	if (first_write) {
 		struct FujiInitPacket *p = (struct FujiInitPacket *)to;
-		printf("vusb: init socket\n");
-		first_write = 0;
+		printf("vusb: init socket (%d bytes)\n", length);
 
+		// Too lazy to decode struct
+		for (int i = 0; i < length; i++) {
+			printf("%c", ((char *)to)[i]);
+		}
+		puts("");
+
+		first_write = 0;
 		ptpip_connection_init();
 
 		// Pretend like we read the packet
@@ -94,6 +100,9 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
 	ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
+#ifdef TCP_NOISY
+	printf("Read %d\n", size);
+#endif
 
 	if (size < 0) {
 		perror("Error reading data from socket");
@@ -111,6 +120,11 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 
 	// Continue reading the rest of the data
 	size += recv(client_socket, buffer + size, packet_length - size, 0);
+#ifdef TCP_NOISY
+	printf("Read %d\n", size);
+#endif
+
+	(*length) = size;
 
 	if (size < 0) {
 		perror("Error reading data from socket");
