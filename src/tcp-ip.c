@@ -23,6 +23,7 @@
 
 void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength);
 void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength);
+void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outlength, int opcode);
 
 struct _GPPortPrivateLibrary {
 	int isopen;
@@ -151,10 +152,8 @@ int tcp_recieve_all(int client_socket) {
 
 		//printf("Processing cmd req for %X\n", bc->code);
 
-		printf("Length %d\n", packet_length);
-
 		// Route the read data into the vcamera. The camera is the responder,
-		// and will be the first to write data to the app.
+		// and will next be writing data to the app.
 		int rc = ptpip_cmd_write(new_buffer, packet_length);
 		if (rc != packet_length) {
 			return -1;
@@ -166,50 +165,49 @@ int tcp_recieve_all(int client_socket) {
 		puts("Recieved init packet");
 		ptpip_cmd_write(buffer, packet_length);
 		return 0;
-	} else {
-		// We shouldn't get anything else
 	}
 
-	if (bc->data_phase == 1) {
-		printf("No data phase\n");
-	} else {
+	if (bc->data_phase == 2) {
 		printf("Recieved data phase\n");
-		return -1;
+
+		// Read in data start packet
+		void *buffer_ds = tcp_recieve_single_packet(client_socket, &packet_length);
+		if (buffer_ds == NULL) {
+			return -1;
+		}
+
+		struct PtpIpStartDataPacket *ds = (struct PtpIpStartDataPacket *)buffer_ds;
+		if (ds->type != PTPIP_DATA_PACKET_START) {
+			printf("Didn't get end data packet\n");
+			exit(1);
+		}
+
+		// Recieve data end packet (which has payload)
+		void *buffer_de = tcp_recieve_single_packet(client_socket, &packet_length);
+		if (buffer_de == NULL) {
+			return -1;
+		}
+
+		struct PtpIpEndDataPacket *ed = (struct PtpIpEndDataPacket *)buffer_de;
+		if (ed->type != PTPIP_DATA_PACKET_END) {
+			printf("Didn't get end data packet\n");
+			exit(1);
+		}
+
+		void *new_buffer = conv_ip_data_packets_to_usb(buffer_ds, buffer_de, &packet_length, bc->code);
+		free(buffer_ds);
+		free(buffer_de);
+
+		// Finally, send the single packet into vcam
+		int rc = ptpip_cmd_write(new_buffer, packet_length);
+		if (rc != packet_length) {
+			return -1;
+		}
+
+		free(new_buffer);
 	}
 
 	free(buffer);
-
-	return 0;
-
-	// TODO: Need to get command packet, data start packet, and data end packet
-	// Would require a seperate funtion to recieve a single packet, rather than doing packet_length
-	// and malloc() nonsense over and over again.
-
-	// Detect if vcam is expecting on recieving a data phase
-	//struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
-	// if (port->pl->vcamera->nrinbulk == 0) {
-// #ifdef TCP_NOISY
-		// printf("Doing data phase response\n");
-// #endif
-		// free(buffer);
-// 
-		// // Get data start and end packets
-// 
-		// void *sd_buffer = tcp_recieve_single_packet(&packet_length);
-		// if (buffer == NULL) {
-			// return -1;
-		// }
-// 
-		// struct PtpIpBulkContainer *bc = (struct PtpIpBulkContainer *)buffer;
-// 
-		// rc = ptpip_cmd_write(buffer, packet_length);
-		// if (rc != packet_length) {
-			// printf("Failed to send response to vcam\n");
-			// return -1;
-		// }
-	// }
-// 
-	// free(buffer);
 
 	return 0;
 }
@@ -261,8 +259,6 @@ int tcp_send_all(int client_socket) {
 	}
 
 	void *new_buffer = conv_usb_packet_to_ip(buffer, packet_length, &packet_length);
-
-	printf("len %d\n", packet_length);
 
 	// Send our response to the initiator
 	int size = send(client_socket, new_buffer, packet_length, 0);

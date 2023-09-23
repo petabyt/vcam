@@ -32,12 +32,20 @@ void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength) {
 	}
 }
 
-void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outlength) {
-	 // else if (bc->type == PTPIP_DATA_PACKET_START) {
-		// 
-	// } else if (bc->type == PTPIP_DATA_PACKET_END) {
-		// 
-	// }
+void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outlength, int opcode) {
+	struct PtpIpStartDataPacket *ds = (struct PtpIpStartDataPacket *)(ds_buffer);
+	struct PtpIpEndDataPacket *de = (struct PtpIpEndDataPacket *)(de_buffer);
+
+	struct PtpBulkContainer *c = (struct PtpBulkContainer *)malloc(12 + (int)(ds->data_phase_length));
+	c->length = 12 + (int)(ds->data_phase_length);
+	c->type = PTP_PACKET_TYPE_DATA;
+	c->code = opcode;
+	c->transaction = ds->transaction;
+
+	// Copy to new pkt payload from data pkt (both are offset 12)
+	memcpy(((uint8_t *)c) + 12, ((uint8_t *)de) + 12, (size_t)ds->data_phase_length);
+
+	return c;
 }
 
 // Parse data from vcam

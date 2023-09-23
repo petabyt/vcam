@@ -44,10 +44,6 @@
 
 #include <ptp.h>
 
-#ifdef CANON_VUSB
-#include "canon.c"
-#endif
-
 #ifdef FUJI_VUSB
 extern int ptp_functions_fuji_size;
 extern struct ptp_function ptp_functions_fuji_x_a2[];
@@ -469,21 +465,19 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	imageformats[0] = 0x3801;
 	x += put_16bit_le_array(data + x, imageformats, 1); /* ImageFormats */
 
-	switch (cam->type) {
-	case CANON_1300D:
-		x += put_string(data + x, "Canon Inc.");	 /* Manufacturer */
-		x += put_string(data + x, "Canon EOS Rebel T6"); /* Model */
-		x += put_string(data + x, "3-1.2.0");		 /* DeviceVersion */
-		x += put_string(data + x, "3-1.2.0");		 /* DeviceVersion */
-		x += put_string(data + x, "828af56");		 /* SerialNumber */
-		break;
-	default:
-		x += put_string(data + x, "GP");     /* Manufacturer */
-		x += put_string(data + x, "VC");     /* Model */
-		x += put_string(data + x, "2.5.11"); /* DeviceVersion */
-		x += put_string(data + x, "0.1");    /* DeviceVersion */
-		x += put_string(data + x, "1");	     /* SerialNumber */
-	}
+#ifdef CAM_HAS_EXTERN_DEV_INFO
+	x += put_string(data + x, extern_manufacturer_info);	 /* Manufacturer */
+	x += put_string(data + x, extern_model_Name); /* Model */
+	x += put_string(data + x, extern_device_version);		 /* DeviceVersion */
+	x += put_string(data + x, extern_device_version);		 /* DeviceVersion */
+	x += put_string(data + x, extern_serial_no);		 /* SerialNumber */
+#else
+	x += put_string(data + x, "GP");     /* Manufacturer */
+	x += put_string(data + x, "VC");     /* Model */
+	x += put_string(data + x, "2.5.11"); /* DeviceVersion */
+	x += put_string(data + x, "0.1");    /* DeviceVersion */
+	x += put_string(data + x, "1");	     /* SerialNumber */
+#endif
 
 	ptp_senddata(cam, 0x1001, data, x);
 	free(data);
@@ -1285,130 +1279,31 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 
 /* magic opcode for our driver, to inject commands */
 int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
-	int capcnt = 98;
-	int timeout = 1;
-
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
-	if (ptp->nparams < 1) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
-		ptp_response(cam, PTP_RC_InvalidParameter, 0);
-		return 1;
+
+	gp_log(GP_LOG_ERROR, __FUNCTION__,
+		"* Recieved 0x9999\n"
+		"* Size: %d\n"
+		"* Type: %d\n"
+		"* Code: %X\n"
+		"* seqnr: %d\n"
+		"* dataphase: %d",
+		ptp->size, ptp->type, ptp->code, ptp->seqnr, ptp->has_data_phase
+	);
+
+	gp_log(GP_LOG_ERROR, __FUNCTION__, "* Params:");
+	for (int i = 0; i < ptp->nparams; i++) {
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "%d", ptp->params[i]);
 	}
-	if (ptp->nparams >= 2) {
-		timeout = ptp->params[1];
-		gp_log(GP_LOG_DEBUG, __FUNCTION__, "new timeout %d", timeout);
-	} else
-		timeout++;
 
-	switch (ptp->params[0]) {
-	case 0: { /* add a new image after 1 second */
-		struct ptp_dirent *cur, *newcur, *dir, *dcim = NULL;
-		char buf[10];
+	ptp_response(cam, PTP_RC_OK, 0);
 
-		cur = first_dirent;
-		while (cur) {
-			if (strstr(cur->name, ".jpg") || strstr(cur->name, ".JPG"))
-				break;
-			cur = cur->next;
-		}
-		if (!cur) {
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "I do not have a JPG file in the store, can not proceed");
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			return 1;
-		}
-		dir = first_dirent;
-		while (dir) {
-			if (!strcmp(dir->name, "DCIM") && dir->parent && !dir->parent->id)
-				dcim = dir;
-			dir = dir->next;
-		}
-
-		cur = first_dirent;
-		while (cur) {
-			if (strstr(cur->name, ".jpg") || strstr(cur->name, ".JPG"))
-				break;
-			cur = cur->next;
-		}
-		if (!cur) {
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "I do not have a JPG file in the store, can not proceed");
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			return 1;
-		}
-		dir = first_dirent;
-		while (dir) {
-			if (!strcmp(dir->name, "DCIM") && dir->parent && !dir->parent->id)
-				dcim = dir;
-			dir = dir->next;
-		}
-		/* nnnGPHOT directories, where nnn is 100-999. (See DCIM standard.) */
-		sprintf(buf, "%03dGPHOT", 100 + ((capcnt / 100) % 900));
-		dir = first_dirent;
-		while (dir) {
-			if (!strcmp(dir->name, buf) && (dir->parent == dcim))
-				break;
-			dir = dir->next;
-		}
-		if (!dir) {
-			dir = malloc(sizeof(struct ptp_dirent));
-			dir->id = ++ptp_objectid;
-			dir->fsname = "virtual";
-			dir->stbuf = dcim->stbuf; /* only the S_ISDIR flag is used */
-			dir->parent = dcim;
-			dir->next = first_dirent;
-			dir->name = strdup(buf);
-			first_dirent = dir;
-			/* Emit ObjectAdded event for the created folder */
-			ptp_inject_interrupt(cam, 80, 0x4002, 1, ptp_objectid, cam->seqnr); /* objectadded */
-		}
-
-		newcur = malloc(sizeof(struct ptp_dirent));
-		newcur->id = ++ptp_objectid;
-		newcur->fsname = strdup(cur->fsname);
-		newcur->stbuf = cur->stbuf;
-		newcur->parent = dir;
-		newcur->next = first_dirent;
-		newcur->name = malloc(8 + 3 + 1 + 1);
-		sprintf(newcur->name, "GPH_%04d.JPG", capcnt++);
-		first_dirent = newcur;
-
-		ptp_inject_interrupt(cam, timeout, 0x4002, 1, ptp_objectid, cam->seqnr); /* objectadded */
-		ptp_response(cam, PTP_RC_OK, 0);
-		break;
-	}
-	case 1: { /* remove 1 image from directory */
-		struct ptp_dirent **pcur, *cur;
-
-		pcur = &first_dirent;
-		while (*pcur) {
-			if (strstr((*pcur)->name, ".jpg") || strstr((*pcur)->name, ".JPG"))
-				break;
-			pcur = &((*pcur)->next);
-		}
-		if (!*pcur) {
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "I do not have a JPG file in the store, can not proceed");
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			return 1;
-		}
-		ptp_inject_interrupt(cam, timeout, 0x4003, 1, (*pcur)->id, cam->seqnr); /* objectremoved */
-		cur = *pcur;
-		*pcur = (*pcur)->next;
-		free(cur->name);
-		free(cur->fsname);
-		free(cur);
-		ptp_response(cam, PTP_RC_OK, 0);
-		break;
-	}
-	case 2:								      /* capture complete */
-		ptp_inject_interrupt(cam, timeout, 0x400d, 0, 0, cam->seqnr); /* capturecomplete */
-		ptp_response(cam, PTP_RC_OK, 0);
-		break;
-	default:
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "unknown action %d", ptp->params[0]);
-		ptp_response(cam, PTP_RC_OK, 0);
-		break;
-	}
 	return 1;
+}
+
+int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	gp_log(GP_LOG_ERROR, __FUNCTION__, "Recieved data phase for 0x9999: %d", len);
 }
 
 int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
