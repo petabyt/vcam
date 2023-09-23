@@ -13,7 +13,7 @@ void gp_log(GPLogLevel level, const char *domain, const char *format, ...) {
 	vsnprintf(buffer, 1024, format, args);
 	va_end(args);
 
-	puts(buffer);
+	printf("[GP] %s\n", buffer);
 }
 
 void gp_log_with_source_location(GPLogLevel level, const char *file, int line, const char *func, const char *format, ...) {
@@ -30,4 +30,14 @@ void gp_port_set_error(void *port, const char *format, ...) {
 	printf("Error: ");
 	vprintf(format, args);
 	va_end(args);
+}
+
+void vcam_log(const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	char buffer[1024];
+	vsnprintf(buffer, 1024, format, args);
+	va_end(args);
+
+	printf("[VCAM] %s", buffer);
 }

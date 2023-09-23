@@ -28,6 +28,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+void vcam_log(const char *format, ...);
+
 #define CHECK(result)               \
 	{                           \
 		int r = (result);   \
@@ -150,6 +152,7 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
 int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
 int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp);
 int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
 int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp);
 int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp);
 

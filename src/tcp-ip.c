@@ -45,7 +45,7 @@ uint8_t socket_init_resp[] = {
 0x1, 0x0,};
 
 int ptpip_connection_init() {
-	printf("Allocated vusb connection\n");
+	vcam_log("Allocated vusb connection\n");
 	port = malloc(sizeof(GPPort));
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(CANON_1300D);
@@ -65,13 +65,7 @@ int ptpip_cmd_write(void *to, int length) {
 	// First packet from the app, info about device
 	if (first_write) {
 		struct FujiInitPacket *p = (struct FujiInitPacket *)to;
-		printf("vusb: init socket (%d bytes)\n", length);
-
-		// Too lazy to decode struct
-		for (int i = 0; i < length; i++) {
-			printf("%c", ((char *)to)[i]);
-		}
-		puts("");
+		vcam_log("vusb: init socket (%d bytes)\n", length);
 
 		first_write = 0;
 		ptpip_connection_init();
@@ -83,7 +77,7 @@ int ptpip_cmd_write(void *to, int length) {
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
 #ifdef TCP_NOISY
-	printf("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
+	vcam_log("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
 #endif
 	return rc;
 }
@@ -92,7 +86,7 @@ int ptpip_cmd_read(void *to, int length) {
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
 #ifdef TCP_NOISY
-	printf("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
+	vcam_log("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
 #endif
 	return rc;
 }
@@ -102,7 +96,7 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 	uint32_t packet_length;
 	ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 #ifdef TCP_NOISY
-	printf("Read %d\n", size);
+	vcam_log("Read %d\n", size);
 #endif
 
 	if (size < 0) {
@@ -111,7 +105,7 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 	}
 
 	if (size != 4) {
-		printf("Couldn't read 4 bytes, only got %d\n", size);
+		vcam_log("Couldn't read 4 bytes, only got %d\n", size);
 		return NULL;
 	}
 
@@ -122,7 +116,7 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 	// Continue reading the rest of the data
 	size += recv(client_socket, buffer + size, packet_length - size, 0);
 #ifdef TCP_NOISY
-	printf("Read %d\n", size);
+	vcam_log("Read %d\n", size);
 #endif
 
 	(*length) = size;
@@ -131,7 +125,7 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 		perror("Error reading data from socket");
 		return NULL;
 	} else if (size != packet_length) {
-		printf("Couldn't read the rest of the packet, only got %d\n", size);
+		vcam_log("Couldn't read the rest of the packet, only got %d\n", size);
 		return NULL;
 	}
 
@@ -162,13 +156,13 @@ int tcp_recieve_all(int client_socket) {
 		free(new_buffer);
 	} else if (bc->type == PTPIP_INIT_COMMAND_REQ) {
 		// Recieved init packet, send it into vcam to init vcam structs
-		puts("Recieved init packet");
+		vcam_log("Recieved init packet\n");
 		ptpip_cmd_write(buffer, packet_length);
 		return 0;
 	}
 
 	if (bc->data_phase == 2) {
-		printf("Recieved data phase\n");
+		vcam_log("Recieved data phase\n");
 
 		// Read in data start packet
 		void *buffer_ds = tcp_recieve_single_packet(client_socket, &packet_length);
@@ -178,7 +172,7 @@ int tcp_recieve_all(int client_socket) {
 
 		struct PtpIpStartDataPacket *ds = (struct PtpIpStartDataPacket *)buffer_ds;
 		if (ds->type != PTPIP_DATA_PACKET_START) {
-			printf("Didn't get end data packet\n");
+			vcam_log("Didn't get end data packet\n");
 			exit(1);
 		}
 
@@ -190,7 +184,7 @@ int tcp_recieve_all(int client_socket) {
 
 		struct PtpIpEndDataPacket *ed = (struct PtpIpEndDataPacket *)buffer_de;
 		if (ed->type != PTPIP_DATA_PACKET_END) {
-			printf("Didn't get end data packet\n");
+			vcam_log("Didn't get end data packet\n");
 			exit(1);
 		}
 
@@ -216,7 +210,7 @@ void *ptpip_cmd_read_single_packet(int *length) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_read(&packet_length, 4);
 	if (size != 4) {
-		printf("send_all: vcam failed to provide 4 bytes: %d\n", size);
+		vcam_log("send_all: vcam failed to provide 4 bytes: %d\n", size);
 		return NULL;
 	}
 
@@ -226,7 +220,7 @@ void *ptpip_cmd_read_single_packet(int *length) {
 	int rc = ptpip_cmd_read(buffer + size, packet_length - size);	
 
 	if (rc != packet_length - size) {
-		printf("Read %d, wanted %d\n", rc, packet_length - size);
+		vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
 		return NULL;
 	}
 
@@ -330,7 +324,7 @@ int new_ptp_tcp_socket(int port) {
 		return -1;
 	}
 
-	printf("Socket listening on port %d...\n", port);
+	vcam_log("Socket listening on port %d...\n", port);
 
 	return server_socket;
 }
@@ -339,7 +333,7 @@ static int ack_event_socket(int client_event_socket) {
 	struct PtpIpHeader init;
 	ssize_t size = recv(client_event_socket, &init, 12, 0);
 	if (size != 12) {
-		printf("Failed to read socket init: %d\n", size);
+		vcam_log("Failed to read socket init: %d\n", size);
 		return -1;
 	}
 
@@ -347,7 +341,7 @@ static int ack_event_socket(int client_event_socket) {
 
 	size = send(client_event_socket, ack, sizeof(ack), 0);	
 	if (size != sizeof(ack)) {
-		printf("Failed to send socket ack\n");
+		vcam_log("Failed to send socket ack\n");
 		return -1;
 	}
 
@@ -367,13 +361,13 @@ int main() {
 		return -1;
 	}
 
-	printf("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	static int have_setup_events_socket = 0;
 
 	while (1) {
 		if (tcp_recieve_all(client_socket)) {
-			puts("tcp_recieve_all failed");
+			vcam_log("tcp_recieve_all failed\n");
 			goto err;
 		}
 
@@ -381,12 +375,12 @@ int main() {
 
 		// Read packet length
 		if (tcp_send_all(client_socket)) {
-			puts("tcp_send_all failed");
+			vcam_log("tcp_send_all failed\n");
 			goto err;
 		}
 
 		if (!have_setup_events_socket) {
-			puts("Waiting for event socket");
+			vcam_log("Waiting for event socket\n");
 			int client_event_socket = accept(server_socket, (struct sockaddr *)&client_address, &client_address_length);
 			if (ack_event_socket(client_event_socket)) {
 				goto err;
@@ -396,13 +390,13 @@ int main() {
 	}
 
 	close(client_socket);
-	printf("Connection closed\n");
+	vcam_log("Connection closed\n");
 	close(server_socket);
 
 	return 0;
 
 err:;
-	puts("Connection forced down");
+	vcam_log("Connection forced down\n");
 	close(client_socket);
 	close(server_socket);
 	return -1;

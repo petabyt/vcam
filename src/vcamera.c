@@ -1282,20 +1282,21 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 
-	gp_log(GP_LOG_ERROR, __FUNCTION__,
-		"* Recieved 0x9999\n"
-		"* Size: %d\n"
-		"* Type: %d\n"
-		"* Code: %X\n"
-		"* seqnr: %d\n"
-		"* dataphase: %d",
+	vcam_log(
+		"\tRecieved 0x9999\n"
+		"\tSize: %d\n"
+		"\tType: %d\n"
+		"\tCode: %X\n"
+		"\tseqnr: %d\n"
+		"\tdataphase: %d\n",
 		ptp->size, ptp->type, ptp->code, ptp->seqnr, ptp->has_data_phase
 	);
 
-	gp_log(GP_LOG_ERROR, __FUNCTION__, "* Params:");
+	vcam_log("Params: ");
 	for (int i = 0; i < ptp->nparams; i++) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "%d", ptp->params[i]);
+		vcam_log("%d ", ptp->params[i]);
 	}
+	vcam_log("\n");
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
@@ -1303,7 +1304,7 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 }
 
 int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
-	gp_log(GP_LOG_ERROR, __FUNCTION__, "Recieved data phase for 0x9999: %d", len);
+	vcam_log("Recieved data phase for 0x9999: %d\n", len);
 }
 
 int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
