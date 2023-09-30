@@ -1,3 +1,4 @@
+// Fake libusb-v1.0 .so spoofer for vcam
 #include <errno.h>
 #include <libusb.h>
 #include <stdio.h>
@@ -115,8 +116,12 @@ int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	return 0;
 }
 
+int libusb_get_string_descriptor_ascii(libusb_device_handle *devh, uint8_t desc_idx, unsigned char *data, int length) {
+	strncpy(data, "vcam", length);
+}
+
 void libusb_free_device_list(libusb_device **list, int unref_devices) {
-	// For the sake of the stub, we assume no action is needed
+	// ...
 }
 
 int libusb_set_auto_detach_kernel_driver(libusb_device_handle *dev_handle, int enable) {
