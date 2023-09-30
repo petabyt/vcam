@@ -3,6 +3,12 @@
 #include <string.h>
 #include <assert.h>
 
+// Fuji does not have device info
+const char *extern_manufacturer_info = "Canon Inc.";
+const char *extern_model_Name = "Canon EOS Rebel T6";
+const char *extern_device_version = "3-1.2.0";
+const char *extern_serial_no = "828af56";
+
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
 #include <config.h>
@@ -16,7 +22,7 @@
 #include <camlib.h>
 #include <fujiptp.h>
 
-#include "fuji-versions.h"
+#include "fuji.h"
 
 #define FUJI_DUMMY_THUMB "bin/fuji/dummy_thumb2.jpg"
 #define FUJI_DUMMY_OBJ_INFO "bin/fuji/fuji_generic_object_info2.bin"
@@ -236,7 +242,8 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		fuji_info.compress_small = uint16[0];
 		break;
 	case PTP_PC_FUJI_NoCompression:
-		assert(uint16[0] == 1 || uint16[0] == 2);
+		assert(len == 2);
+		assert(uint16[0] == 1 || uint16[0] == 0);
 		fuji_info.no_compressed = uint16[0];
 		break;
 	case PTP_PC_FUJI_RemoteImageExploreVersion:

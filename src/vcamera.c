@@ -557,6 +557,19 @@ int ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+int ptp_get_object_count() {
+	int cnt = 0;
+	struct ptp_dirent *cur = first_dirent;
+	while (cur) {
+		if (cur->id) { /* do not include 0 entry */
+			cnt++;
+		}
+		cur = cur->next;
+	}
+
+	return cnt;
+}
+
 int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0, cnt;
@@ -891,9 +904,9 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef FUJI_VUSB
-	return fuji_get_thumb(cam, ptp);
-#endif
+// #ifdef FUJI_VUSB
+	// return fuji_get_thumb(cam, ptp);
+// #endif
 
 	cur = first_dirent;
 	while (cur) {
@@ -1292,11 +1305,11 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 		ptp->size, ptp->type, ptp->code, ptp->seqnr, ptp->has_data_phase
 	);
 
-	vcam_log("Params: ");
+	vcam_log("Params (%d): ", ptp->nparams);
 	for (int i = 0; i < ptp->nparams; i++) {
-		vcam_log("%d ", ptp->params[i]);
+		printf("%d ", ptp->params[i]);
 	}
-	vcam_log("\n");
+	printf("\n");
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
@@ -1626,36 +1639,20 @@ void vcam_process_output(vcamera *cam) {
 	}
 
 	int has_data_phase = 0;
-	if (cam->is_ptp_ip) {
-		/* uint32_t length;
-		uint32_t type;
-		uint32_t data_phase;
-		uint16_t code;
-		uint32_t transaction; */
-		ptp.type = get_32bit_le(cam->outbulk + 4);
-		has_data_phase = get_32bit_le(cam->outbulk + 8);
-		ptp.code = get_32bit_le(cam->outbulk + 12);
-		ptp.seqnr = get_32bit_le(cam->outbulk + 14);
-	} else {
-		/* ptp:  4 byte size, 2 byte opcode, 2 byte type, 4 byte serial number */
-		ptp.type = get_16bit_le(cam->outbulk + 4);
-		ptp.code = get_16bit_le(cam->outbulk + 6);
-		ptp.seqnr = get_32bit_le(cam->outbulk + 8);
-	}
 
-	if (cam->is_ptp_ip) {
-		// Don't know how to else to react to this
-		assert(ptp.type != PTPIP_COMMAND_REQUEST);
-	} else {
-		/* We want either CMD or DATA phase. */
-		if ((ptp.type != PTP_PACKET_TYPE_COMMAND) && (ptp.type != PTP_PACKET_TYPE_DATA)) {
-			/* not clear if normal cameras react like this */
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "expected CMD or DATA, but type was %d", ptp.type);
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-			cam->nroutbulk -= ptp.size;
-			return;
-		}
+	/* ptp:  4 byte size, 2 byte opcode, 2 byte type, 4 byte serial number */
+	ptp.type = get_16bit_le(cam->outbulk + 4);
+	ptp.code = get_16bit_le(cam->outbulk + 6);
+	ptp.seqnr = get_32bit_le(cam->outbulk + 8);
+
+	/* We want either CMD or DATA phase. */
+	if ((ptp.type != PTP_PACKET_TYPE_COMMAND) && (ptp.type != PTP_PACKET_TYPE_DATA)) {
+		/* not clear if normal cameras react like this */
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "expected CMD or DATA, but type was %d", ptp.type);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
+		cam->nroutbulk -= ptp.size;
+		return;
 	}
 
 	if ((ptp.code & 0x7000) != 0x1000) {
@@ -1668,34 +1665,27 @@ void vcam_process_output(vcamera *cam) {
 	}
 
 	if (ptp.type == PTP_PACKET_TYPE_COMMAND) {
-		if (cam->is_ptp_ip) {
-			ptp.nparams = (ptp.size - 18) / 4;
-			for (i = 0; i < ptp.nparams; i++) {
-				ptp.params[i] = get_32bit_le(cam->outbulk + 18 + i * 4);
-			}
-		} else {
-			if ((ptp.size - 12) % 4) {
-				/* not clear if normal cameras react like this */
-				gp_log(GP_LOG_ERROR, __FUNCTION__, "SIZE-12 is not divisible by 4, but is %d", ptp.size - 12);
-				ptp_response(cam, PTP_RC_GeneralError, 0);
-				memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-				cam->nroutbulk -= ptp.size;
-				return;
-			}
+		if ((ptp.size - 12) % 4) {
+			/* not clear if normal cameras react like this */
+			gp_log(GP_LOG_ERROR, __FUNCTION__, "SIZE-12 is not divisible by 4, but is %d", ptp.size - 12);
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
+			cam->nroutbulk -= ptp.size;
+			return;
+		}
 
-			if ((ptp.size - 12) / 4 >= 6) {
-				/* not clear if normal cameras react like this */
-				gp_log(GP_LOG_ERROR, __FUNCTION__, "(SIZE-12)/4 is %d, exceeds maximum arguments", (ptp.size - 12) / 4);
-				ptp_response(cam, PTP_RC_GeneralError, 0);
-				memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-				cam->nroutbulk -= ptp.size;
-				return;
-			}
+		if ((ptp.size - 12) / 4 >= 6) {
+			/* not clear if normal cameras react like this */
+			gp_log(GP_LOG_ERROR, __FUNCTION__, "(SIZE-12)/4 is %d, exceeds maximum arguments", (ptp.size - 12) / 4);
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
+			cam->nroutbulk -= ptp.size;
+			return;
+		}
 
-			ptp.nparams = (ptp.size - 12) / 4;
-			for (i = 0; i < ptp.nparams; i++) {
-				ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
-			}
+		ptp.nparams = (ptp.size - 12) / 4;
+		for (i = 0; i < ptp.nparams; i++) {
+			ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
 		}
 	}
 

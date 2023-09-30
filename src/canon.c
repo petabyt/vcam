@@ -1,4 +1,24 @@
+// Emulator for non-standard Canon PTP
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
+#define _GPHOTO2_INTERNAL_CODE
+#define _DARWIN_C_SOURCE
+#include <config.h>
+#include <gphoto2/gphoto2-port-library.h>
+#include <gphoto2/gphoto2-port-log.h>
+#include <gphoto2/gphoto2-port-result.h>
+#include <gphoto2/gphoto2-port.h>
+#include <libgphoto2_port/i18n.h>
+#include <vcamera.h>
+
 #include "ptp.h"
+
+const char *extern_manufacturer_info = "Canon Inc.";
+const char *extern_model_Name = "Canon EOS Rebel T6";
+const char *extern_device_version = "3-1.2.0";
+const char *extern_serial_no = "828af56";
 
 extern unsigned char bin_eos_events_bin[];
 extern unsigned int bin_eos_events_bin_len;
@@ -12,7 +32,7 @@ static struct EosInfo {
 	struct EventQueue {
 		uint16_t code;
 		uint32_t data;
-	} queue[10];
+	}queue[10];
 	int queue_length;
 
 	int calls_to_liveview;
@@ -25,7 +45,7 @@ struct EosEventUint {
 	uint32_t value;
 };
 
-static int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
+int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 	usleep(1000 * 10);
 	eos_info.calls_to_liveview++;
 
@@ -40,7 +60,7 @@ static int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
+int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
 	switch (ptp->code) {
 	case PTP_OC_EOS_SetRemoteMode:
 	case PTP_OC_EOS_SetEventMode: {
@@ -54,13 +74,13 @@ static int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int ptp_eos_set_property(vcamera *cam, ptpcontainer *ptp) {
+int ptp_eos_set_property(vcamera *cam, ptpcontainer *ptp) {
 	//ptp_senddata(cam, ptp->code, (unsigned char *)buffer, curr);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
 
-static int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	uint32_t *dat = (uint32_t *)data;
 
 	switch (dat[1]) {
@@ -79,15 +99,15 @@ static int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigne
 	return 1;
 }
 
-static int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
+int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
 	if (ptp->code == PTP_OC_EOS_RemoteReleaseOff) {
-		gp_log(GP_LOG_DEBUG, __FUNCTION__, "Shutter up");
+		vcam_log("CANON: Shutter up\n");
 	} else if (ptp->code == PTP_OC_EOS_RemoteReleaseOn) {
 		if (ptp->params[0] == 1) {
-			gp_log(GP_LOG_DEBUG, __FUNCTION__, "Shutter half down");
+			vcam_log("CANON: Shutter half down\n");
 			usleep(1000 * 2000);
 		} else if (ptp->params[0] == 2) {
-			gp_log(GP_LOG_DEBUG, __FUNCTION__, "Shutter full down");
+			vcam_log("CANON: Shutter full down\n");
 			usleep(1000 * 200);
 		}
 	}
@@ -96,7 +116,7 @@ static int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static int ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
+int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
 
 	if (eos_info.first_events) {
