@@ -2,6 +2,11 @@
 #ifndef GPHOTO_STUFF_H
 #define GPHOTO_STUFF_H
 
+extern char *extern_manufacturer_info;
+extern char *extern_model_Name;
+extern char *extern_device_version;
+extern char *extern_serial_no;
+
 #include "config.h"
 #include <gphoto2/gphoto2-port-library.h>
 #include <gphoto2/gphoto2-port-portability.h>
@@ -9,7 +14,6 @@
 #ifdef HAVE_LIBEXIF
 #include <libexif/exif-data.h>
 #endif
-
 
 #include "vcamera.h"
 

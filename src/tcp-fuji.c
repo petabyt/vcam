@@ -24,6 +24,8 @@
 #error "FUJI_VUSB should be defined"
 #endif
 
+#include "fuji.h"
+
 //#define TCP_NOISY
 
 int fuji_open_remote_port = 0;
@@ -36,7 +38,7 @@ struct _GPPortPrivateLibrary {
 static GPPort *port = NULL;
 
 uint8_t socket_init_resp[] = {0x44, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x8, 0x70, 0xb0, 0x61, 0xa, 0x8b, 0x45, 0x93,
-			      0xb2, 0xe7, 0x93, 0x57, 0xdd, 0x36, 0xe0, 0x50, 'X', 0x0, '-', 0x0, 'T', 0x0, '2', 0x0, '0', 0x0, 0x0, 0x0, 0x0, 0x0,
+			      0xb2, 0xe7, 0x93, 0x57, 0xdd, 0x36, 0xe0, 0x50, 'X', 0x0, '-', 0x0, 'A', 0x0, '2', 0x0, '\0', 0x0, 0x0, 0x0, 0x0, 0x0,
 			      0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
 
 int ptpip_connection_init() {
@@ -58,7 +60,6 @@ int ptpip_cmd_write(void *to, int length) {
 	static int first_write = 1;
 
 	if (first_write) {
-		struct FujiInitPacket *p = (struct FujiInitPacket *)to;
 		printf("vusb: init socket\n");
 		first_write = 0;
 
@@ -76,10 +77,23 @@ int ptpip_cmd_write(void *to, int length) {
 	return rc;
 }
 
+// Copies the device name into global data (fuji doesn't care about extra zeros)
+static void fixup_init_resp() {
+	struct FujiInitPacket *p = (struct FujiInitPacket *)socket_init_resp;
+	char *name = FUJI_CAM_NAME;
+	int i;
+	for (i = 0; name[i] != '\0'; i++) {
+		p->device_name[i * 2] = name[i];
+		p->device_name[i * 2 + 1] = '\0';
+	}
+	p->device_name[i * 2 + 1] = '\0';
+}
+
 int ptpip_cmd_read(void *to, int length) {
 	static int left_of_init_packet = sizeof(socket_init_resp);
 
 	if (left_of_init_packet) {
+		fixup_init_resp();	
 		memcpy(to, socket_init_resp + sizeof(socket_init_resp) - left_of_init_packet, length);
 		left_of_init_packet -= length;
 		return length;
@@ -114,10 +128,6 @@ int tcp_recieve_all(int client_socket) {
 
 	// Continue reading the rest of the data
 	size += recv(client_socket, buffer + size, packet_length - 4, 0);
-
-	// for (int i = 0; i < size; i++) {
-	// printf("%02X ", buffer[i]);
-	// } puts("");
 
 	if (size < 0) {
 		perror("Error reading data from socket");
@@ -249,7 +259,7 @@ int new_ptp_tcp_socket(int port) {
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = INADDR_ANY;
+	serverAddress.sin_addr.s_addr = inet_addr("192.168.0.1");
 	serverAddress.sin_port = htons(port);
 
 	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
@@ -310,6 +320,10 @@ static void fuji_accept_remote_ports() {
 
 int main() {
 	int server_socket = new_ptp_tcp_socket(55740);
+	if (server_socket == -1) {
+		printf("Make sure to add virtual network device\n");
+		return 1;
+	}
 
 	struct sockaddr_in client_address;
 	socklen_t client_address_length = sizeof(client_address);

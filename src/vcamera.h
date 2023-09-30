@@ -95,7 +95,7 @@ typedef struct vcamera {
 	int (*readint)(struct vcamera*,  unsigned char *data, int bytes, int timeout);
 	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
 
-	int is_ptp_ip; // If is in TCP/IP mode, and wants that packet type, and specific behaviors
+	int is_ptp_ip; // If is in TCP/IP mode, packet conversion is done in usb2ip.c
 
 	unsigned short	vendor, product;	/* for generic fuzzing */
 

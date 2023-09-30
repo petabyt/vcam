@@ -19,7 +19,7 @@
 #include <libgphoto2_port/i18n.h>
 #include <vcamera.h>
 
-#define TCP_NOISY
+//#define TCP_NOISY
 
 void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength);
 void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength);
@@ -76,37 +76,53 @@ int ptpip_cmd_write(void *to, int length) {
 
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
-#ifdef TCP_NOISY
+
+	#ifdef TCP_NOISY
 	vcam_log("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
-#endif
+	#endif
+
 	return rc;
 }
 
 int ptpip_cmd_read(void *to, int length) {
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
-#ifdef TCP_NOISY
+
+	#ifdef TCP_NOISY
 	vcam_log("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
-#endif
+	#endif
+
 	return rc;
 }
 
 void *tcp_recieve_single_packet(int client_socket, int *length) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
-	ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
-#ifdef TCP_NOISY
-	vcam_log("Read %d\n", size);
-#endif
+	ssize_t size;
+	for (int i = 0; i < 100; i++) {
+		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 
-	if (size < 0) {
-		perror("Error reading data from socket");
-		return NULL;
-	}
+		#ifdef TCP_NOISY
+		vcam_log("Read %d\n", size);
+		#endif
 
-	if (size != 4) {
-		vcam_log("Couldn't read 4 bytes, only got %d\n", size);
-		return NULL;
+		if (size == 0) {
+			vcam_log("Initiator isn't sending anything, trying again\n");
+			usleep(1000 * 1000);
+			continue;
+		}
+
+		if (size < 0) {
+			perror("Error reading data from socket");
+			return NULL;
+		}
+
+		if (size != 4) {
+			vcam_log("Couldn't read 4 bytes, only got %d\n", size);
+			return NULL;
+		}
+
+		break;
 	}
 
 	// Allocate the rest of the packet to read
@@ -144,8 +160,6 @@ int tcp_recieve_all(int client_socket) {
 	if (bc->type == PTPIP_COMMAND_REQUEST) {
 		void *new_buffer = conv_ip_cmd_packet_to_usb(buffer, packet_length, &packet_length);
 
-		//printf("Processing cmd req for %X\n", bc->code);
-
 		// Route the read data into the vcamera. The camera is the responder,
 		// and will next be writing data to the app.
 		int rc = ptpip_cmd_write(new_buffer, packet_length);
@@ -173,7 +187,7 @@ int tcp_recieve_all(int client_socket) {
 		struct PtpIpStartDataPacket *ds = (struct PtpIpStartDataPacket *)buffer_ds;
 		if (ds->type != PTPIP_DATA_PACKET_START) {
 			vcam_log("Didn't get end data packet\n");
-			exit(1);
+			return -1;
 		}
 
 		// Recieve data end packet (which has payload)
@@ -185,7 +199,7 @@ int tcp_recieve_all(int client_socket) {
 		struct PtpIpEndDataPacket *ed = (struct PtpIpEndDataPacket *)buffer_de;
 		if (ed->type != PTPIP_DATA_PACKET_END) {
 			vcam_log("Didn't get end data packet\n");
-			exit(1);
+			return -1;
 		}
 
 		void *new_buffer = conv_ip_data_packets_to_usb(buffer_ds, buffer_de, &packet_length, bc->code);
@@ -337,7 +351,9 @@ static int ack_event_socket(int client_event_socket) {
 		return -1;
 	}
 
-	uint32_t ack[2] = {0, 0};
+	vcam_log("Recieved event socket req\n");
+
+	uint32_t ack[2] = {8, PTPIP_INIT_EVENT_ACK};
 
 	size = send(client_event_socket, ack, sizeof(ack), 0);	
 	if (size != sizeof(ack)) {
@@ -345,7 +361,40 @@ static int ack_event_socket(int client_event_socket) {
 		return -1;
 	}
 
+	vcam_log("Send event socket ack\n");
+
 	return 0;
+}
+
+static void *bind_event_socket_thread(void *arg) {
+	struct sockaddr_in client_address;
+	socklen_t client_address_length = sizeof(client_address);
+	int server_socket = *((int *)arg);
+	vcam_log("Waiting for event socket on new thread...\n");
+	int client_event_socket = accept(server_socket, (struct sockaddr *)&client_address, &client_address_length);
+	if (ack_event_socket(client_event_socket)) {
+		return NULL;
+	}
+
+	vcam_log("Event socket accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+
+	// uint32_t packet_length;
+	// ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
+// 
+	// if (size != 4) {
+		// vcam_log("Failed to read length from event socket\n");
+		// return NULL;
+	// }
+// 
+	// uint32_t packet_length;
+	// ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
+	
+	while (1) {
+		vcam_log("Event thread sleeping\n");
+		usleep(1000 * 1000);
+	}
+
+	return NULL;
 }
 
 int main() {
@@ -380,11 +429,11 @@ int main() {
 		}
 
 		if (!have_setup_events_socket) {
-			vcam_log("Waiting for event socket\n");
-			int client_event_socket = accept(server_socket, (struct sockaddr *)&client_address, &client_address_length);
-			if (ack_event_socket(client_event_socket)) {
-				goto err;
+			pthread_t thread;
+			if (pthread_create(&thread, NULL, bind_event_socket_thread, &server_socket)) {
+				return 1;
 			}
+
 			have_setup_events_socket = 1;
 		}
 	}

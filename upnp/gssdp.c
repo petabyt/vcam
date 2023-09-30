@@ -88,6 +88,11 @@ void *start_upnp_server(void *arg) {
 	server_addr.sin_port = htons(PORT);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 
+	int true = 1;
+	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
+	}
+
 	// Bind the server socket to the specified port
 	if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
 		perror("upnp: Binding failed");

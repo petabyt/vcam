@@ -12,7 +12,7 @@ void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength) {
 
 	int param_length = (bc->length - 18) / 4;
 
-	printf("Param length: %d\n", param_length);
+	vcam_log("Param length: %d\n", param_length);
 
 	if (bc->type == PTPIP_COMMAND_REQUEST) {
 		struct PtpBulkContainer *c = (struct PtpBulkContainer *)malloc(12 + (param_length * 4));
@@ -27,7 +27,7 @@ void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength) {
 
 		return c;
 	} else {
-		puts("Unsupported command request");
+		vcam_log("Unsupported command request\n");
 		exit(-1);
 	}
 }
@@ -54,7 +54,7 @@ void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength) {
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
 	int param_length = (c->length - 12) / 4;
 
-	printf("Packet type: %d\n", c->type);
+	vcam_log("conv_usb_packet_to_ip: Packet type: %d\n", c->type);
 
 	if (c->type == PTP_PACKET_TYPE_DATA) {
 		// Send both payload start (16 bytes) and end packet (12 + payload)
@@ -100,7 +100,7 @@ void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength) {
 
 		return (void *)req;
 	} else {
-		puts("Unknown USB packet\n");
+		vcam_log("Unknown USB packet\n");
 		return NULL;
 	}
 }
