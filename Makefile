@@ -1,5 +1,5 @@
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
-SO_FILES=src/log.o src/libusb.o src/vcamera.o src/libgphoto2_port/gphoto2-port-portability.o src/usb2ip.o
+SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o
 
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF "-DVCAMERADIR=\"sd/\"" -D CAM_HAS_EXTERN_DEV_INFO
 LDFLAGS=-L. -Wl,-rpath=.

@@ -36,6 +36,10 @@ struct EosEventUint {
 	uint32_t value;
 };
 
+int vcam_vendor_setup() {
+	return 0;
+}
+
 int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 	usleep(1000 * 10);
 	eos_info.calls_to_liveview++;

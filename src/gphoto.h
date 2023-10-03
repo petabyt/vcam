@@ -5,6 +5,8 @@
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
 
+#include <ptp.h>
+
 #include <config.h>
 
 extern char *extern_manufacturer_info;
