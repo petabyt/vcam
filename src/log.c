@@ -3,10 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gphoto2/gphoto2-port-log.h>
-#include <gphoto2/gphoto2-port-result.h>
+void gp_log_(const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	vprintf(format, args);
+	va_end(args);
+}
 
-void gp_log(GPLogLevel level, const char *domain, const char *format, ...) {
+void gp_log(void *, const char *domain, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
 	char buffer[1024];
@@ -16,7 +20,7 @@ void gp_log(GPLogLevel level, const char *domain, const char *format, ...) {
 	printf("[GP] (%s) %s\n", domain, buffer);
 }
 
-void gp_log_with_source_location(GPLogLevel level, const char *file, int line, const char *func, const char *format, ...) {
+void gp_log_with_source_location(void *, const char *file, int line, const char *func, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
 	printf("[GP] [%s:%d] %s: ", file, line, func);

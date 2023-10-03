@@ -1,4 +1,3 @@
-/* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 8; tab-width: 8 -*- */
 /* vcamera.h
  *
  * Copyright (c) 2015,2016 Marcus Meissner <marcus@jet.franken.de>
@@ -28,7 +27,16 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#ifndef VUSB_BIN_DIR
+#define VUSB_BIN_DIR "bin/"
+#endif
+
 void vcam_log(const char *format, ...);
+void gp_log_(const char *format, ...);
+
+int ptp_get_object_count();
+
+int vcam_vendor_setup();
 
 #define CHECK(result)               \
 	{                           \

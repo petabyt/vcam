@@ -1,15 +1,5 @@
 // Fake libusb-v1.0 .so spoofer for vcam
-#include <errno.h>
-#include <libusb.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#define _GPHOTO2_INTERNAL_CODE
-#define _DARWIN_C_SOURCE
-#include "config.h"
-#include <gphoto2/gphoto2-port-library.h>
-
-#include "vcamera.h"
+// Copyright Daniel C - GNU Lesser General Public License v2.1  
 
 #include <errno.h>
 #include <fcntl.h>
@@ -20,13 +10,9 @@
 #include <sys/param.h>
 #endif
 #include <string.h>
+#include <libusb.h>
 
-#include <gphoto2/gphoto2-port-log.h>
-#include <gphoto2/gphoto2-port-result.h>
-#include <gphoto2/gphoto2-port.h>
-
-#include "gphoto2/gphoto2-port-log.h"
-#include "libgphoto2_port/i18n.h"
+#include <gphoto.h>
 
 struct _GPPortPrivateLibrary {
 	int isopen;

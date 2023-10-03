@@ -1,24 +1,15 @@
 // Emulator for non-standard Canon PTP
+// Copyright Daniel C - GNU Lesser General Public License v2.1
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-#define _GPHOTO2_INTERNAL_CODE
-#define _DARWIN_C_SOURCE
-#include <config.h>
-#include <gphoto2/gphoto2-port-library.h>
-#include <gphoto2/gphoto2-port-log.h>
-#include <gphoto2/gphoto2-port-result.h>
-#include <gphoto2/gphoto2-port.h>
-#include <libgphoto2_port/i18n.h>
-#include <vcamera.h>
+#include <gphoto.h>
 
-#include "ptp.h"
-
-const char *extern_manufacturer_info = "Canon Inc.";
-const char *extern_model_Name = "Canon EOS Rebel T6";
-const char *extern_device_version = "3-1.2.0";
-const char *extern_serial_no = "828af56";
+char *extern_manufacturer_info = "Canon Inc.";
+char *extern_model_Name = "Canon EOS Rebel T6";
+char *extern_device_version = "3-1.2.0";
+char *extern_serial_no = "828af56";
 
 extern unsigned char bin_eos_events_bin[];
 extern unsigned int bin_eos_events_bin_len;

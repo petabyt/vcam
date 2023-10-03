@@ -1,8 +1,10 @@
 #ifndef VCAM_FUJI_H
 #define VCAM_FUJI_H
 
-//#define IS_FUJI_X_T20
-#define IS_FUJI_X_A2
+#define FUJI_ACK_PACKET_SIZE 0x44
+
+#define IS_FUJI_X_T20
+//#define IS_FUJI_X_A2
 
 #ifdef IS_FUJI_X_A2
 	#define FUJI_CAM_NAME "X-A2"
@@ -34,6 +36,12 @@
 	#define FUJI_START_CAM_STATE FUJI_REMOTE_ACCESS
 #endif
 
+#define FUJI_DUMMY_THUMB "bin/fuji/dummy_thumb2.jpg"
+#define FUJI_DUMMY_OBJ_INFO "bin/fuji/fuji_generic_object_info2.bin"
+#define FUJI_DUMMY_OBJ_INFO_CUT "bin/fuji/fuji_generic_object_info1.bin"
+#define FUJI_DUMMY_JPEG_FULL "bin/fuji/jpeg-full.jpg"
+#define FUJI_DUMMY_JPEG_COMPRESSED "bin/fuji/jpeg-compressed.jpg"
+#define FUJI_DUMMY_LV_JPEG "bin/fuji/lv_stream"
 
 int fuji_get_thumb(vcamera *cam, ptpcontainer *ptp);
 int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp);
@@ -44,5 +52,9 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp);
 int fuji_get_property(vcamera *cam, ptpcontainer *ptp);
 int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp);
 int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp);
+
+int fuji_is_compressed_mode(vcamera *cam);
+
+uint8_t *fuji_get_ack_packet();
 
 #endif

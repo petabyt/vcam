@@ -12,12 +12,7 @@
 
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
-#include <config.h>
-#include <gphoto2/gphoto2-port-library.h>
-#include <gphoto2/gphoto2-port-log.h>
-#include <gphoto2/gphoto2-port-result.h>
-#include <gphoto2/gphoto2-port.h>
-#include <libgphoto2_port/i18n.h>
+#include <gphoto.h>
 #include <vcamera.h>
 
 #ifndef FUJI_VUSB
@@ -37,12 +32,8 @@ struct _GPPortPrivateLibrary {
 
 static GPPort *port = NULL;
 
-uint8_t socket_init_resp[] = {0x44, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x8, 0x70, 0xb0, 0x61, 0xa, 0x8b, 0x45, 0x93,
-			      0xb2, 0xe7, 0x93, 0x57, 0xdd, 0x36, 0xe0, 0x50, 'X', 0x0, '-', 0x0, 'A', 0x0, '2', 0x0, '\0', 0x0, 0x0, 0x0, 0x0, 0x0,
-			      0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
-
 int ptpip_connection_init() {
-	printf("Allocated vusb connection\n");
+	vcam_log("Allocated vusb connection\n");
 	port = malloc(sizeof(GPPort));
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(FUJI_X_A2);
@@ -60,7 +51,7 @@ int ptpip_cmd_write(void *to, int length) {
 	static int first_write = 1;
 
 	if (first_write) {
-		printf("vusb: init socket\n");
+		vcam_log("vusb: init socket\n");
 		first_write = 0;
 
 		ptpip_connection_init();
@@ -72,29 +63,18 @@ int ptpip_cmd_write(void *to, int length) {
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
 #ifdef TCP_NOISY
-	printf("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
+	vcam_log("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
 #endif
 	return rc;
 }
 
-// Copies the device name into global data (fuji doesn't care about extra zeros)
-static void fixup_init_resp() {
-	struct FujiInitPacket *p = (struct FujiInitPacket *)socket_init_resp;
-	char *name = FUJI_CAM_NAME;
-	int i;
-	for (i = 0; name[i] != '\0'; i++) {
-		p->device_name[i * 2] = name[i];
-		p->device_name[i * 2 + 1] = '\0';
-	}
-	p->device_name[i * 2 + 1] = '\0';
-}
-
 int ptpip_cmd_read(void *to, int length) {
-	static int left_of_init_packet = sizeof(socket_init_resp);
+	static int left_of_init_packet = FUJI_ACK_PACKET_SIZE;
+
+	uint8_t *packet = fuji_get_ack_packet();
 
 	if (left_of_init_packet) {
-		fixup_init_resp();	
-		memcpy(to, socket_init_resp + sizeof(socket_init_resp) - left_of_init_packet, length);
+		memcpy(to, packet + FUJI_ACK_PACKET_SIZE - left_of_init_packet, length);
 		left_of_init_packet -= length;
 		return length;
 	}
@@ -102,7 +82,7 @@ int ptpip_cmd_read(void *to, int length) {
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
 #ifdef TCP_NOISY
-	printf("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
+	vcam_log("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
 #endif
 	return rc;
 }
@@ -118,7 +98,7 @@ int tcp_recieve_all(int client_socket) {
 	}
 
 	if (size != 4) {
-		printf("Couldn't read 4 bytes, only got %d\n", size);
+		vcam_log("Couldn't read 4 bytes, only got %d\n", size);
 		return -1;
 	}
 
@@ -133,7 +113,7 @@ int tcp_recieve_all(int client_socket) {
 		perror("Error reading data from socket");
 		return -1;
 	} else if (size != packet_length) {
-		printf("Couldn't read the rest of the packet, only got %d\n", size);
+		vcam_log("Couldn't read the rest of the packet, only got %d\n", size);
 		return -1;
 	}
 
@@ -149,13 +129,13 @@ int tcp_recieve_all(int client_socket) {
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
 	if (port->pl->vcamera->nrinbulk == 0 && c->code != 0x0) {
 #ifdef TCP_NOISY
-		printf("Doing data phase response\n");
+		vcam_log("Doing data phase response\n");
 #endif
 		free(buffer);
 
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 		if (size != sizeof(uint32_t)) {
-			printf("Failed to recieve 4 bytes of data phase response\n");
+			vcam_log("Failed to recieve 4 bytes of data phase response\n");
 			return -1;
 		}
 
@@ -164,18 +144,18 @@ int tcp_recieve_all(int client_socket) {
 		((uint32_t *)buffer)[0] = packet_length;
 		rc = recv(client_socket, buffer + size, packet_length - size, 0);
 		if (rc != packet_length - size) {
-			printf("Failed to recieve data phase response\n");
+			vcam_log("Failed to recieve data phase response\n");
 			return -1;
 		}
 
 		if (rc != packet_length - size) {
-			printf("Wrote %d, wanted %d\n", rc, packet_length - size);
+			vcam_log("Wrote %d, wanted %d\n", rc, packet_length - size);
 			return -1;
 		}
 
 		rc = ptpip_cmd_write(buffer, packet_length);
 		if (rc != packet_length) {
-			printf("Failed to send response to vcam\n");
+			vcam_log("Failed to send response to vcam\n");
 			return -1;
 		}
 	}
@@ -189,7 +169,7 @@ int tcp_send_all(int client_socket) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_read(&packet_length, 4);
 	if (size != 4) {
-		printf("send_all: vcam failed to provide 4 bytes\n", size);
+		vcam_log("send_all: vcam failed to provide 4 bytes\n", size);
 		return -1;
 	}
 
@@ -199,7 +179,7 @@ int tcp_send_all(int client_socket) {
 	int rc = ptpip_cmd_read(buffer + size, packet_length - size);
 
 	if (rc != packet_length - size) {
-		printf("Read %d, wanted %d\n", rc, packet_length - size);
+		vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
 		return -1;
 	}
 
@@ -217,8 +197,8 @@ int tcp_send_all(int client_socket) {
 		// Read packet length
 		size = ptpip_cmd_read(&packet_length, 4);
 		if (size != 4) {
-			printf("response packet: vcam failed to provide 4 bytes\n", size);
-			printf("Code: %X\n", c->code);
+			vcam_log("response packet: vcam failed to provide 4 bytes: %d\n", size);
+			vcam_log("Code: %X\n", c->code);
 			return -1;
 		}
 
@@ -228,7 +208,7 @@ int tcp_send_all(int client_socket) {
 		rc = ptpip_cmd_read(buffer + size, packet_length - size);
 
 		if (rc != packet_length - size) {
-			printf("Read %d, wanted %d\n", rc, packet_length - size);
+			vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
 			return -1;
 		}
 
@@ -300,8 +280,7 @@ void *fuji_accept_remote_ports_thread(void *arg) {
 	ptp_fuji_liveview(client_socket_video);
 
 	while (1) {
-		puts("Writing liveview");
-		
+		printf("Pinging liveview\n");
 		usleep(1000000);
 	}
 
