@@ -3,8 +3,8 @@
 
 #define FUJI_ACK_PACKET_SIZE 0x44
 
-#define IS_FUJI_X_T20
-//#define IS_FUJI_X_A2
+//#define IS_FUJI_X_T20
+#define IS_FUJI_X_A2
 
 #ifdef IS_FUJI_X_A2
 	#define FUJI_CAM_NAME "X-A2"

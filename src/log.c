@@ -6,6 +6,7 @@
 void gp_log_(const char *format, ...) {
 	va_list args;
 	va_start(args, format);
+	printf("[GP_] ");
 	vprintf(format, args);
 	va_end(args);
 }

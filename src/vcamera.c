@@ -730,10 +730,6 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef FUJI_VUSB
-	return fuji_get_object_info(cam, ptp);
-#endif
-
 	cur = first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
@@ -813,7 +809,9 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	}
 #endif
 
-	int compressed_size = cur->stbuf.st_size;
+	gp_log_("Image %dx%x\n", imagewidth, imageheight);
+
+	uint32_t compressed_size = cur->stbuf.st_size;
 
 	// Fuji weirdness
 #ifdef FUJI_VUSB
@@ -824,7 +822,7 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 
 	x += put_16bit_le(data + x, ofc);
 	x += put_16bit_le(data + x, 0);			 /* ProtectionStatus, no protection */
-	x += put_32bit_le(data + x, cur->stbuf.st_size); /* ObjectCompressedSize */
+	x += put_32bit_le(data + x, compressed_size); /* ObjectCompressedSize */
 	x += put_16bit_le(data + x, thumbofc);		 /* ThumbFormat */
 	x += put_32bit_le(data + x, thumbsize);		 /* ThumbCompressedSize */
 	x += put_32bit_le(data + x, thumbwidth);	 /* ThumbPixWidth */
@@ -853,7 +851,12 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	sprintf(xdate, "%04d%02d%02dT%02d%02d%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 	x += put_string(data + x, xdate); /* ModificatioDate */
 
-	x += put_string(data + x, "keyword"); /* Keywords */
+	// Orientation tag
+	if (imageheight > imagewidth) {
+		x += put_string(data + x, "Orientation: 8");
+	} else {
+		x += put_string(data + x, "Orientation: 1");
+	}
 
 	ptp_senddata(cam, 0x1008, data, x);
 	free(data);

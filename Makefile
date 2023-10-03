@@ -1,8 +1,10 @@
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
 SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o
 
-CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF "-DVCAMERADIR=\"sd/\"" -D CAM_HAS_EXTERN_DEV_INFO
+CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF -D CAM_HAS_EXTERN_DEV_INFO
 LDFLAGS=-L. -Wl,-rpath=.
+
+CFLAGS+="-D VCAMERADIR=\"/home/daniel/Documents/fuji_sd/\""
 
 CFLAGS+=-I../camlib/src/ -I../fudge/lib
 
@@ -41,10 +43,10 @@ kill-fuji:
 	sudo ip link delete fuji_dummy
 ap-fuji:
 	sudo bash scripts/create_ap wlp0s20f3 fuji_dummy FUJIFILM-X-T20-ABCD
-test-fuji: tcp-fuji
+test-fuji:
 	@while true; do \
 	echo '------------------------------------------'; \
-	./tcp-fuji; \
+	make tcp-fuji && ./tcp-fuji; \
 	done
 
 setup-canon:
@@ -59,8 +61,8 @@ ap-canon:
 	sudo bash scripts/create_ap wlp0s20f3 canon_dummy 'EOST6{-464_Canon0A' zzzzzzzz -g 192.168.1.2 --ieee80211n
 kill-canon:
 	sudo ip link delete canon_dummy
-test-canon: ip-canon
+test-canon:
 	@while true; do \
 	echo '------------------------------------------'; \
-	./ip-canon; \
+	make ip-canon && ./ip-canon; \
 	done
