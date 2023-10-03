@@ -1,5 +1,4 @@
-/* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 8; tab-width: 8 -*- */
-/* camera.c
+/* Main gphoto PTP codebase
  *
  * Copyright (c) 2015-2017 Marcus Meissner <marcus@jet.franken.de>
  *
@@ -18,12 +17,6 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA  02110-1301  USA
  */
-#define _GPHOTO2_INTERNAL_CODE
-#define _DARWIN_C_SOURCE
-
-#ifndef VUSB_BIN_DIR
-#define VUSB_BIN_DIR "bin/"
-#endif
 
 #include <assert.h>
 #include <errno.h>
@@ -37,17 +30,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "gphoto.h"
+#include <gphoto.h>
 
 #include "canon.h"
 #include "fuji.h"
 
 #include <ptp.h>
-
-#ifdef FUJI_VUSB
-extern int ptp_functions_fuji_size;
-extern struct ptp_function ptp_functions_fuji_x_a2[];
-#endif
 
 #include "opcodes.h"
 
@@ -292,6 +280,7 @@ void read_directories(const char *path, struct ptp_dirent *parent) {
 		strcpy(cur->fsname, path);
 		strcat(cur->fsname, "/");
 		strcat(cur->fsname, gp_system_filename(de));
+		gp_log_("Found filename: %s\n", cur->fsname);
 		cur->id = ptp_objectid++;
 		cur->next = first_dirent;
 		cur->parent = parent;
@@ -823,6 +812,16 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 		free(filedata);
 	}
 #endif
+
+	int compressed_size = cur->stbuf.st_size;
+
+	// Fuji weirdness
+#ifdef FUJI_VUSB
+	if (fuji_is_compressed_mode(cam)) {
+		compressed_size = 0x19000;
+	}
+#endif
+
 	x += put_16bit_le(data + x, ofc);
 	x += put_16bit_le(data + x, 0);			 /* ProtectionStatus, no protection */
 	x += put_32bit_le(data + x, cur->stbuf.st_size); /* ObjectCompressedSize */
@@ -904,9 +903,9 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-// #ifdef FUJI_VUSB
-	// return fuji_get_thumb(cam, ptp);
-// #endif
+#ifdef FUJI_VUSB
+	return fuji_get_thumb(cam, ptp);
+#endif
 
 	cur = first_dirent;
 	while (cur) {
@@ -1600,6 +1599,9 @@ int vcam_open(vcamera *cam, const char *port) {
 		*/
 	}
 #endif
+
+	vcam_vendor_setup();
+
 	return GP_OK;
 }
 
