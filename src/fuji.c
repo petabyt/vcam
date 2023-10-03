@@ -80,7 +80,7 @@ static struct FujiInfo {
 int vcam_vendor_setup() {
 	//fuji_info.obj_count = ptp_get_object_count();
 
-	printf("Found %d objects\n", fuji_info.obj_count);
+	vcam_log("Found %d objects\n", fuji_info.obj_count);
 
 	return 0;
 }
@@ -92,12 +92,12 @@ int fuji_is_compressed_mode(vcamera *cam) {
 static int send_partial_object(char *path, vcamera *cam, ptpcontainer *ptp) {
 	FILE *file = fopen(path, "rb");
 	if (file == NULL) {
-		puts("File not found");
+		vcam_log("File %s not found\n", path);
 		exit(-1);
 	}
 
 	if (fseek(file, (size_t)ptp->params[1], SEEK_SET) == -1) {
-		puts("fseek failure");
+		vcam_log("fseek failure\n");
 		exit(-1);
 	}
 
@@ -106,7 +106,7 @@ static int send_partial_object(char *path, vcamera *cam, ptpcontainer *ptp) {
 	int read = fread(buffer, 1, max, file);
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, read);
-	printf("Generic sending %d\n", read);
+	vcam_log("Generic sending %d\n", read);
 
 	free(buffer);
 	fclose(file);
@@ -117,7 +117,7 @@ static int send_partial_object(char *path, vcamera *cam, ptpcontainer *ptp) {
 static int generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
 	FILE *file = fopen(path, "rb");
 	if (file == NULL) {
-		puts("File not found");
+		vcam_log("File %s not found\n", path);
 		exit(-1);
 	}
 
@@ -130,7 +130,7 @@ static int generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, file_size);
 	free(buffer);
-	printf("Generic sending %d\n", file_size);
+	vcam_log("Generic sending %d\n", file_size);
 
 	fclose(file);
 }
@@ -138,7 +138,7 @@ static int generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
 static size_t generic_file_size(char *path) {
 	FILE *file = fopen(path, "rb");
 	if (file == NULL) {
-		puts("File not found");
+		vcam_log("File %s not found", path);
 		exit(-1);
 	}
 
@@ -152,14 +152,14 @@ static size_t generic_file_size(char *path) {
 }
 
 int fuji_get_thumb(vcamera *cam, ptpcontainer *ptp) {
-	printf("Get thumb for object %d\n", ptp->params[0]);
+	vcam_log("Get thumb for object %d\n", ptp->params[0]);
 	generic_send_file(FUJI_DUMMY_THUMB, cam, ptp);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
 
 int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp) {
-	printf("Get object info for %d\n", ptp->params[0]);
+	vcam_log("Get object info for %d\n", ptp->params[0]);
 	FILE *file = NULL;
 	if (fuji_info.no_compressed) {
 		file = fopen(FUJI_DUMMY_OBJ_INFO, "rb");
@@ -168,7 +168,7 @@ int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp) {
 	}
 
 	if (file == NULL) {
-		puts("File not found");
+		vcam_log("File not found\n");
 		exit(-1);
 	}
 
@@ -195,7 +195,7 @@ int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp) {
 }
 
 int fuji_get_partial_object(vcamera *cam, ptpcontainer *ptp) {
-	printf("GetPartialObject request for %d\n", ptp->params[0]);
+	vcam_log("GetPartialObject request for %d\n", ptp->params[0]);
 	if (fuji_info.no_compressed) {
 		send_partial_object(FUJI_DUMMY_JPEG_FULL, cam, ptp);
 	} else {
@@ -224,7 +224,7 @@ int fuji_set_prop_supported(int code) {
 		}
 	}
 
-	printf("Request to set unknown property %X\n", code);
+	vcam_log("Request to set unknown property %X\n", code);
 	exit(1);
 
 	return 1;
@@ -242,7 +242,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 
 	// TODO: More asserts for len
 
-	printf("Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
+	vcam_log("Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_FunctionMode:
@@ -303,7 +303,7 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 	
 	// Fill in stack from previous
 	for (int i = 0; i < fuji_info.event_stack_length; i++) {
-		printf("Popping event from stack\n");
+		vcam_log("Popping event from stack\n");
 		ev->events[ev->length].code = fuji_info.event_stack[i].code;
 		ev->events[ev->length].value = fuji_info.event_stack[i].value;
 		ev->length++;
@@ -365,7 +365,7 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 		add_events(ev, remote_props, sizeof(remote_props) / sizeof(remote_props[0]));		
 	}
 
-	printf("Sending %d events\n", ev->length);
+	vcam_log("Sending %d events\n", ev->length);
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)ev, 2 + (6 * ev->length));
 	free(ev);
@@ -376,7 +376,7 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 }
 
 int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
-	printf("Get property %X\n", ptp->params[0]);
+	vcam_log("Get property %X\n", ptp->params[0]);
 	int data = -1;
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_EventsList:
@@ -424,7 +424,7 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 2);
 	default:
-		printf("Unknown %X\n", ptp->params[0]);
+		vcam_log("Unknown %X\n", ptp->params[0]);
 		//ptp_response (cam, PTP_RC_GeneralError, 0);
 		//return 1;
 	}
@@ -435,7 +435,7 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 
 extern int fuji_open_remote_port;
 int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
-	printf("Opening remote ports\n");
+	vcam_log("Opening remote ports\n");
 	fuji_open_remote_port++;
 
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
