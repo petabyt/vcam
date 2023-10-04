@@ -706,11 +706,47 @@ int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp) {
 }
 
 int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
-#ifdef FUJI_VUSB
-	return fuji_get_partial_object(cam, ptp);
-#endif
+	CHECK_SEQUENCE_NUMBER();
+	CHECK_SESSION();
+	CHECK_PARAM_COUNT(3);
 
-	ptp_response(cam, PTP_RC_GeneralError, 0);
+	struct ptp_dirent *cur = first_dirent;
+	while (cur) {
+		if (cur->id == ptp->params[0])
+			break;
+		cur = cur->next;
+	}
+
+	if (!cur) {
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+
+	FILE *file = fopen(cur->fsname, "rb");
+	if (file == NULL) {
+		vcam_log("File %s not found\n", cur->fsname);
+		exit(-1);
+	}
+
+	size_t start = (size_t)ptp->params[1];
+	size_t size = (size_t)ptp->params[2];
+
+	if (fseek(file, start, SEEK_SET) == -1) {
+		vcam_log("fseek failure\n");
+		exit(-1);
+	}
+
+	char *buffer = malloc(size);
+	int read = fread(buffer, 1, size, file);
+
+	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, read);
+	vcam_log("Generic sending %d\n", read);
+
+	free(buffer);
+	fclose(file);
+
+	ptp_response(cam, PTP_RC_OK, 0);
 
 	return 1;
 }
@@ -793,6 +829,8 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 				gp_log(GP_LOG_DEBUG, __FUNCTION__, "pixel x dim format is %d", e->format);
 				if (e->format == EXIF_FORMAT_SHORT) {
 					imagewidth = exif_get_short(e->data, exif_data_get_byte_order(ed));
+				} else if (e->format == EXIF_FORMAT_LONG) {
+					imagewidth = exif_get_long(e->data, exif_data_get_byte_order(ed));
 				}
 			}
 			e = exif_data_get_entry(ed, EXIF_TAG_PIXEL_Y_DIMENSION);
@@ -800,8 +838,11 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 				gp_log(GP_LOG_DEBUG, __FUNCTION__, "pixel y dim format is %d", e->format);
 				if (e->format == EXIF_FORMAT_SHORT) {
 					imageheight = exif_get_short(e->data, exif_data_get_byte_order(ed));
+				} else if (e->format == EXIF_FORMAT_LONG) {
+					imageheight = exif_get_long(e->data, exif_data_get_byte_order(ed));
 				}
 			}
+
 			/* FIXME: potentially could find out more about thumbnail too */
 		}
 		exif_data_unref(ed);
@@ -809,7 +850,7 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	}
 #endif
 
-	gp_log_("Image %dx%x\n", imagewidth, imageheight);
+	gp_log_("Image %s is %dx%d\n", cur->fsname, imagewidth, imageheight);
 
 	uint32_t compressed_size = cur->stbuf.st_size;
 
@@ -830,7 +871,11 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	x += put_32bit_le(data + x, imagewidth);	 /* ImagePixWidth */
 	x += put_32bit_le(data + x, imageheight);	 /* ImagePixHeight */
 	x += put_32bit_le(data + x, imagebitdepth);	 /* ImageBitDepth */
-	x += put_32bit_le(data + x, cur->parent->id);	 /* ParentObject */
+	if (cur->parent != NULL) {
+		x += put_32bit_le(data + x, cur->parent->id);	 /* ParentObject */
+	} else {
+		x += put_32bit_le(data + x, 0xffffffff);	 /* ParentObject */
+	}
 	/* AssociationType */
 	if (S_ISDIR(cur->stbuf.st_mode)) {
 		x += put_16bit_le(data + x, 1); /* GenericFolder */
@@ -906,9 +951,11 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef FUJI_VUSB
-	return fuji_get_thumb(cam, ptp);
-#endif
+// #ifdef FUJI_VUSB
+	// return fuji_get_thumb(cam, ptp);
+// #endif
+
+	gp_log_("Processing thumb call for %d\n", ptp->params[0]);
 
 	cur = first_dirent;
 	while (cur) {
