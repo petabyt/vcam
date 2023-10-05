@@ -1,5 +1,6 @@
 // Fujifilm PTP/IP/USB TCP I/O interface
-// Cameras 2014-2017
+// For X cameras 2014-2017
+// Copyright Daniel C - GNU Lesser General Public License v2.1
 #include <arpa/inet.h>
 #include <errno.h>
 #include <pthread.h>
@@ -7,11 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
 #include <ptp.h>
-
-#define _GPHOTO2_INTERNAL_CODE
-#define _DARWIN_C_SOURCE
 #include <gphoto.h>
 #include <vcamera.h>
 
@@ -21,7 +18,7 @@
 
 #include "fuji.h"
 
-//#define TCP_NOISY
+#define FUJI_IP_ADDR "192.168.0.1"
 
 int fuji_open_remote_port = 0;
 
@@ -87,16 +84,16 @@ int ptpip_cmd_read(void *to, int length) {
 	return rc;
 }
 
+// Recieve all packets from the app (initiator)
 int tcp_recieve_all(int client_socket) {
-	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 
-		#ifdef TCP_NOISY
+#ifdef TCP_NOISY
 		vcam_log("Read %d\n", size);
-		#endif
+#endif
 
 		if (size == 0) {
 			vcam_log("Initiator isn't sending anything, trying again\n");
@@ -142,7 +139,6 @@ int tcp_recieve_all(int client_socket) {
 	// Route the read data into the vcamera. The camera is the responder,
 	// and will be the first to write data to the app.
 	int rc = ptpip_cmd_write(buffer, size);
-
 	if (rc != size) {
 		return -1;
 	}
@@ -261,7 +257,7 @@ int new_ptp_tcp_socket(int port) {
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = inet_addr("192.168.0.1");
+	serverAddress.sin_addr.s_addr = inet_addr(FUJI_IP_ADDR);
 	serverAddress.sin_port = htons(port);
 
 	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
@@ -284,8 +280,8 @@ int new_ptp_tcp_socket(int port) {
 int ptp_fuji_liveview(int socket);
 
 void *fuji_accept_remote_ports_thread(void *arg) {
-	int event_socket = new_ptp_tcp_socket(55741);
-	int video_socket = new_ptp_tcp_socket(55742);
+	int event_socket = new_ptp_tcp_socket(FUJI_EVENT_IP_PORT);
+	int video_socket = new_ptp_tcp_socket(FUJI_LIVEVIEW_IP_PORT);
 
 	struct sockaddr_in client_address_event;
 	socklen_t client_address_length_event = sizeof(client_address_event);
@@ -320,9 +316,9 @@ static void fuji_accept_remote_ports() {
 }
 
 int main() {
-	int server_socket = new_ptp_tcp_socket(55740);
+	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
 	if (server_socket == -1) {
-		printf("Make sure to add virtual network device\n");
+		printf("Error, make sure to add virtual network device\n");
 		return 1;
 	}
 

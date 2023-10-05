@@ -1649,6 +1649,7 @@ int vcam_open(vcamera *cam, const char *port) {
 #endif
 
 	vcam_vendor_setup();
+	// TODO: setup generic props like shutterspeed
 
 	return GP_OK;
 }

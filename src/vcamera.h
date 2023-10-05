@@ -27,54 +27,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#ifndef VUSB_BIN_DIR
-#define VUSB_BIN_DIR "bin/"
-#endif
-
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
 
 int ptp_get_object_count();
 
 int vcam_vendor_setup();
-
-#define CHECK(result)               \
-	{                           \
-		int r = (result);   \
-		if (r < 0)          \
-			return (r); \
-	}
-
-#define CHECK_PARAM_COUNT(x)                                                                                          \
-	if (ptp->nparams != x) {                                                                                      \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "%X: params should be %d, but is %d", ptp->code, x, ptp->nparams); \
-		ptp_response(cam, PTP_RC_GeneralError, 0);                                                            \
-		return 1;                                                                                             \
-	}
-
-// Check the transaction ID
-#if 0
-#define CHECK_SEQUENCE_NUMBER()                                                                                   \
-	if (ptp->seqnr != cam->seqnr) {                                                                           \
-		/* not clear if normal cameras react like this */                                                 \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr); \
-		ptp_response(cam, PTP_RC_GeneralError, 0);                                                        \
-		return 1;                                                                                         \
-	}
-#endif
-
-// It was broken (?)
-#define CHECK_SEQUENCE_NUMBER() \
-	;                       \
-	;                       \
-	;
-
-#define CHECK_SESSION()                                                    \
-	if (!cam->session) {                                               \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open"); \
-		ptp_response(cam, PTP_RC_SessionNotOpen, 0);               \
-		return 1;                                                  \
-	}
 
 typedef struct ptpcontainer {
 	unsigned int size;
@@ -93,6 +51,7 @@ typedef enum vcameratype {
 	FUJI_X_A2,
 } vcameratype;
 
+// All members are garunteed to be zero by calloc()
 typedef struct vcamera {
 	int (*init)(struct vcamera*);
 	int (*exit)(struct vcamera*);
@@ -103,7 +62,7 @@ typedef struct vcamera {
 	int (*readint)(struct vcamera*,  unsigned char *data, int bytes, int timeout);
 	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
 
-	int is_ptp_ip; // If is in TCP/IP mode, packet conversion is done in usb2ip.c
+	//int is_ptp_ip;
 
 	unsigned short	vendor, product;	/* for generic fuzzing */
 
@@ -118,9 +77,18 @@ typedef struct vcamera {
 	unsigned int	session;
 	ptpcontainer	ptpcmd;
 
-	int		exposurebias;
-	unsigned int	shutterspeed;
-	unsigned int	fnumber;
+	// Generic camera internal properties
+	int exposurebias;
+	unsigned int shutterspeed;
+	unsigned int fnumber;
+	unsigned int focal_length;
+	unsigned int target_distance_feet;
+
+	// Fujifilm server related attributes
+	int fuji_test_cam_attr;
+
+	// Canon PTP/IP server related things
+	int is_lv_ready;
 
 #ifdef FUZZING
 	int		fuzzmode;
@@ -229,5 +197,41 @@ int ptp_fnumber_setvalue(vcamera *, PTPPropertyValue *);
 int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
 int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
 int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
+
+// A bunch of stupid macros
+#define CHECK(result)               \
+	{                           \
+		int r = (result);   \
+		if (r < 0)          \
+			return (r); \
+	}
+
+#define CHECK_PARAM_COUNT(x)                                                                                          \
+	if (ptp->nparams != x) {                                                                                      \
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "%X: params should be %d, but is %d", ptp->code, x, ptp->nparams); \
+		ptp_response(cam, PTP_RC_GeneralError, 0);                                                            \
+		return 1;                                                                                             \
+	}
+
+// Check the transaction ID
+#if 0
+	#define CHECK_SEQUENCE_NUMBER()                                                                                   \
+		if (ptp->seqnr != cam->seqnr) {                                                                           \
+			/* not clear if normal cameras react like this */                                                 \
+			gp_log(GP_LOG_ERROR, __FUNCTION__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr); \
+			ptp_response(cam, PTP_RC_GeneralError, 0);                                                        \
+			return 1;                                                                                         \
+		}
+#else
+	// It was broken (?)
+	#define CHECK_SEQUENCE_NUMBER()
+#endif
+
+#define CHECK_SESSION()                                                    \
+	if (!cam->session) {                                               \
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open"); \
+		ptp_response(cam, PTP_RC_SessionNotOpen, 0);               \
+		return 1;                                                  \
+	}
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

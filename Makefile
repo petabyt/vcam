@@ -1,17 +1,20 @@
+-include config.mak
+
+WIFI_DEV?=wlp0s20f3
+
+# Set this to a folder with images (no DCIM for fuji)
+VCAMERADIR?=/home/daniel/Documents/fuji_sd/
+
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
 SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o
 
-CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF -D CAM_HAS_EXTERN_DEV_INFO
+CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
-
-WIFI_DEV=wlp0s20f3
-
-# Set this to a folder with images (no DCIM for fuji)
-CFLAGS+="-D VCAMERADIR=\"/home/daniel/Documents/fuji_sd/\""
-
+CFLAGS+="-D VCAMERADIR=\"$(VCAMERADIR)\""
 CFLAGS+=-I../camlib/src/ -I../fudge/lib
 
-libusb.so: CFLAGS+=-D CANON_VUSB
+# generic libusb.so Canon EOS Device
+libusb.so: CFLAGS+=-D CANON_VUSB -D CAM_HAS_EXTERN_DEV_INFO
 libusb.so: SO_FILES+=src/data.o src/canon.o
 libusb.so: src/data.o src/canon.o $(SO_FILES)
 libusb.so: $(SO_FILES)
@@ -20,12 +23,12 @@ libusb.so: $(SO_FILES)
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 src/vcamera.o: src/opcodes.h
 
-tcp-fuji: CFLAGS+=-D FUJI_VUSB
+tcp-fuji: CFLAGS+=-D FUJI_VUSB -D CAM_HAS_EXTERN_DEV_INFO
 tcp-fuji: SO_FILES+=src/fuji.o src/tcp-fuji.o
 tcp-fuji: src/fuji.o src/tcp-fuji.o $(SO_FILES)
 	$(CC) $(SO_FILES) $(CFLAGS) -o tcp-fuji $(LDFLAGS) -lexif
 
-ip-canon: CFLAGS+=-D CANON_VUSB
+ip-canon: CFLAGS+=-D CANON_VUSB -D CAM_HAS_EXTERN_DEV_INFO
 ip-canon: SO_FILES+=src/tcp-ip.o src/data.o src/canon.o
 ip-canon: src/tcp-ip.o src/data.o src/canon.o $(SO_FILES)
 	$(CC) $(SO_FILES) $(CFLAGS) -o ip-canon $(LDFLAGS) -lexif
@@ -47,9 +50,9 @@ kill-fuji:
 ap-fuji:
 	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-T20-ABCD
 test-fuji:
-	@while true; do \
+	@while make tcp-fuji; do \
 	echo '------------------------------------------'; \
-	make tcp-fuji && ./tcp-fuji; \
+	./tcp-fuji; \
 	done
 
 setup-canon:
@@ -65,7 +68,7 @@ ap-canon:
 kill-canon:
 	sudo ip link delete canon_dummy
 test-canon:
-	@while true; do \
+	@while make ip-canon; do \
 	echo '------------------------------------------'; \
-	make ip-canon && ./ip-canon; \
+	./ip-canon; \
 	done
