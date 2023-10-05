@@ -423,15 +423,16 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		data = FUJI_REMOTE_VERSION;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-#endif
+#else
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
+#endif
 	case PTP_PC_FUJI_StorageID:
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 2);
+		break;
 	default:
-		vcam_log("Unknown %X\n", ptp->params[0]);
-		ptp_response(cam, PTP_RC_GeneralError, 0);
+		vcam_log("Fuji Unknown %X\n", ptp->params[0]);
 		return 1;
 	}
 

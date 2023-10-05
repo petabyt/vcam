@@ -1282,10 +1282,8 @@ int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
 #ifdef FUJI_VUSB
-	if (cam->type == FUJI_X_A2) {
-		if (!fuji_get_property(cam, ptp)) {
-			return 1;
-		}
+	if (!fuji_get_property(cam, ptp)) {
+		return 1;
 	}
 #endif
 

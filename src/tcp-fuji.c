@@ -90,16 +90,38 @@ int ptpip_cmd_read(void *to, int length) {
 int tcp_recieve_all(int client_socket) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
-	ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
+	ssize_t size;
+	for (int i = 0; i < 10; i++) {
+		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 
-	if (size < 0) {
-		perror("Error reading data from socket");
-		return -1;
-	}
+		#ifdef TCP_NOISY
+		vcam_log("Read %d\n", size);
+		#endif
 
-	if (size != 4) {
-		vcam_log("Couldn't read 4 bytes, only got %d\n", size);
-		return -1;
+		if (size == 0) {
+			vcam_log("Initiator isn't sending anything, trying again\n");
+			usleep(1000 * 1000);
+			continue;
+		}
+
+		if (size < 0) {
+			perror("Error reading data from socket");
+			return -1;
+		}
+
+		if (size != 4) {
+			vcam_log("Couldn't read 4 bytes, only got %d: %X\n", size, packet_length);
+
+			size += recv(client_socket, (uint8_t *)(&packet_length) + size, sizeof(uint32_t) - size, 0);
+			if (size == sizeof(uint32_t)) {
+				vcam_log("Acting up, didn't send all of size at first: %X\n", packet_length);
+				break;
+			}
+			
+			return -1;
+		}
+
+		break;
 	}
 
 	// Allocate the rest of the packet to read
@@ -113,7 +135,7 @@ int tcp_recieve_all(int client_socket) {
 		perror("Error reading data from socket");
 		return -1;
 	} else if (size != packet_length) {
-		vcam_log("Couldn't read the rest of the packet, only got %d\n", size);
+		vcam_log("Couldn't read the rest of the packet, only got %d/%d\n", size, packet_length);
 		return -1;
 	}
 

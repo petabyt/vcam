@@ -4,6 +4,9 @@ SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF -D CAM_HAS_EXTERN_DEV_INFO
 LDFLAGS=-L. -Wl,-rpath=.
 
+WIFI_DEV=wlp0s20f3
+
+# Set this to a folder with images (no DCIM for fuji)
 CFLAGS+="-D VCAMERADIR=\"/home/daniel/Documents/fuji_sd/\""
 
 CFLAGS+=-I../camlib/src/ -I../fudge/lib
@@ -42,7 +45,7 @@ setup-fuji:
 kill-fuji:
 	sudo ip link delete fuji_dummy
 ap-fuji:
-	sudo bash scripts/create_ap wlp0s20f3 fuji_dummy FUJIFILM-X-T20-ABCD
+	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-T20-ABCD
 test-fuji:
 	@while true; do \
 	echo '------------------------------------------'; \
@@ -51,14 +54,14 @@ test-fuji:
 
 setup-canon:
 	sudo ip link add canon_dummy type dummy
-	#sudo ip address add 192.168.1.2/24 dev canon_dummy # required for local testing
+	#sudo ip address add 192.168.1.2/24 dev canon_dummy # local testing doesn't work without this
 	sudo ip link set dev canon_dummy address '00:BB:C1:85:9F:AB'
 	sudo ip link set canon_dummy up
 	sudo ip route add 192.168.1.2 dev canon_dummy
 	sudo ip address add 192.168.1.10/24 brd + dev canon_dummy noprefixroute
 	ip a
 ap-canon:
-	sudo bash scripts/create_ap wlp0s20f3 canon_dummy 'EOST6{-464_Canon0A' zzzzzzzz -g 192.168.1.2 --ieee80211n
+	sudo bash scripts/create_ap $(WIFI_DEV) canon_dummy 'EOST6{-464_Canon0A' zzzzzzzz -g 192.168.1.2 --ieee80211n
 kill-canon:
 	sudo ip link delete canon_dummy
 test-canon:
