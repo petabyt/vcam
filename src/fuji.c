@@ -87,7 +87,7 @@ static struct FujiInfo {
     .event_stack_length = 0
 };
 
-int vcam_vendor_setup() {
+int vcam_vendor_setup(vcamera *cam) {
 	fuji_info.obj_count = ptp_get_object_count();
 
 	vcam_log("Found %d objects\n", fuji_info.obj_count);

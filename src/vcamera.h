@@ -32,8 +32,6 @@ void gp_log_(const char *format, ...);
 
 int ptp_get_object_count();
 
-int vcam_vendor_setup();
-
 typedef struct ptpcontainer {
 	unsigned int size;
 	unsigned int type;
@@ -100,6 +98,8 @@ typedef struct vcamera {
 } vcamera;
 
 vcamera *vcamera_new(vcameratype);
+
+int vcam_vendor_setup(vcamera *cam);
 
 struct ptp_function {
 	int	code;

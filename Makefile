@@ -2,8 +2,14 @@
 
 WIFI_DEV?=wlp0s20f3
 
-# Set this to a folder with images (no DCIM for fuji)
-VCAMERADIR?=/home/daniel/Documents/fuji_sd/
+# Set this to a folder with images (as it appears to PTP)
+VCAMERADIR?=$(HOME)/Documents/fuji_sd/
+
+ifeq ($(wildcard $(VCAMERADIR).*),)
+$(info Directory '$(VCAMERADIR)' not found)
+VCAMERADIR=$(PWD)/sd
+$(info Using '$(VCAMERADIR)')
+endif
 
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
 SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o

@@ -5,11 +5,12 @@
 #include <assert.h>
 
 #include <gphoto.h>
+#include <canon.h>
 
-char *extern_manufacturer_info = "Canon Inc.";
-char *extern_model_Name = "Canon EOS Rebel T6";
-char *extern_device_version = "3-1.2.0";
-char *extern_serial_no = "828af56";
+char *extern_manufacturer_info = CANON_MANUFACT;
+char *extern_model_Name = CANON_MODEL;
+char *extern_device_version = CANON_DEV_VER;
+char *extern_serial_no = CANON_SERIAL_NO;
 
 extern unsigned char bin_eos_events_bin[];
 extern unsigned int bin_eos_events_bin_len;
@@ -36,7 +37,7 @@ struct EosEventUint {
 	uint32_t value;
 };
 
-int vcam_vendor_setup() {
+int vcam_vendor_setup(vcamera *cam) {
 	return 0;
 }
 

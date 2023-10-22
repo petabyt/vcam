@@ -24,19 +24,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif
 #include <stdint.h>
 #include <string.h>
 
+#include <ptp.h>
 #include <gphoto.h>
-
 #include "canon.h"
 #include "fuji.h"
-
-#include <ptp.h>
-
 #include "opcodes.h"
 
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
@@ -1648,7 +1642,7 @@ int vcam_open(vcamera *cam, const char *port) {
 	}
 #endif
 
-	vcam_vendor_setup();
+	vcam_vendor_setup(cam);
 	// TODO: setup generic props like shutterspeed
 
 	return GP_OK;
@@ -1971,16 +1965,14 @@ int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 	return tocopy;
 }
 
-vcamera *
-vcamera_new(vcameratype type) {
+vcamera *vcamera_new(vcameratype type) {
 	vcamera *cam;
 
 	cam = calloc(1, sizeof(vcamera));
 	if (!cam)
 		return NULL;
 
-	const char *vcameradir_env = getenv("VCAMERADIR");
-	read_tree(vcameradir_env != NULL ? vcameradir_env : VCAMERADIR);
+	read_tree(VCAMERADIR);
 
 	cam->init = vcam_init;
 	cam->exit = vcam_exit;
