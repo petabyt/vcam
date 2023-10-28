@@ -1359,6 +1359,27 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 
 int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	vcam_log("Recieved data phase for 0x9999: %d\n", len);
+
+	if (ptp->nparams != 1) {
+		vcam_log("Expected a checksum parameter\n");
+	}
+
+	int checksum = 0;
+	for (int i = 0; i < len; i++) {
+		checksum += data[i];
+	}
+
+	if (checksum != ptp->params[0]) {
+		vcam_log("Invalid checksum %d/%d\n", checksum, ptp->params[0]);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	} else {
+		vcam_log("Verified checksum %d/%d\n", checksum, ptp->params[0]);
+	}
+
+	ptp_response(cam, PTP_RC_OK, 0);
+
+	return 1;
 }
 
 int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {

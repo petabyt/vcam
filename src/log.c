@@ -15,7 +15,7 @@ void gp_log(void *lvl, const char *domain, const char *format, ...) {
 	va_list args;
 	va_start(args, format);
 	char buffer[1024];
-	vsnprintf(buffer, 1024, format, args);
+	vsnprintf(buffer, sizeof(buffer), format, args);
 	va_end(args);
 
 	printf("[GP] (%s) %s\n", domain, buffer);
@@ -41,7 +41,7 @@ void vcam_log(const char *format, ...) {
 	va_list args;
 	va_start(args, format);
 	char buffer[1024];
-	vsnprintf(buffer, 1024, format, args);
+	vsnprintf(buffer, sizeof(buffer), format, args);
 	va_end(args);
 
 	printf("[VCAM] %s", buffer);
