@@ -4,12 +4,13 @@ responder (server) side of PTP/USB, PTP/IP, UPnP, and (eventually) Bluetooth. Fo
 drop-in spoofer replacement of `libusb-v1.0.so`.
 
 ## Roadmap
+- [x] Basic PTP responder implementation (thanks Marcus Meissner)
 - [x] LibUSB drop-in replacement
 - [x] PTP/IP Implementation
 - [x] Complete Fujifilm X implementation (2015-2020)
 - [x] Spoof Fujifilm Camera Connect
-- [ ] Complete Canon EOS implementation (EOS T6)
-- [ ] Spoof EOS Connect
+- [x] Spoof EOS Connect UPnP
+- [ ] Complete Canon EOS implementation (Digic 4+)
 
 Note that this is an experimental regression testing tool, and the code quality reflects that. Of course, this will be improved
 before it's finished.
@@ -24,6 +25,8 @@ For Canon PTP/IP spoofer:
 - `make setup-canon` - setup dummy net device
 - `make ip-canon` - start wireless AP on device wlp0s20f3
 - `make test-canon` - starts program in a loop - will accept another connection after disconnect 
+
+Fuji test images: https://s1.danielc.dev/filedump/fuji_sd.tar.gz
 
 ## Credits
 Original Author (vusb): Marcus Meissner <marcus@jet.franken.de>  
