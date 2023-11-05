@@ -179,6 +179,7 @@ int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
 int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
 int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
 
+
 // A bunch of janky macros
 #define CHECK(result)               \
 	{                           \
@@ -209,5 +210,47 @@ int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
 		ptp_response(cam, PTP_RC_SessionNotOpen, 0);               \
 		return 1;                                                  \
 	}
+
+struct ptp_dirent {
+	uint32_t id;
+	char *name;
+	char *fsname;
+	struct stat stbuf;
+	struct ptp_dirent *parent;
+	struct ptp_dirent *next;
+};
+
+struct ptp_interrupt {
+	unsigned char *data;
+	int size;
+	struct timeval triggertime;
+	struct ptp_interrupt *next;
+};
+
+extern struct ptp_dirent *first_dirent;
+extern uint32_t ptp_objectid;
+
+void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd);
+
+// Data structure API
+int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt);
+int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt);
+char *get_string(unsigned char *data);
+int put_string(unsigned char *data, char *str);
+int put_8bit_le(unsigned char *data, uint8_t x);
+int put_16bit_le(unsigned char *data, uint16_t x);
+int put_32bit_le(unsigned char *data, uint32_t x);
+int put_64bit_le(unsigned char *data, uint64_t x);
+int8_t get_i8bit_le(unsigned char *data);
+uint8_t get_8bit_le(unsigned char *data);
+uint16_t get_16bit_le(unsigned char *data);
+uint32_t get_32bit_le(unsigned char *data);
+
+void *read_file(struct ptp_dirent *cur);
+void free_dirent(struct ptp_dirent *ent);
+
+int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
+
+int ptp_notify_change(vcamera *cam, uint16_t code, uint32_t value);
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

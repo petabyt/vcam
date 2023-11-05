@@ -9,7 +9,7 @@
 #include <string.h>
 #include <libusb.h>
 
-#include <gphoto.h>
+#include <vcam.h>
 
 struct _GPPortPrivateLibrary {
 	int isopen;

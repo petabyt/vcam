@@ -4,7 +4,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <gphoto.h>
+#include <vcam.h>
 #include <canon.h>
 
 char *extern_manufacturer_info = CANON_MANUFACT;
@@ -97,7 +97,7 @@ int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigned char 
 		eos_info.queue_length++;
 	}
 
-	ptp_notify_change(code, value);
+	ptp_notify_change(cam, code, value);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

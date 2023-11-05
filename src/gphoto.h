@@ -20,8 +20,6 @@ extern char *extern_serial_no;
 #include <libexif/exif-data.h>
 #endif
 
-#include "vcamera.h"
-
 #include <gphoto2/gphoto2-port-log.h>
 #include <gphoto2/gphoto2-port-result.h>
 #include <gphoto2/gphoto2-port.h>

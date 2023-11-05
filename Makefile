@@ -12,7 +12,7 @@ $(info Using '$(VCAMERADIR)')
 endif
 
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
-SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o
+SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o src/ops.o
 
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
