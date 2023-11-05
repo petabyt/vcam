@@ -1,19 +1,23 @@
 # vcam
 This is a virtual camera emulator to spoof and communicate with official vendor software. It currently emulates the
-responder (server) side of PTP/USB, PTP/IP, UPnP, and (eventually) Bluetooth. For USB, this project has a a
-drop-in spoofer replacement of `libusb-v1.0.so`.
+responder (server) side of PTP/USB, PTP/IP, UPnP, and (eventually) Bluetooth. It also perfectly emulates the networking
+too (requires a good WiFi card) so that means it can [spoof official vendor apps](https://twitter.com/danielcdev/status/1696271427240902894) without patching.
 
 ## Roadmap
 - [x] Basic PTP responder implementation (thanks Marcus Meissner)
-- [x] LibUSB drop-in replacement
-- [x] PTP/IP Implementation
+- [x] `libusb-v1.0.so` drop-in replacement - spoof Linux PTP apps
+- [x] PTP/IP packet support
 - [x] Complete Fujifilm X implementation (2015-2020)
-- [x] Spoof Fujifilm Camera Connect
-- [x] Spoof EOS Connect UPnP
+- [x] Spoof [Fujifilm Camera Connect](https://play.google.com/store/apps/details?id=com.fujifilm_dsc.app.remoteshooter&hl=en_US&gl=US)
+- [x] Spoof [EOS Connect](https://play.google.com/store/apps/details?id=jp.co.canon.ic.cameraconnect&hl=en_US&gl=US) (only the setup part)
 - [ ] Complete Canon EOS implementation (Digic 4+)
 
-Note that this is an experimental regression testing tool, and the code quality reflects that. Of course, this will be improved
-before it's finished.
+## Why
+- For regression testing - link a PTP library again the fake libusb and test functionality in CI
+- For rapid prototyping - vcam can be used instead of a physical camera for maintaining PTP code.
+- Spoofing official clients helps me better understand what they are doing - this has helped me improve my PTP app without decompiling anything,
+and removes a lot of the guesswork.
+- Note that this tool is very *experimental*, and the code quality reflects that.
 
 ## Building
 - This repo is currently being rapidly developed alongside other projects so symlinks are being used for now instead of submodules.  
