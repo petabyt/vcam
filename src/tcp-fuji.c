@@ -12,15 +12,11 @@
 #include <gphoto.h>
 #include <vcamera.h>
 
-#ifndef FUJI_VUSB
-#error "FUJI_VUSB should be defined"
-#endif
-
 #include "fuji.h"
 
 #define FUJI_IP_ADDR "192.168.0.1"
 
-int fuji_open_remote_port = 0;
+int fuji_open_remote_port = 0; // TODO: Move to int in vcamera
 
 struct _GPPortPrivateLibrary {
 	int isopen;
@@ -298,7 +294,7 @@ void *fuji_accept_remote_ports_thread(void *arg) {
 	ptp_fuji_liveview(client_socket_video);
 
 	while (1) {
-		printf("Pinging liveview\n");
+		printf("Liveview thread sleeping...\n");
 		usleep(1000000);
 	}
 
@@ -316,6 +312,8 @@ static void fuji_accept_remote_ports() {
 }
 
 int main() {
+	printf("vcam - running %s\n", extern_model_name);
+
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
 	if (server_socket == -1) {
 		printf("Error, make sure to add virtual network device\n");

@@ -7,10 +7,8 @@
 
 #include <ptp.h>
 
-#include <config.h>
-
 extern char *extern_manufacturer_info;
-extern char *extern_model_Name;
+extern char *extern_model_name;
 extern char *extern_device_version;
 extern char *extern_serial_no;
 

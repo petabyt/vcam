@@ -6,9 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif
 #include <string.h>
 #include <libusb.h>
 

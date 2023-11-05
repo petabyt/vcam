@@ -8,7 +8,7 @@
 #include <canon.h>
 
 char *extern_manufacturer_info = CANON_MANUFACT;
-char *extern_model_Name = CANON_MODEL;
+char *extern_model_name = CANON_MODEL;
 char *extern_device_version = CANON_DEV_VER;
 char *extern_serial_no = CANON_SERIAL_NO;
 
@@ -24,7 +24,7 @@ static struct EosInfo {
 	struct EventQueue {
 		uint16_t code;
 		uint32_t data;
-	}queue[10];
+	}queue[10]; // TODO: We need to do more than 10
 	int queue_length;
 
 	int calls_to_liveview;
@@ -78,8 +78,14 @@ int ptp_eos_set_property(vcamera *cam, ptpcontainer *ptp) {
 
 int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	uint32_t *dat = (uint32_t *)data;
+	uint32_t length = dat[0];
+	uint32_t code = dat[1];
+	uint32_t value = dat[2];
 
-	switch (dat[1]) {
+	// We don't support multi-length params
+	assert(length == 0xc);
+
+	switch (code) {
 	case PTP_PC_EOS_CaptureDestination:
 		eos_info.lv_ready = 1;
 		break;
@@ -90,6 +96,8 @@ int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigned char 
 		eos_info.queue[eos_info.queue_length].data = dat[2];
 		eos_info.queue_length++;
 	}
+
+	ptp_notify_change(code, value);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

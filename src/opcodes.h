@@ -28,7 +28,7 @@ struct ptp_function ptp_functions_nikon_dslr[] = {
 	{0x90c2,	ptp_nikon_setcontrolmode_write, NULL			},
 };
 
-#ifdef CANON_VUSB
+#ifdef VCAM_CANON
 struct ptp_function ptp_functions_canon[] = {
 	{0x9101,	ptp_eos_generic, NULL },
 	{0x9102,	ptp_eos_generic, NULL },
@@ -183,7 +183,7 @@ struct ptp_function ptp_functions_canon[] = {
 };
 #endif
 
-#ifdef FUJI_VUSB
+#ifdef VCAM_FUJI
 struct ptp_function ptp_functions_fuji_x_a2[] = {
 	{PTP_OC_FUJI_GetDeviceInfo,	ptp_fuji_get_device_info, NULL },
 	{0x101c,	ptp_fuji_capture, NULL },
@@ -198,10 +198,10 @@ struct ptp_map_functions {
 } ptp_functions[] = {
 	{GENERIC_PTP,	ptp_functions_generic,		sizeof(ptp_functions_generic) / sizeof(ptp_functions_generic[0])},
 	{NIKON_D750,	ptp_functions_nikon_dslr,	sizeof(ptp_functions_nikon_dslr) / sizeof(ptp_functions_nikon_dslr[0])},
-#ifdef CANON_VUSB
+#ifdef VCAM_CANON
 	{CANON_1300D,	ptp_functions_canon,		sizeof(ptp_functions_canon) / sizeof(ptp_functions_canon[0])},
 #endif
-#ifdef FUJI_VUSB
+#ifdef VCAM_FUJI
 	{FUJI_X_A2,	ptp_functions_fuji_x_a2,		sizeof(ptp_functions_fuji_x_a2) / sizeof(ptp_functions_fuji_x_a2[0])},
 #endif
 };

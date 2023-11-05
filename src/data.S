@@ -1,12 +1,5 @@
 // Include binary files with incbin. Yes, this is assembly :)
-
-/*
-
-TODO:
-- get object info (compressed and uncompressed)
-- get basic thumbnail
-
-*/
+// TODO: Move to fopen/fread
 
 .global eos_lv_jpg
 .global eos_lv_jpg_size

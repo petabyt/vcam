@@ -1,23 +1,4 @@
-/* Main gphoto PTP codebase
- *
- * Copyright (c) 2015-2017 Marcus Meissner <marcus@jet.franken.de>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA  02110-1301  USA
- */
-
+// Copyright (c) 2015,2016 Marcus Meissner <marcus@jet.franken.de> - GNU General Public License v2
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -27,7 +8,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <ptp.h>
+//#include "vcam.h"
+
 #include <gphoto.h>
 #include "canon.h"
 #include "fuji.h"
@@ -450,7 +432,7 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 
 #ifdef CAM_HAS_EXTERN_DEV_INFO
 	x += put_string(data + x, extern_manufacturer_info);	 /* Manufacturer */
-	x += put_string(data + x, extern_model_Name); /* Model */
+	x += put_string(data + x, extern_model_name); /* Model */
 	x += put_string(data + x, extern_device_version);		 /* DeviceVersion */
 	x += put_string(data + x, extern_device_version);		 /* DeviceVersion */
 	x += put_string(data + x, extern_serial_no);		 /* SerialNumber */
@@ -849,7 +831,7 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	uint32_t compressed_size = cur->stbuf.st_size;
 
 	// Fuji weirdness
-#ifdef FUJI_VUSB
+#ifdef VCAM_FUJI
 	if (fuji_is_compressed_mode(cam)) {
 		compressed_size = 0x19000;
 	}
@@ -945,7 +927,7 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-// #ifdef FUJI_VUSB
+// #ifdef VCAM_FUJI
 	// return fuji_get_thumb(cam, ptp);
 // #endif
 
@@ -1275,7 +1257,7 @@ int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef FUJI_VUSB
+#ifdef VCAM_FUJI
 	if (!fuji_get_property(cam, ptp)) {
 		return 1;
 	}
@@ -1309,7 +1291,7 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef FUJI_VUSB
+#ifdef VCAM_FUJI
 	if (fuji_set_prop_supported(ptp->params[0])) {
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
@@ -1352,7 +1334,7 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 	}
 	printf("\n");
 
-	ptp_response(cam, PTP_RC_OK, 0);
+	//ptp_response(cam, PTP_RC_OK, 0);
 
 	return 1;
 }
@@ -1391,7 +1373,7 @@ int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned 
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef FUJI_VUSB
+#ifdef VCAM_FUJI
 	return fuji_set_property(cam, ptp, data, len);
 #endif
 
@@ -1755,10 +1737,10 @@ void vcam_process_output(vcamera *cam) {
 		}
 	}
 
-	// We have read the first packet, dicard it
+	// We have read the first packet, discard it
 	cam->nroutbulk -= ptp.size;
 
-	printf("Processing call for opcode 0x%X\n", ptp.code);
+	gp_log_("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
 
 	/* call the opcode handler */
 	for (j = 0; j < sizeof(ptp_functions) / sizeof(ptp_functions[0]); j++) {
@@ -1884,6 +1866,10 @@ struct ptp_interrupt {
 };
 
 struct ptp_interrupt *first_interrupt;
+
+int ptp_notify_change(vcamera *cam, uint16_t code, uint32_t value) {
+	return ptp_inject_interrupt(cam, 1000, code, value, 0, 0);
+}
 
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
 	struct ptp_interrupt *interrupt, **pint;

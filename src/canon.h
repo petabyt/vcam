@@ -1,3 +1,4 @@
+#ifdef VCAM_CANON
 #ifndef VCAM_CANON_H
 #define VCAM_CANON_H
 
@@ -20,4 +21,5 @@ int ptp_eos_set_property_payload(vcamera *cam, ptpcontainer *ptp, unsigned char 
 int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp);
 int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp);
 
+#endif
 #endif

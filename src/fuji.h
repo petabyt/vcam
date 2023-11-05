@@ -1,3 +1,4 @@
+#ifdef VCAM_FUJI
 #ifndef VCAM_FUJI_H
 #define VCAM_FUJI_H
 
@@ -57,4 +58,5 @@ int fuji_is_compressed_mode(vcamera *cam);
 
 uint8_t *fuji_get_ack_packet();
 
+#endif
 #endif

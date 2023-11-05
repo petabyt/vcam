@@ -7,17 +7,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "vcamera.h"
 #include <ptp.h>
-
-#define _GPHOTO2_INTERNAL_CODE
-#define _DARWIN_C_SOURCE
-#include <config.h>
-#include <gphoto2/gphoto2-port-library.h>
-#include <gphoto2/gphoto2-port-log.h>
-#include <gphoto2/gphoto2-port-result.h>
-#include <gphoto2/gphoto2-port.h>
-#include <libgphoto2_port/i18n.h>
-#include <vcamera.h>
+#include "gphoto.h"
 
 //#define TCP_NOISY
 
@@ -398,6 +390,8 @@ static void *bind_event_socket_thread(void *arg) {
 }
 
 int main() {
+	printf("vcam - running %s\n", extern_model_name);
+
 	int server_socket = new_ptp_tcp_socket(PTP_IP_PORT);
 
 	struct sockaddr_in client_address;

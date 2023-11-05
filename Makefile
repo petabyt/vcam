@@ -19,29 +19,30 @@ LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+="-D VCAMERADIR=\"$(VCAMERADIR)\""
 CFLAGS+=-I../camlib/src/ -I../fudge/lib
 
+$(SO_FILES): CFLAGS+=$(SO_CFLAGS)
+
 # generic libusb.so Canon EOS Device
-libusb.so: CFLAGS+=-D CANON_VUSB -D CAM_HAS_EXTERN_DEV_INFO
+libusb.so: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
 libusb.so: SO_FILES+=src/data.o src/canon.o
 libusb.so: src/data.o src/canon.o $(SO_FILES)
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
-$(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 src/vcamera.o: src/opcodes.h
 
-tcp-fuji: CFLAGS+=-D FUJI_VUSB -D CAM_HAS_EXTERN_DEV_INFO
-tcp-fuji: SO_FILES+=src/fuji.o src/tcp-fuji.o
-tcp-fuji: src/fuji.o src/tcp-fuji.o $(SO_FILES)
-	$(CC) $(SO_FILES) $(CFLAGS) -o tcp-fuji $(LDFLAGS) -lexif
+fuji: CFLAGS+=-D VCAM_FUJI -D CAM_HAS_EXTERN_DEV_INFO
+fuji: SO_FILES+=src/tcp-fuji.o src/fuji.o
+fuji: src/fuji.o src/tcp-fuji.o $(SO_FILES)
+	$(CC) $(SO_FILES) $(CFLAGS) -o fuji $(LDFLAGS) -lexif
 
-ip-canon: CFLAGS+=-D CANON_VUSB -D CAM_HAS_EXTERN_DEV_INFO
-ip-canon: SO_FILES+=src/tcp-ip.o src/data.o src/canon.o
-ip-canon: src/tcp-ip.o src/data.o src/canon.o $(SO_FILES)
-	$(CC) $(SO_FILES) $(CFLAGS) -o ip-canon $(LDFLAGS) -lexif
+canon: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
+canon: SO_FILES+=src/tcp-ip.o src/data.o src/canon.o
+canon: src/tcp-ip.o src/data.o src/canon.o $(SO_FILES)
+	$(CC) $(SO_FILES) $(CFLAGS) -o canon $(LDFLAGS) -lexif
 
 clean:
 	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o
-	$(RM) tcp-fuji ip-canon
+	$(RM) fuji canon
 
 # Wireless AP networking Hacks
 
@@ -56,9 +57,9 @@ kill-fuji:
 ap-fuji:
 	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-T20-ABCD
 test-fuji:
-	@while make tcp-fuji; do \
+	@while make fuji; do \
 	echo '------------------------------------------'; \
-	./tcp-fuji; \
+	./fuji; \
 	done
 
 setup-canon:
@@ -74,7 +75,7 @@ ap-canon:
 kill-canon:
 	sudo ip link delete canon_dummy
 test-canon:
-	@while make ip-canon; do \
+	@while make canon; do \
 	echo '------------------------------------------'; \
-	./ip-canon; \
+	./canon; \
 	done
