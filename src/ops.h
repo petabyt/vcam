@@ -1,5 +1,4 @@
-// External opcode header for camera definitions and ptp_function declarations
-// All data in this file is static, and can be included more than once (although try to not)
+// Map of all opcodes for the current build
 #ifndef VCAM_OPCODES_H
 #define VCAM_OPCODES_H
 

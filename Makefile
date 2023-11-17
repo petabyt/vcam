@@ -1,3 +1,4 @@
+# TODO: depend on config.mak rather than make CLI flags
 -include config.mak
 
 WIFI_DEV?=wlp0s20f3
@@ -11,15 +12,19 @@ VCAMERADIR=$(PWD)/sd
 $(info Using '$(VCAMERADIR)')
 endif
 
+VCAM_CORE=src/log.o src/vcamera.o src/gphoto-system.o src/packet.o src/ops.o
+
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
-SO_FILES=src/log.o src/libusb.o src/vcamera.o src/gphoto-system.o src/packet.o src/ops.o
+SO_FILES=$(VCAM_CORE) src/libusb.o
 
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+="-D VCAMERADIR=\"$(VCAMERADIR)\""
-CFLAGS+=-I../camlib/src/ -I../fudge/lib
+CFLAGS+=-I../camlib/src/
 
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
+
+src/%.o: src/*.h
 
 # generic libusb.so Canon EOS Device
 libusb.so: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
@@ -28,12 +33,10 @@ libusb.so: src/data.o src/canon.o $(SO_FILES)
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
-src/vcamera.o: src/opcodes.h
-
+FUJI_FILES=$(VCAM_CORE) src/tcp-fuji.o src/fuji.o
 fuji: CFLAGS+=-D VCAM_FUJI -D CAM_HAS_EXTERN_DEV_INFO
-fuji: SO_FILES+=src/tcp-fuji.o src/fuji.o
-fuji: src/fuji.o src/tcp-fuji.o $(SO_FILES)
-	$(CC) $(SO_FILES) $(CFLAGS) -o fuji $(LDFLAGS) -lexif
+fuji: $(FUJI_FILES)
+	$(CC) $(FUJI_FILES) $(CFLAGS) -o fuji $(LDFLAGS) -lexif
 
 canon: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
 canon: SO_FILES+=src/tcp-ip.o src/data.o src/canon.o

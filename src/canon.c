@@ -34,7 +34,7 @@ int vcam_vendor_setup(vcamera *cam) {
 	return 0;
 }
 
-int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
+static int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 	usleep(1000 * 10);
 	eos_info.calls_to_liveview++;
 
@@ -49,7 +49,7 @@ int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
+static int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
 	switch (ptp->code) {
 	case PTP_OC_EOS_SetRemoteMode:
 	case PTP_OC_EOS_SetEventMode: {
@@ -64,23 +64,23 @@ int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int vcam_eos_exec_evproc(vcamera *cam, ptpcontainer *ptp) {
+static int ptp_eos_exec_evproc(vcamera *cam, ptpcontainer *ptp) {
 	vcam_log("Evproc %d %d\n", ptp->params[0], ptp->params[1]);
 	// wait until payload
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
-int ptp_eos_exec_evproc_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+static int ptp_eos_exec_evproc_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	vcam_log("Evproc data phase\n");
 	return 1;
 }
 
-int ptp_eos_set_property(vcamera *cam, ptpcontainer *ptp) {
+static int ptp_eos_set_property(vcamera *cam, ptpcontainer *ptp) {
 	ptp_response(cam, PTP_RC_OK, 0);
 	// Wait until the payload
 	return 1;
 }
-int ptp_eos_set_property_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+static int ptp_eos_set_property_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	uint32_t *dat = (uint32_t *)data;
 	uint32_t length = dat[0];
 	uint32_t code = dat[1];
@@ -98,7 +98,7 @@ int ptp_eos_set_property_data(vcamera *cam, ptpcontainer *ptp, unsigned char *da
 	ptp_notify_event(cam, code, value);
 
 #if 0
-	struct PtpGenericEvent ev = ptp_pop_event(cam);
+	struct CamGenericEvent ev = ptp_pop_event(cam);
 	printf("Code: %X\n", ev.code);
 #endif
 
@@ -106,7 +106,7 @@ int ptp_eos_set_property_data(vcamera *cam, ptpcontainer *ptp, unsigned char *da
 	return 1;
 }
 
-int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
+static int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
 	if (ptp->code == PTP_OC_EOS_RemoteReleaseOff) {
 		vcam_log("CANON: Shutter up\n");
 	} else if (ptp->code == PTP_OC_EOS_RemoteReleaseOn) {
@@ -123,7 +123,7 @@ int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
+static int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
 
 #if 0
@@ -307,7 +307,7 @@ struct ptp_function ptp_functions_canon[] = {
 	{0x9124,	ptp_eos_generic, NULL },
 	{0x91f5,	ptp_eos_generic, NULL },
 	{0x91f6,	ptp_eos_generic, NULL },
-	{PTP_OC_EOS_ExecuteEventProc,	vcam_eos_exec_evproc, ptp_eos_exec_evproc_data },
+	{PTP_OC_EOS_ExecuteEventProc,	ptp_eos_exec_evproc, ptp_eos_exec_evproc_data },
 	{0x9053,	ptp_eos_generic, NULL },
 	{0x9057,	ptp_eos_generic, NULL },
 	{0x9058,	ptp_eos_generic, NULL },

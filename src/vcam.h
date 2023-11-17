@@ -251,7 +251,7 @@ void free_dirent(struct ptp_dirent *ent);
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
 #pragma pack(push, 1)
-struct PtpGenericEvent {
+struct CamGenericEvent {
 	uint32_t size;
 	uint16_t x;
 	uint16_t code;
@@ -262,6 +262,6 @@ struct PtpGenericEvent {
 
 int ptp_notify_event(vcamera *cam, uint16_t code, uint32_t value);
 
-struct PtpGenericEvent ptp_pop_event(vcamera *cam);
+struct CamGenericEvent ptp_pop_event(vcamera *cam);
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

@@ -1,2 +1,7 @@
 *.o
 *.out
+config.mak
+*.bin
+*.elf
+*.txt
+DUMP

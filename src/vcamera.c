@@ -777,9 +777,9 @@ int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uin
 	return 1;
 }
 
-struct PtpGenericEvent ptp_pop_event(vcamera *cam) {
-	struct PtpGenericEvent ev;
-	memcpy(&ev, first_interrupt->data, sizeof(struct PtpGenericEvent));
+struct CamGenericEvent ptp_pop_event(vcamera *cam) {
+	struct CamGenericEvent ev;
+	memcpy(&ev, first_interrupt->data, sizeof(struct CamGenericEvent));
 
 	struct ptp_interrupt *prev = first_interrupt;
 	first_interrupt = first_interrupt->next;

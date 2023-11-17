@@ -20,10 +20,11 @@ and removes a lot of the guesswork.
 - Note that this tool is very *experimental*, and the code quality reflects that.
 
 ## Building
-- This repo is currently being rapidly developed alongside other projects so symlinks are being used for now instead of submodules.  
-Clone in same dir as this repo: https://github.com/petabyt/camlib https://github.com/petabyt/fudge  
 - `make libusb.so`
 - Run on Linux only.
+
+Hard symlinks:
+- `ln ../../fudge/lib/fujiptp.h fujiptp.h`
 
 For Canon PTP/IP spoofer:
 - `make setup-canon` - setup dummy net device

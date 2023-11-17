@@ -2,7 +2,9 @@
 #ifndef VCAM_CANON_H
 #define VCAM_CANON_H
 
+// Current camera to compile for:
 #define CANON_IS_1300D
+
 #define CANON_MANUFACT "Canon Inc.";
 
 #ifdef CANON_IS_1300D
