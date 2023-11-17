@@ -9,7 +9,15 @@
 #include <string.h>
 #include <libusb.h>
 
-#include <vcam.h>
+#include "vcam.h"
+#include "cams.h"
+
+#ifdef VCAM_CANON
+	#define VENDOR_ID 0x4A9
+	#ifdef CANON_IS_1300D
+		#define PRODUCT_ID 0x0
+	#endif
+#endif
 
 struct _GPPortPrivateLibrary {
 	int isopen;
@@ -43,8 +51,8 @@ int libusb_get_device_descriptor(libusb_device *dev, struct libusb_device_descri
 	desc->bLength = sizeof(struct libusb_device_descriptor);
 	desc->bDescriptorType = 1;
 	desc->bNumConfigurations = 1;
-	desc->idVendor = 0x123;
-	desc->idProduct = 0x123;
+	desc->idVendor = VENDOR_ID;
+	desc->idProduct = PRODUCT_ID;
 	return 0;
 }
 
@@ -104,7 +112,7 @@ int libusb_get_string_descriptor_ascii(libusb_device_handle *devh, uint8_t desc_
 }
 
 void libusb_free_device_list(libusb_device **list, int unref_devices) {
-	// ...
+	return;
 }
 
 int libusb_set_auto_detach_kernel_driver(libusb_device_handle *dev_handle, int enable) {
@@ -123,7 +131,8 @@ int libusb_release_interface(libusb_device_handle *dev_handle, int interface_num
 	return 0;
 }
 
-int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoint, unsigned char *data, int length, int *transferred, unsigned int timeout) {
+int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoint,
+		unsigned char *data, int length, int *transferred, unsigned int timeout) {
 	GPPort *port = dev_handle->dev;
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Simplified for new code
 void gp_log_(const char *format, ...) {
 	va_list args;
 	va_start(args, format);
@@ -11,6 +12,7 @@ void gp_log_(const char *format, ...) {
 	va_end(args);
 }
 
+// For gphoto legacy code only
 void gp_log(void *lvl, const char *domain, const char *format, ...) {
 	va_list args;
 	va_start(args, format);

@@ -9,9 +9,10 @@
 #include <string.h>
 
 #include "vcam.h"
-#include "canon.h"
-#include "fuji.h"
-#include "opcodes.h"
+#include "cams.h"
+#include "ops.h"
+
+struct ptp_interrupt *first_interrupt;
 
 uint32_t get_32bit_le(unsigned char *data) {
 	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
@@ -229,7 +230,7 @@ void read_directories(const char *path, struct ptp_dirent *parent) {
 		strcpy(cur->fsname, path);
 		strcat(cur->fsname, "/");
 		strcat(cur->fsname, gp_system_filename(de));
-		gp_log_("Found filename: %s\n", cur->fsname);
+		//gp_log_("Found filename: %s\n", cur->fsname);
 		cur->id = ptp_objectid++;
 		cur->next = first_dirent;
 		cur->parent = parent;
@@ -517,11 +518,6 @@ int vcam_open(vcamera *cam, const char *port) {
 			cam->fuzzpending = 0;
 			cam->fuzzmode = FUZZMODE_NORMAL;
 		}
-		/* in virtual camera mode we have no fuzzing
-		if (cam->fuzzf == NULL) {
-			perror(s+1);
-		}
-		*/
 	}
 #endif
 
@@ -583,7 +579,8 @@ void vcam_process_output(vcamera *cam) {
 		return;
 	}
 
-	if ((ptp.code & 0x7000) != 0x1000) {
+	// Allow our special BEEF code for testing
+	if ((ptp.code & 0x7000) != 0x1000 && ptp.code != 0xBEEF) {
 		/* not clear if normal cameras react like this */
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "OPCODE 0x%04x does not start with 0x1 or 0x9", ptp.code);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
@@ -615,21 +612,17 @@ void vcam_process_output(vcamera *cam) {
 		for (i = 0; i < ptp.nparams; i++) {
 			ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
 		}
+
+		gp_log_("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
 	}
 
 	// We have read the first packet, discard it
 	cam->nroutbulk -= ptp.size;
 
-	gp_log_("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
-
 	/* call the opcode handler */
 	for (j = 0; j < sizeof(ptp_functions) / sizeof(ptp_functions[0]); j++) {
 		struct ptp_function *funcs = ptp_functions[j].functions;
-
-		if ((ptp_functions[j].type != GENERIC_PTP) && (ptp_functions[j].type != cam->type))
-			continue;
-
-		for (i = 0; i < ptp_functions[j].nroffunctions; i++) {
+		for (i = 0; funcs[i].code != 0; i++) {
 			if (funcs[i].code == ptp.code) {
 				if (ptp.type == 1) {
 					funcs[i].write(cam, &ptp);
@@ -646,13 +639,9 @@ void vcam_process_output(vcamera *cam) {
 			}
 		}
 	}
+
 	gp_log(GP_LOG_ERROR, __FUNCTION__, "received an unsupported opcode 0x%04x", ptp.code);
-#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-	/* in fuzzing mode, be less strict with unknown opcodes */
 	ptp_response(cam, PTP_RC_OperationNotSupported, 0);
-#else
-	ptp_response(cam, PTP_RC_OK, 0);
-#endif
 }
 
 int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes) {
@@ -702,10 +691,6 @@ int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes) {
 			if (!hasread && feof(cam->fuzzf))
 				return GP_ERROR_IO_READ;
 #endif
-#if 0
-			for (i=0;i<toread;i++)
-				data[i] ^= cam->inbulk[i];
-#endif
 			toread = hasread;
 
 			return toread;
@@ -738,10 +723,8 @@ int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes) {
 	return bytes;
 }
 
-struct ptp_interrupt *first_interrupt;
-
-int ptp_notify_change(vcamera *cam, uint16_t code, uint32_t value) {
-	return ptp_inject_interrupt(cam, 1000, code, value, 0, 0);
+int ptp_notify_event(vcamera *cam, uint16_t code, uint32_t value) {
+	return ptp_inject_interrupt(cam, 1000, code, 1, value, 0);
 }
 
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
@@ -794,6 +777,19 @@ int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uin
 	return 1;
 }
 
+struct PtpGenericEvent ptp_pop_event(vcamera *cam) {
+	struct PtpGenericEvent ev;
+	memcpy(&ev, first_interrupt->data, sizeof(struct PtpGenericEvent));
+
+	struct ptp_interrupt *prev = first_interrupt;
+	first_interrupt = first_interrupt->next;
+	free(prev->data);
+	free(prev);
+
+	return ev;
+}
+
+// Reads ints into 'data' with max 'bytes'
 int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 	struct timeval now, end;
 	int newtimeout, tocopy;
@@ -801,13 +797,10 @@ int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 
 	if (!first_interrupt) {
 #ifdef FUZZING
-#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-		//usleep(timeout * 1000);
-#endif
 		/* this emulates plugged out devices during fuzzing */
 		if (cam->fuzzf && feof(cam->fuzzf))
 			return GP_ERROR_IO;
-#endif /* FUZZING */
+#endif
 		return GP_ERROR_TIMEOUT;
 	}
 	gettimeofday(&now, NULL);
@@ -819,16 +812,10 @@ int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 		end.tv_sec++;
 	}
 	if (first_interrupt->triggertime.tv_sec > end.tv_sec) {
-#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-		//usleep(1000 * timeout);
-#endif
 		return GP_ERROR_TIMEOUT;
 	}
 	if ((first_interrupt->triggertime.tv_sec == end.tv_sec) &&
 	    (first_interrupt->triggertime.tv_usec > end.tv_usec)) {
-#ifndef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-		//usleep(1000 * timeout);
-#endif
 		return GP_ERROR_TIMEOUT;
 	}
 	newtimeout = (first_interrupt->triggertime.tv_sec - now.tv_sec) * 1000 + (first_interrupt->triggertime.tv_usec - now.tv_usec) / 1000;

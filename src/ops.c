@@ -11,7 +11,7 @@
 #include "vcam.h"
 #include "canon.h"
 #include "fuji.h"
-#include "opcodes.h"
+#include "ops.h"
 
 int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
@@ -78,38 +78,26 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	data = malloc(2000);
 
 	x += put_16bit_le(data + x, 100); /* StandardVersion */
-	switch (cam->type) {
-	case NIKON_D750:
-		x += put_32bit_le(data + x, 0xa); /* VendorExtensionID */
-		x += put_16bit_le(data + x, 100); /* VendorExtensionVersion */
-		break;
-	default:
-		x += put_32bit_le(data + x, 0); /* VendorExtensionID */
-		x += put_16bit_le(data + x, 0); /* VendorExtensionVersion */
-		break;
-	}
+	x += put_32bit_le(data + x, 100); /* VendorExtensionID */
+	x += put_16bit_le(data + x, 100); /* VendorExtensionVersion */
 	x += put_string(data + x, "G-V: 1.0;"); /* VendorExtensionDesc */
 	x += put_16bit_le(data + x, 0);		/* FunctionalMode */
 
 	cnt = 0;
 	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
-		if (ptp_functions[i].type == GENERIC_PTP) {
-			cnt += ptp_functions[i].nroffunctions;
-			continue;
-		}
-		if (ptp_functions[i].type == cam->type) {
-			vendor = i;
-			cnt += ptp_functions[i].nroffunctions;
+		for (int x = 0; x < ptp_functions[i].functions[x].code != 0; x++) {
+			cnt++;
 		}
 	}
+
 	opcodes = malloc(cnt * sizeof(uint16_t));
 
-	for (i = 0; i < ptp_functions[0].nroffunctions; i++)
-		opcodes[i] = ptp_functions[0].functions[i].code;
-
-	if (cam->type != GENERIC_PTP) {
-		for (i = 0; i < ptp_functions[vendor].nroffunctions; i++)
-			opcodes[i + ptp_functions[0].nroffunctions] = ptp_functions[vendor].functions[i].code;
+	int y = 0;
+	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
+		for (int z = 0; z < ptp_functions[i].functions[z].code != 0; z++) {
+			opcodes[y] = ptp_functions[i].functions[z].code;
+			y++;
+		}
 	}
 
 	x += put_16bit_le_array(data + x, opcodes, cnt); /* OperationsSupported */
@@ -1017,13 +1005,12 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-/* magic opcode for our driver, to inject commands */
 int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 
 	vcam_log(
-		"\tRecieved 0x9999\n"
+		"\tRecieved 0xBEEF\n"
 		"\tSize: %d\n"
 		"\tType: %d\n"
 		"\tCode: %X\n"
@@ -1038,13 +1025,11 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 	}
 	printf("\n");
 
-	//ptp_response(cam, PTP_RC_OK, 0);
-
 	return 1;
 }
 
 int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
-	vcam_log("Recieved data phase for 0x9999: %d\n", len);
+	vcam_log("Recieved data phase for 0xBEEF: %d\n", len);
 
 	if (ptp->nparams != 1) {
 		vcam_log("Expected a checksum parameter\n");
@@ -1105,3 +1090,24 @@ int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
+
+struct ptp_function ptp_functions_generic[] = {
+	{0x1001,	ptp_deviceinfo_write, 		NULL			},
+	{0x1002,	ptp_opensession_write, 		NULL			},
+	{0x1003,	ptp_closesession_write, 	NULL			},
+	{0x1004,	ptp_getstorageids_write, 	NULL			},
+	{0x1005,	ptp_getstorageinfo_write, 	NULL			},
+	{0x1006,	ptp_getnumobjects_write, 	NULL			},
+	{0x1007,	ptp_getobjecthandles_write, NULL			},
+	{0x1008,	ptp_getobjectinfo_write, 	NULL			},
+	{0x1009,	ptp_getobject_write, 		NULL			},
+	{0x100A,	ptp_getthumb_write, 		NULL			},
+	{0x100B,	ptp_deleteobject_write, 	NULL			},
+	{0x100E,	ptp_initiatecapture_write, 	NULL			},
+	{0x1014,	ptp_getdevicepropdesc_write, 	NULL			},
+	{0x1015,	ptp_getdevicepropvalue_write, 	NULL			},
+	{0x1016,	ptp_setdevicepropvalue_write, 	ptp_setdevicepropvalue_write_data	},
+	{0x101B,	ptp_getpartialobject_write, 	NULL			},
+	{0xBEEF,	ptp_vusb_write, 		ptp_vusb_write_data			},
+	{0, NULL, NULL},
+};

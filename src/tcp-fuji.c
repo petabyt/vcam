@@ -14,7 +14,7 @@
 
 #include "fuji.h"
 
-#define FUJI_IP_ADDR "192.168.0.1"
+#define FUJI_IP_ADDR "192.168.1.33"
 
 int fuji_open_remote_port = 0; // TODO: Move to int in vcamera
 
@@ -44,7 +44,7 @@ int ptpip_cmd_write(void *to, int length) {
 	static int first_write = 1;
 
 	if (first_write) {
-		vcam_log("vusb: init socket\n");
+		vcam_log("vusb: init socket: %d\n", length);
 		first_write = 0;
 
 		ptpip_connection_init();
@@ -268,7 +268,7 @@ int new_ptp_tcp_socket(int port) {
 		return -1;
 	}
 
-	printf("Socket listening on port %d...\n", port);
+	printf("Socket listening on %s:%d...\n", FUJI_IP_ADDR, port);
 
 	return server_socket;
 }

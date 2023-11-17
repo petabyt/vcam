@@ -272,7 +272,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	case PTP_PC_FUJI_NoCompression:
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
-		if (uint16[0] == 1) msleep(500); // Fuji seems to take a while here, maybe a bug on their end
+		if (uint16[0] == 1) msleep(500); // Fuji seems to take a while here
 		fuji_info.no_compressed = uint16[0];
 		break;
 	case PTP_PC_FUJI_RemoteImageExploreVersion:
@@ -492,3 +492,10 @@ int ptp_fuji_liveview(int socket) {
 
 	return 0;
 }
+
+struct ptp_function ptp_functions_fuji_x_a2[] = {
+	{PTP_OC_FUJI_GetDeviceInfo,	ptp_fuji_get_device_info, NULL },
+	{0x101c,	ptp_fuji_capture, NULL },
+	{0x1018,	ptp_fuji_capture, NULL },
+	{0, NULL, NULL},
+};
