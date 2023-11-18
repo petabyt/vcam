@@ -122,19 +122,18 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	imageformats[0] = 0x3801;
 	x += put_16bit_le_array(data + x, imageformats, 1); /* ImageFormats */
 
-#ifdef CAM_HAS_EXTERN_DEV_INFO
-	x += put_string(data + x, extern_manufacturer_info);	 /* Manufacturer */
-	x += put_string(data + x, extern_model_name); /* Model */
-	x += put_string(data + x, extern_device_version);		 /* DeviceVersion */
-	x += put_string(data + x, extern_device_version);		 /* DeviceVersion */
-	x += put_string(data + x, extern_serial_no);		 /* SerialNumber */
-#else
-	x += put_string(data + x, "GP");     /* Manufacturer */
-	x += put_string(data + x, "VC");     /* Model */
-	x += put_string(data + x, "2.5.11"); /* DeviceVersion */
-	x += put_string(data + x, "0.1");    /* DeviceVersion */
-	x += put_string(data + x, "1");	     /* SerialNumber */
-#endif
+	if (cam->type == CAM_CANON) {
+		x += put_string(data + x, "Canon Inc.");
+	} else if (cam->type == CAM_FUJI_WIFI) {
+		x += put_string(data + x, "Fujifilm Corp");
+	} else {
+		x += put_string(data + x, "Generic Corp");
+	}
+
+	x += put_string(data + x, cam->conf->model);
+	x += put_string(data + x, cam->conf->version);
+	x += put_string(data + x, cam->conf->version);
+	x += put_string(data + x, cam->conf->serial);
 
 	ptp_senddata(cam, 0x1001, data, x);
 	free(data);

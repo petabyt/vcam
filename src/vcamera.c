@@ -25,6 +25,29 @@ void vcam_dump(void *ptr, size_t len) {
 	fclose(f);
 }
 
+int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
+	FILE *file = fopen(path, "rb");
+	if (file == NULL) {
+		vcam_log("vcam_generic_send_file: File %s not found\n", path);
+		exit(-1);
+	}
+
+	fseek(file, 0, SEEK_END);
+	long file_size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	char *buffer = malloc(file_size);
+	fread(buffer, 1, file_size, file);
+
+	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, file_size);
+	free(buffer);
+	vcam_log("Generic sending %d\n", file_size);
+
+	fclose(file);
+
+	return 0;
+}
+
 uint32_t get_32bit_le(unsigned char *data) {
 	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
 }
@@ -529,7 +552,11 @@ int vcam_open(vcamera *cam, const char *port) {
 	}
 #endif
 
-	vcam_vendor_setup(cam);
+	if (cam->type == CAM_FUJI_WIFI) {
+		vcam_fuji_setup(cam);
+	} else if (cam->type == CAM_CANON) {
+		vcam_canon_setup(cam);
+	}
 	// TODO: setup generic props like shutterspeed
 
 	return GP_OK;

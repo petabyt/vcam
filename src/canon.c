@@ -7,15 +7,8 @@
 #include <vcam.h>
 #include <canon.h>
 
-char *extern_manufacturer_info = CANON_MANUFACT;
-char *extern_model_name = CANON_MODEL;
-char *extern_device_version = CANON_DEV_VER;
-char *extern_serial_no = CANON_SERIAL_NO;
-
-extern unsigned char bin_eos_events_bin[];
-extern unsigned int bin_eos_events_bin_len;
-extern unsigned char eos_lv_jpg[];
-extern unsigned int eos_lv_jpg_size;
+#define EOS_LV_JPEG "bin/eos_liveview.jpg"
+#define EOS_EVENTS_BIN "bin/eos_events.bin"
 
 static struct EosInfo {
 	int first_events;
@@ -30,7 +23,7 @@ struct EosEventUint {
 	uint32_t value;
 };
 
-int vcam_vendor_setup(vcamera *cam) {
+int vcam_canon_setup(vcamera *cam) {
 	return 0;
 }
 
@@ -43,7 +36,7 @@ static int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 
-	ptp_senddata(cam, ptp->code, (unsigned char *)eos_lv_jpg, eos_lv_jpg_size);
+	vcam_generic_send_file(EOS_LV_JPEG, cam, ptp);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

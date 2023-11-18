@@ -1,4 +1,7 @@
 // PTP/IP packet wrapper over vusb USB packets - emulates standard PTP/IP as per spec
+// Mostly similar to Fuji TCP code, except this uses PTP/IP style packets
+// This code will listen on *any* IP address, so it will open up the ISO standard PTP port
+// to the entire computer
 #include <arpa/inet.h>
 #include <errno.h>
 #include <pthread.h>
@@ -7,9 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "vcamera.h"
-#include <ptp.h>
-#include "gphoto.h"
+#include <vcam.h>
 
 //#define TCP_NOISY
 
@@ -24,7 +25,8 @@ struct _GPPortPrivateLibrary {
 
 static GPPort *port = NULL;
 
-uint8_t socket_init_resp[] = {
+// TODO: Convert to structure
+static uint8_t socket_init_resp[] = {
 0x2e, 0x0, 0x0, 0x0,
 0x2, 0x0, 0x0, 0x0,
 0x1, 0x0, 0x0, 0x0,
@@ -36,11 +38,12 @@ uint8_t socket_init_resp[] = {
 0x0, 0x0,
 0x1, 0x0,};
 
-int ptpip_connection_init() {
+static int ptpip_connection_init(struct CamConfig *options) {
 	vcam_log("Allocated vusb connection\n");
 	port = malloc(sizeof(GPPort));
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
-	port->pl->vcamera = vcamera_new(CANON_1300D);
+	port->pl->vcamera = vcamera_new(CAM_CANON);
+	port->pl->vcamera->conf = options;
 	port->pl->vcamera->init(port->pl->vcamera);
 
 	if (port->pl->isopen)
@@ -51,7 +54,7 @@ int ptpip_connection_init() {
 	return 0;
 }
 
-int ptpip_cmd_write(void *to, int length) {
+static int ptpip_cmd_write(void *to, int length) {
 	static int first_write = 1;
 
 	// First packet from the app, info about device
@@ -60,7 +63,6 @@ int ptpip_cmd_write(void *to, int length) {
 		vcam_log("vusb: init socket (%d bytes)\n", length);
 
 		first_write = 0;
-		ptpip_connection_init();
 
 		// Pretend like we read the packet
 		return length;
@@ -76,7 +78,7 @@ int ptpip_cmd_write(void *to, int length) {
 	return rc;
 }
 
-int ptpip_cmd_read(void *to, int length) {
+static int ptpip_cmd_read(void *to, int length) {
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
 
@@ -87,7 +89,7 @@ int ptpip_cmd_read(void *to, int length) {
 	return rc;
 }
 
-void *tcp_recieve_single_packet(int client_socket, int *length) {
+static void *tcp_recieve_single_packet(int client_socket, int *length) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
 	ssize_t size;
@@ -141,7 +143,7 @@ void *tcp_recieve_single_packet(int client_socket, int *length) {
 }
 
 // Recieve data from app TCP, and route into vcam
-int tcp_recieve_all(int client_socket) {
+static int tcp_recieve_all(int client_socket) {
 	int packet_length = 0;
 	void *buffer = tcp_recieve_single_packet(client_socket, &packet_length);
 	if (buffer == NULL) {
@@ -212,7 +214,7 @@ int tcp_recieve_all(int client_socket) {
 	return 0;
 }
 
-void *ptpip_cmd_read_single_packet(int *length) {
+static void *ptpip_cmd_read_single_packet(int *length) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_read(&packet_length, 4);
 	if (size != 4) {
@@ -237,7 +239,7 @@ void *ptpip_cmd_read_single_packet(int *length) {
 	return buffer;
 }
 
-int tcp_send_all(int client_socket) {
+static int tcp_send_all(int client_socket) {
 	static int left_of_init_packet = sizeof(socket_init_resp);
 
 	// Wait until 'hello' packet is sent
@@ -299,7 +301,7 @@ int tcp_send_all(int client_socket) {
 	return 0;
 }
 
-int new_ptp_tcp_socket(int port) {
+static int new_ptp_tcp_socket(int port) {
 	int server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (server_socket == -1) {
@@ -345,7 +347,10 @@ static int ack_event_socket(int client_event_socket) {
 
 	vcam_log("Recieved event socket req\n");
 
-	uint32_t ack[2] = {8, PTPIP_INIT_EVENT_ACK};
+	uint32_t ack[2] = {
+		8, // size
+		PTPIP_INIT_EVENT_ACK
+	};
 
 	size = send(client_event_socket, ack, sizeof(ack), 0);	
 	if (size != sizeof(ack)) {
@@ -370,17 +375,7 @@ static void *bind_event_socket_thread(void *arg) {
 
 	vcam_log("Event socket accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
-	// uint32_t packet_length;
-	// ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
-// 
-	// if (size != 4) {
-		// vcam_log("Failed to read length from event socket\n");
-		// return NULL;
-	// }
-// 
-	// uint32_t packet_length;
-	// ssize_t size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
-	
+	// Canon devices don't seem to send any events
 	while (1) {
 		vcam_log("Event thread sleeping\n");
 		usleep(1000 * 1000);
@@ -389,8 +384,10 @@ static void *bind_event_socket_thread(void *arg) {
 	return NULL;
 }
 
-int main() {
-	printf("vcam - running %s\n", extern_model_name);
+int canon_wifi_main(struct CamConfig *options) {
+	printf("Canon vcam - running %s\n", options->model);
+
+	ptpip_connection_init(options);
 
 	int server_socket = new_ptp_tcp_socket(PTP_IP_PORT);
 
@@ -407,7 +404,7 @@ int main() {
 	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	static int have_setup_events_socket = 0;
-
+	pthread_t thread;
 	while (1) {
 		if (tcp_recieve_all(client_socket)) {
 			vcam_log("tcp_recieve_all failed\n");
@@ -422,8 +419,8 @@ int main() {
 			goto err;
 		}
 
+		// Once the first packets are sent, start by opening the event socket and listening on another thread
 		if (!have_setup_events_socket) {
-			pthread_t thread;
 			if (pthread_create(&thread, NULL, bind_event_socket_thread, &server_socket)) {
 				return 1;
 			}

@@ -15,14 +15,18 @@ void gp_log_(const char *format, ...);
 
 int ptp_get_object_count();
 
-// Generic options sent to camera as fake input
+// Generic options setup by CLI, put in cam->conf
 // All are 0 by default
 struct CamConfig {
 	int type;
 	int variant;
-	char name[16];
+	char model[32];
+	char version[16];
+	char serial[16];
+
 	int run_slow;
 	int use_local;
+	int is_mirrorless;
 
 	// Fuji stuff
 	int is_select_multiple_images;
@@ -32,13 +36,16 @@ struct CamConfig {
 	int remote_image_explore_version;
 
 	// Canon stuff
+	int digic;
 };
 
 int fuji_wifi_main(struct CamConfig *options);
+int canon_wifi_main(struct CamConfig *options);
 
 typedef enum vcameratype {
 	GENERIC_PTP = 1,
 	CAM_NIKON_D750,
+	CAM_NIKON,
 	CAM_CANON,
 	CAM_FUJI_WIFI,
 } vcameratype;
@@ -110,12 +117,16 @@ typedef struct vcamera {
 
 vcamera *vcamera_new(vcameratype);
 
-int vcam_vendor_setup(vcamera *cam);
+int vcam_fuji_setup(vcamera *cam);
+int vcam_canon_setup(vcamera *cam);
+
 struct ptp_function {
 	int	code;
 	int	(*write)(vcamera *cam, ptpcontainer *ptp);
 	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
 };
+
+int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp);
 
 void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes);
 void ptp_response(vcamera *cam, uint16_t code, int nparams, ...);

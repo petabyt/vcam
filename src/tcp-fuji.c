@@ -46,7 +46,7 @@ static int ptpip_cmd_write(void *to, int length) {
 static int ptpip_cmd_read(void *to, int length) {
 	static int left_of_init_packet = FUJI_ACK_PACKET_SIZE;
 
-	uint8_t *packet = fuji_get_ack_packet();
+	uint8_t *packet = fuji_get_ack_packet(port->pl->vcamera);
 
 	if (left_of_init_packet) {
 		memcpy(to, packet + FUJI_ACK_PACKET_SIZE - left_of_init_packet, length);
@@ -308,7 +308,7 @@ static int init_vcam(struct CamConfig *options) {
 }
 
 int fuji_wifi_main(struct CamConfig *options) {
-	printf("Fuji vcam - running %s\n", options->name);
+	printf("Fuji vcam - running '%s'\n", options->model);
 
 	init_vcam(options);
 

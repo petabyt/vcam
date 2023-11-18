@@ -1,9 +1,9 @@
-#ifdef VCAM_FUJI
 #ifndef VCAM_FUJI_H
 #define VCAM_FUJI_H
 
 #define FUJI_ACK_PACKET_SIZE 0x44
 
+#if 0
 //#define IS_FUJI_X_T20
 #define IS_FUJI_X_A2
 
@@ -25,6 +25,7 @@
 	#define FUJI_REMOTE_IMAGE_EXPLORE_VERSION 2
 
 	#define FUJI_START_CAM_STATE FUJI_REMOTE_ACCESS
+#endif
 #endif
 
 #ifdef IS_FUJI_X_S10
@@ -60,7 +61,6 @@ int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp);
 
 int fuji_is_compressed_mode(vcamera *cam);
 
-uint8_t *fuji_get_ack_packet();
+uint8_t *fuji_get_ack_packet(vcamera *cam);
 
-#endif
 #endif

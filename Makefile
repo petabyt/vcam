@@ -26,8 +26,8 @@ $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
 libusb.so: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
-libusb.so: SO_FILES+=src/data.o src/canon.o
-libusb.so: src/data.o src/canon.o $(SO_FILES)
+libusb.so: SO_FILES+=src/canon.o
+libusb.so: src/canon.o $(SO_FILES)
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
@@ -37,9 +37,14 @@ fuji: $(FUJI_FILES)
 	$(CC) $(FUJI_FILES) $(CFLAGS) -o fuji $(LDFLAGS) -lexif
 
 canon: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
-canon: SO_FILES+=src/tcp-ip.o src/data.o src/canon.o
-canon: src/tcp-ip.o src/data.o src/canon.o $(SO_FILES)
-	$(CC) $(SO_FILES) $(CFLAGS) -o canon $(LDFLAGS) -lexif
+CANON_FILES=$(VCAM_CORE) src/tcp-ip.o src/canon.o src/main.o src/fuji.o src/tcp-fuji.o
+canon: $(CANON_FILES)
+	$(CC) $(CANON_FILES) $(CFLAGS) -o canon $(LDFLAGS) -lexif
+
+vcam: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
+VCAM_FILES=$(VCAM_CORE) src/tcp-ip.o src/canon.o src/main.o src/fuji.o src/tcp-fuji.o
+vcam: $(VCAM_FILES)
+	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
 
 # Recompile when headers change
 %.o: %.c $(H) $(wildcard src/*.h)
@@ -47,7 +52,7 @@ canon: src/tcp-ip.o src/data.o src/canon.o $(SO_FILES)
 
 clean:
 	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o
-	$(RM) fuji canon
+	$(RM) fuji canon vcam
 
 # Wireless AP networking Hacks
 
