@@ -58,7 +58,7 @@ setup-fuji:
 kill-fuji:
 	sudo ip link delete fuji_dummy
 ap-fuji:
-	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-T20-ABCD
+	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-A2-ABCD
 test-fuji:
 	@while make fuji; do \
 	echo '------------------------------------------'; \

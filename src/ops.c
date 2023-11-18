@@ -317,7 +317,7 @@ int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
 		}
 		cur = cur->next;
 	}
-	ptp_senddata(cam, 0x1007, data, x);
+	ptp_senddata(cam, ptp->code, data, x);
 	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -337,7 +337,7 @@ int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp) {
 	sids[0] = 0x00010001;
 	x = put_32bit_le_array(data, sids, 1);
 
-	ptp_senddata(cam, 0x1004, data, x);
+	ptp_senddata(cam, ptp->code, data, x);
 	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -378,6 +378,8 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(3);
 
+	vcam_log("GetPartialObject %d (%X %X)\n", ptp->params[0], ptp->params[1], ptp->params[2]);
+
 	struct ptp_dirent *cur = first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
@@ -416,6 +418,13 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
+#ifdef VCAM_FUJI
+	// The probably switches when start+size partialobject calls
+	// meet end of file, but this will do for now
+	if (size != 0x100000) {
+		fuji_downloaded_object(cam);
+	}
+#endif
 	return 1;
 }
 
@@ -446,7 +455,8 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 	data = malloc(2000);
-	x += put_32bit_le(data + x, 0x00010001); /* StorageID */
+	x += put_32bit_le(data + x, 0x10000001); /* StorageID */
+	//x += put_32bit_le(data + x, 0x00010001); /* StorageID */
 	/* ObjectFormatCode */
 	ofc = 0x3000;
 	if (S_ISDIR(cur->stbuf.st_mode)) {
@@ -559,10 +569,13 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	tm = gmtime(&xtime);
 	sprintf(xdate, "%04d%02d%02dT%02d%02d%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 	x += put_string(data + x, xdate); /* CreationDate */
+
+#if 0
 	xtime = cur->stbuf.st_mtime;
 	tm = gmtime(&xtime);
 	sprintf(xdate, "%04d%02d%02dT%02d%02d%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-	x += put_string(data + x, xdate); /* ModificatioDate */
+	x += put_string(data + x, xdate); /* ModificationDate */
+#endif
 
 	// Orientation tag
 	if (imageheight > imagewidth) {
@@ -570,6 +583,9 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	} else {
 		x += put_string(data + x, "Orientation: 1");
 	}
+
+	printf("Sending objectinfo length %x\n", x);
+	vcam_dump(data, x);
 
 	ptp_senddata(cam, 0x1008, data, x);
 	free(data);
@@ -602,9 +618,14 @@ int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 
-	ptp_senddata(cam, 0x1009, data, cur->stbuf.st_size);
+	ptp_senddata(cam, ptp->code, data, cur->stbuf.st_size);
 	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
+
+#ifdef VCAM_FUJI
+	fuji_downloaded_object(cam);
+#endif
+
 	return 1;
 }
 
@@ -950,9 +971,7 @@ int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
 #ifdef VCAM_FUJI
-	if (!fuji_get_property(cam, ptp)) {
-		return 1;
-	}
+	return fuji_get_property(cam, ptp);
 #endif
 
 	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {

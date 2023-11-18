@@ -43,8 +43,6 @@ typedef struct vcamera {
 	int (*readint)(struct vcamera*,  unsigned char *data, int bytes, int timeout);
 	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
 
-	//int is_ptp_ip;
-
 	unsigned short	vendor, product;	/* for generic fuzzing */
 
 	vcameratype	type;
@@ -195,6 +193,7 @@ int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
 	}
 
 // Check the transaction ID
+#if 0
 #define CHECK_SEQUENCE_NUMBER()                                                                                   \
 	if (ptp->seqnr != cam->seqnr) {                                                                           \
 		/* not clear if normal cameras react like this */                                                 \
@@ -202,6 +201,9 @@ int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
 		ptp_response(cam, PTP_RC_GeneralError, 0);                                                        \
 		return 1;                                                                                         \
 	}
+#else
+#define CHECK_SEQUENCE_NUMBER() ;
+#endif
 
 #define CHECK_SESSION()                                                    \
 	if (!cam->session) {                                               \
@@ -229,6 +231,8 @@ struct ptp_interrupt {
 extern struct ptp_dirent *first_dirent;
 extern uint32_t ptp_objectid;
 
+void vcam_dump(void *ptr, size_t len);
+
 void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd);
 
 // Data structure API
@@ -247,6 +251,9 @@ uint32_t get_32bit_le(unsigned char *data);
 
 void *read_file(struct ptp_dirent *cur);
 void free_dirent(struct ptp_dirent *ent);
+
+// Deletes the first object from the 
+void vcam_virtual_pop_object(int id);
 
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 

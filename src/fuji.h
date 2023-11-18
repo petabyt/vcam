@@ -4,15 +4,16 @@
 
 #define FUJI_ACK_PACKET_SIZE 0x44
 
-#define IS_FUJI_X_T20
-//#define IS_FUJI_X_A2
+//#define IS_FUJI_X_T20
+#define IS_FUJI_X_A2
 
 #ifdef IS_FUJI_X_A2
 	#define FUJI_CAM_NAME "X-A2"
 	#define FUJI_IMAGE_GET_VERSION 1
 	#define FUJI_IMAGE_EXPLORE_VERSION 2
 	#define FUJI_REMOTE_VERSION 0x0
-	#define FUJI_START_CAM_STATE FUJI_FULL_ACCESS
+	//#define FUJI_START_CAM_STATE FUJI_FULL_ACCESS
+	#define FUJI_START_CAM_STATE FUJI_MULTIPLE_TRANSFER
 #endif
 
 #ifdef IS_FUJI_X_T20
@@ -43,6 +44,9 @@
 #define FUJI_DUMMY_JPEG_FULL "bin/fuji/jpeg-full.jpg"
 #define FUJI_DUMMY_JPEG_COMPRESSED "bin/fuji/jpeg-compressed.jpg"
 #define FUJI_DUMMY_LV_JPEG "bin/fuji/lv_stream"
+
+// Ran when getpartialobject or getobject is completed
+void fuji_downloaded_object(vcamera *cam);
 
 int fuji_get_thumb(vcamera *cam, ptpcontainer *ptp);
 int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp);

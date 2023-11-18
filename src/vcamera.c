@@ -12,7 +12,18 @@
 #include "cams.h"
 #include "ops.h"
 
+// Event handler
 struct ptp_interrupt *first_interrupt;
+
+// Filesystem index
+struct ptp_dirent *first_dirent = NULL;
+uint32_t ptp_objectid = 0;
+
+void vcam_dump(void *ptr, size_t len) {
+	FILE *f = fopen("DUMP", "wb");
+	fwrite(ptr, len, 1, f);
+	fclose(f);
+}
 
 uint32_t get_32bit_le(unsigned char *data) {
 	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
@@ -184,9 +195,6 @@ void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd) {
 		}
 	}
 }
-
-struct ptp_dirent *first_dirent = NULL;
-uint32_t ptp_objectid = 0;
 
 void *read_file(struct ptp_dirent *cur) {
 	FILE *file = fopen(cur->fsname, "rb");

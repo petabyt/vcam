@@ -14,7 +14,7 @@
 
 #include "fuji.h"
 
-#define FUJI_IP_ADDR "192.168.1.33"
+#define FUJI_IP_ADDR "192.168.0.1"
 
 int fuji_open_remote_port = 0; // TODO: Move to int in vcamera
 
@@ -311,7 +311,7 @@ static void fuji_accept_remote_ports() {
 	printf("Started new thread to accept remote ports\n");
 }
 
-int main() {
+int main(int argc, char *argv[]) {
 	printf("vcam - running %s\n", extern_model_name);
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
