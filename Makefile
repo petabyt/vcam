@@ -24,8 +24,6 @@ CFLAGS+=-I../camlib/src/
 
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
-src/%.o: src/*.h
-
 # generic libusb.so Canon EOS Device
 libusb.so: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
 libusb.so: SO_FILES+=src/data.o src/canon.o
@@ -33,7 +31,7 @@ libusb.so: src/data.o src/canon.o $(SO_FILES)
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
-FUJI_FILES=$(VCAM_CORE) src/tcp-fuji.o src/fuji.o
+FUJI_FILES=$(VCAM_CORE) src/tcp-fuji.o src/fuji.o src/main.o
 fuji: CFLAGS+=-D VCAM_FUJI -D CAM_HAS_EXTERN_DEV_INFO
 fuji: $(FUJI_FILES)
 	$(CC) $(FUJI_FILES) $(CFLAGS) -o fuji $(LDFLAGS) -lexif
@@ -42,6 +40,10 @@ canon: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
 canon: SO_FILES+=src/tcp-ip.o src/data.o src/canon.o
 canon: src/tcp-ip.o src/data.o src/canon.o $(SO_FILES)
 	$(CC) $(SO_FILES) $(CFLAGS) -o canon $(LDFLAGS) -lexif
+
+# Recompile when headers change
+%.o: %.c $(H) $(wildcard src/*.h)
+	$(CC) -c $< $(CFLAGS) -o $@
 
 clean:
 	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o

@@ -12,7 +12,7 @@ static struct ptp_function ptp_functions_nikon_dslr[] = {
 };
 
 #ifdef VCAM_FUJI
-extern struct ptp_function ptp_functions_fuji_x_a2[];
+extern struct ptp_function ptp_functions_fuji_wifi[];
 #endif
 
 #ifdef VCAM_CANON
@@ -25,14 +25,14 @@ static struct ptp_map_functions {
 	unsigned int		nroffunctions;
 } ptp_functions[] = {
 	{GENERIC_PTP,	ptp_functions_generic, 0},
-	{NIKON_D750,	ptp_functions_nikon_dslr, 0},
+	{CAM_NIKON_D750,	ptp_functions_nikon_dslr, 0},
 
 #ifdef VCAM_CANON
-	{CANON_1300D,	ptp_functions_canon, 0},
+	{CAM_CANON,	ptp_functions_canon, 0},
 #endif
 
 #ifdef VCAM_FUJI
-	{FUJI_X_A2,	ptp_functions_fuji_x_a2, 0},
+	{CAM_FUJI_WIFI,	ptp_functions_fuji_wifi, 0},
 #endif
 };
 

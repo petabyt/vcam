@@ -847,6 +847,8 @@ vcamera *vcamera_new(vcameratype type) {
 	if (!cam)
 		return NULL;
 
+	cam->conf = NULL;
+
 	read_tree(VCAMERADIR);
 
 	cam->init = vcam_init;

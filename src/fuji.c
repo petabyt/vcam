@@ -5,8 +5,7 @@
 #include <assert.h>
 #include <sys/socket.h>
 
-#include <gphoto.h>
-#include <vcamera.h>
+#include <vcam.h>
 
 #include <camlib.h>
 #include <fujiptp.h>
@@ -84,7 +83,19 @@ uint8_t *fuji_get_ack_packet() {
 int vcam_vendor_setup(vcamera *cam) {
 	fuji_info.obj_count = ptp_get_object_count();
 
-	vcam_log("Found %d objects\n", fuji_info.obj_count);
+	vcam_log("Fuji: Found %d objects\n", fuji_info.obj_count);
+
+	// Check if remote mode is supported
+	if (cam->conf->remote_version) {
+		fuji_info.camera_state = FUJI_FULL_ACCESS;
+	} else {
+		fuji_info.camera_state = FUJI_REMOTE_ACCESS;
+	}
+
+	if (cam->conf->is_select_multiple_images) {
+		vcam_log("Configuring camera to select multiple images");
+		fuji_info.camera_state = FUJI_MULTIPLE_TRANSFER;
+	}
 
 	return 0;
 }
@@ -516,7 +527,7 @@ void fuji_downloaded_object(vcamera *cam) {
 	}
 }
 
-struct ptp_function ptp_functions_fuji_x_a2[] = {
+struct ptp_function ptp_functions_fuji_wifi[] = {
 	{PTP_OC_FUJI_GetDeviceInfo,	ptp_fuji_get_device_info, NULL },
 	{0x101c,	ptp_fuji_capture, NULL },
 	{0x1018,	ptp_fuji_capture, NULL },

@@ -14,7 +14,7 @@
 
 #include "fuji.h"
 
-#define FUJI_IP_ADDR "192.168.0.1"
+static const char *server_ip_address = "192.168.0.1";
 
 int fuji_open_remote_port = 0; // TODO: Move to int in vcamera
 
@@ -25,30 +25,12 @@ struct _GPPortPrivateLibrary {
 
 static GPPort *port = NULL;
 
-int ptpip_connection_init() {
-	vcam_log("Allocated vusb connection\n");
-	port = malloc(sizeof(GPPort));
-	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
-	port->pl->vcamera = vcamera_new(FUJI_X_A2);
-	port->pl->vcamera->init(port->pl->vcamera);
-
-	if (port->pl->isopen)
-		return -1;
-
-	port->pl->vcamera->open(port->pl->vcamera, port->settings.usb.port);
-	port->pl->isopen = 1;
-	return 0;
-}
-
-int ptpip_cmd_write(void *to, int length) {
+static int ptpip_cmd_write(void *to, int length) {
 	static int first_write = 1;
 
 	if (first_write) {
-		vcam_log("vusb: init socket: %d\n", length);
+		vcam_log("vusb: got first write: %d\n", length);
 		first_write = 0;
-
-		ptpip_connection_init();
-
 		// Pretend like we read the packet
 		return length;
 	}
@@ -61,7 +43,7 @@ int ptpip_cmd_write(void *to, int length) {
 	return rc;
 }
 
-int ptpip_cmd_read(void *to, int length) {
+static int ptpip_cmd_read(void *to, int length) {
 	static int left_of_init_packet = FUJI_ACK_PACKET_SIZE;
 
 	uint8_t *packet = fuji_get_ack_packet();
@@ -81,7 +63,7 @@ int ptpip_cmd_read(void *to, int length) {
 }
 
 // Recieve all packets from the app (initiator)
-int tcp_recieve_all(int client_socket) {
+static int tcp_recieve_all(int client_socket) {
 	uint32_t packet_length;
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
@@ -179,7 +161,7 @@ int tcp_recieve_all(int client_socket) {
 	return 0;
 }
 
-int tcp_send_all(int client_socket) {
+static int tcp_send_all(int client_socket) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_read(&packet_length, 4);
 	if (size != 4) {
@@ -237,7 +219,7 @@ int tcp_send_all(int client_socket) {
 	return 0;
 }
 
-int new_ptp_tcp_socket(int port) {
+static int new_ptp_tcp_socket(int port) {
 	int server_socket = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (server_socket == -1) {
@@ -253,7 +235,7 @@ int new_ptp_tcp_socket(int port) {
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = inet_addr(FUJI_IP_ADDR);
+	serverAddress.sin_addr.s_addr = inet_addr(server_ip_address);
 	serverAddress.sin_port = htons(port);
 
 	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
@@ -268,14 +250,14 @@ int new_ptp_tcp_socket(int port) {
 		return -1;
 	}
 
-	printf("Socket listening on %s:%d...\n", FUJI_IP_ADDR, port);
+	printf("Socket listening on %s:%d...\n", server_ip_address, port);
 
 	return server_socket;
 }
 
 int ptp_fuji_liveview(int socket);
 
-void *fuji_accept_remote_ports_thread(void *arg) {
+static void *fuji_accept_remote_ports_thread(void *arg) {
 	int event_socket = new_ptp_tcp_socket(FUJI_EVENT_IP_PORT);
 	int video_socket = new_ptp_tcp_socket(FUJI_LIVEVIEW_IP_PORT);
 
@@ -311,8 +293,28 @@ static void fuji_accept_remote_ports() {
 	printf("Started new thread to accept remote ports\n");
 }
 
-int main(int argc, char *argv[]) {
-	printf("vcam - running %s\n", extern_model_name);
+static int init_vcam(struct CamConfig *options) {
+	port = malloc(sizeof(GPPort));
+	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
+	port->pl->vcamera = vcamera_new(CAM_FUJI_WIFI);
+	port->pl->vcamera->conf = options;
+	port->pl->vcamera->init(port->pl->vcamera);
+
+	if (port->pl->isopen)
+		return -1;
+
+	port->pl->vcamera->open(port->pl->vcamera, port->settings.usb.port);
+	port->pl->isopen = 1;
+}
+
+int fuji_wifi_main(struct CamConfig *options) {
+	printf("Fuji vcam - running %s\n", options->name);
+
+	init_vcam(options);
+
+	if (options->use_local) {
+		server_ip_address = "192.168.1.33";
+	}
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
 	if (server_socket == -1) {

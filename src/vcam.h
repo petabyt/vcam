@@ -15,6 +15,41 @@ void gp_log_(const char *format, ...);
 
 int ptp_get_object_count();
 
+// Generic options sent to camera as fake input
+// All are 0 by default
+struct CamConfig {
+	int type;
+	int variant;
+	char name[16];
+	int run_slow;
+	int use_local;
+
+	// Fuji stuff
+	int is_select_multiple_images;
+	int image_get_version;
+	int image_explore_version;
+	int remote_version;
+	int remote_image_explore_version;
+
+	// Canon stuff
+};
+
+int fuji_wifi_main(struct CamConfig *options);
+
+typedef enum vcameratype {
+	GENERIC_PTP = 1,
+	CAM_NIKON_D750,
+	CAM_CANON,
+	CAM_FUJI_WIFI,
+} vcameratype;
+
+typedef enum vcameravariant {
+	V_FUJI_X_A2 = 1,
+	V_FUJI_X_T20,
+	V_FUJI_X_S10,
+	V_CANON_1300D,
+} vcameravariant;
+
 typedef struct ptpcontainer {
 	unsigned int size;
 	unsigned int type;
@@ -24,13 +59,6 @@ typedef struct ptpcontainer {
 	unsigned int params[6];
 	unsigned int has_data_phase;
 } ptpcontainer;
-
-typedef enum vcameratype {
-	GENERIC_PTP,
-	NIKON_D750,
-	CANON_1300D,
-	FUJI_X_A2,
-} vcameratype;
 
 // All members are garunteed to be zero by calloc()
 typedef struct vcamera {
@@ -43,16 +71,18 @@ typedef struct vcamera {
 	int (*readint)(struct vcamera*,  unsigned char *data, int bytes, int timeout);
 	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
 
-	unsigned short	vendor, product;	/* for generic fuzzing */
+	unsigned short	vendor, product;
 
 	vcameratype	type;
+	//vcameravariant variant;
+
+	struct CamConfig *conf;
+
 	unsigned char	*inbulk;
 	int		nrinbulk;
 	unsigned char	*outbulk;
 	int		nroutbulk;
-
 	unsigned int	seqnr;
-
 	unsigned int	session;
 	ptpcontainer	ptpcmd;
 
