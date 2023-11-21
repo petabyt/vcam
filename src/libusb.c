@@ -9,8 +9,7 @@
 #include <string.h>
 #include <libusb.h>
 
-#include "vcam.h"
-#include "cams.h"
+#include <vcam.h>
 
 #ifdef VCAM_CANON
 	#define VENDOR_ID 0x4A9

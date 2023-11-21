@@ -8,9 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "vcam.h"
-#include "cams.h"
-#include "ops.h"
+#include <vcam.h>
 
 // Event handler
 struct ptp_interrupt *first_interrupt;

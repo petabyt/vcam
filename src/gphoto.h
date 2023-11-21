@@ -5,8 +5,6 @@
 #define _GPHOTO2_INTERNAL_CODE
 #define _DARWIN_C_SOURCE
 
-#include <ptp.h>
-
 // automake config
 #define HAVE_ALARM 1
 #define HAVE_DLFCN_H 1

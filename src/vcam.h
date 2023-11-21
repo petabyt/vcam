@@ -314,4 +314,8 @@ int ptp_notify_event(vcamera *cam, uint16_t code, uint32_t value);
 
 struct CamGenericEvent ptp_pop_event(vcamera *cam);
 
+#include "canon.h"
+#include "fuji.h"
+#include "ops.h"
+
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

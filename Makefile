@@ -12,7 +12,7 @@ VCAMERADIR=$(PWD)/sd
 $(info Using '$(VCAMERADIR)')
 endif
 
-VCAM_CORE=src/log.o src/vcamera.o src/gphoto-system.o src/packet.o src/ops.o
+VCAM_CORE=src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o
 
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
 SO_FILES=$(VCAM_CORE) src/libusb.o
