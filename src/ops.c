@@ -969,9 +969,9 @@ int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef VCAM_FUJI
-	return fuji_get_property(cam, ptp);
-#endif
+	if (cam->type == CAM_FUJI_WIFI) {
+		return fuji_get_property(cam, ptp);
+	}
 
 	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
@@ -1001,14 +1001,14 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef VCAM_FUJI
-	if (fuji_set_prop_supported(ptp->params[0])) {
-		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
-		return 1;
-	} else {
-		return 1;
+	if (cam->type == CAM_FUJI_WIFI) {
+		if (fuji_set_prop_supported(ptp->params[0])) {
+			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
+			return 1;
+		} else {
+			return 1;
+		}
 	}
-#endif
 
 	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
@@ -1080,9 +1080,9 @@ int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned 
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-#ifdef VCAM_FUJI
-	return fuji_set_property(cam, ptp, data, len);
-#endif
+	if (cam->type == CAM_FUJI_WIFI) {
+		return fuji_set_property(cam, ptp, data, len);
+	}
 
 	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
 		if (ptp_properties[i].code == ptp->params[0])

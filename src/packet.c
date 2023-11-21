@@ -4,9 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <ptp.h>
 
-#include <vcamera.h>
+#include <vcam.h>
 
 // Get data from the app, convert it to usb for vcam
 void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength) {

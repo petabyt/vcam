@@ -19,6 +19,36 @@ struct ptp_interrupt *first_interrupt;
 struct ptp_dirent *first_dirent = NULL;
 uint32_t ptp_objectid = 0;
 
+// Fill a config struct from model string
+int vcam_get_variant_info(char *arg, struct CamConfig *o) {
+	if (!strcmp(arg, "fuji_x_a2")) {
+		strcpy(o->model, "X-A2");
+		o->type = CAM_FUJI_WIFI;
+		o->variant = V_FUJI_X_A2;
+		o->image_get_version = 1;
+		o->image_explore_version = 2;
+		o->remote_version = 0;
+	} else if (!strcmp(arg, "fuji_x_t20")) {
+		strcpy(o->model, "X-T20");
+		o->type = CAM_FUJI_WIFI;
+		o->variant = V_FUJI_X_T20;
+		o->image_get_version = 3;
+		o->image_explore_version = 4;
+		o->remote_version = 0x00020004;
+		o->remote_image_explore_version = 2;
+	} else if (!strcmp(arg, "canon_1300d")) {
+		strcpy(o->model, "Canon EOS Rebel T6");
+		strcpy(o->version, "3-1.2.0");
+		strcpy(o->serial, "828af56");
+		o->type = CAM_CANON;
+		o->variant = V_CANON_1300D;
+	} else {
+		return 1;
+	}
+
+	return 0;
+}
+
 void vcam_dump(void *ptr, size_t len) {
 	FILE *f = fopen("DUMP", "wb");
 	fwrite(ptr, len, 1, f);

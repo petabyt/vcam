@@ -26,8 +26,7 @@ $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
 libusb.so: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
-libusb.so: SO_FILES+=src/canon.o
-libusb.so: src/canon.o $(SO_FILES)
+SO_FILES+=src/canon.o src/fuji.o src/tcp-fuji.o
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
@@ -74,7 +73,6 @@ test-fuji:
 
 setup-canon:
 	sudo ip link add canon_dummy type dummy
-	#sudo ip address add 192.168.1.2/24 dev canon_dummy # local testing doesn't work without this
 	sudo ip link set dev canon_dummy address '00:BB:C1:85:9F:AB'
 	sudo ip link set canon_dummy up
 	sudo ip route add 192.168.1.2 dev canon_dummy

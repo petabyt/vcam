@@ -117,6 +117,8 @@ typedef struct vcamera {
 
 vcamera *vcamera_new(vcameratype);
 
+int vcam_get_variant_info(char *arg, struct CamConfig *o);
+
 int vcam_fuji_setup(vcamera *cam);
 int vcam_canon_setup(vcamera *cam);
 

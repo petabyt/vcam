@@ -91,9 +91,14 @@ void libusb_free_config_descriptor(struct libusb_config_descriptor *config) {
 int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	*dev_handle = (libusb_device_handle *)malloc(sizeof(struct libusb_device_handle));
 
+	struct CamConfig *conf = calloc(sizeof(struct CamConfig), 1);
+
+	vcam_get_variant_info("canon_1300d", conf);
+
 	GPPort *port = malloc(sizeof(GPPort));
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(CAM_CANON);
+	port->pl->vcamera->conf = conf;
 	port->pl->vcamera->init(port->pl->vcamera);
 
 	(*dev_handle)->dev = port;

@@ -24,15 +24,9 @@
  * This file contains various portability functions that
  * make non UNIX (Windows) ports easier.
  */
-#define _GPHOTO2_INTERNAL_CODE
-#include "config.h"
-#include <gphoto2/gphoto2-port-portability.h>
-#include <gphoto2/gphoto2-port-result.h>
-#include <gphoto2/gphoto2-port.h>
-#include <stdio.h>
 
-/* Windows Portability
-   ------------------------------------------------------------------ */
+#include "gphoto.h"
+
 #ifdef WIN32
 
 void gp_port_win_convert_path(char *path) {

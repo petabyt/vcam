@@ -8,11 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <ptp.h>
-#include <gphoto.h>
-#include <vcamera.h>
 
-#include "fuji.h"
+#include <vcam.h>
 
 static const char *server_ip_address = "192.168.0.1";
 

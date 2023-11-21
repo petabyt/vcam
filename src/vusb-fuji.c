@@ -1,3 +1,4 @@
+// Dead old code, camlib vusb backend for fuji
 #include <android/log.h>
 #include <errno.h>
 #include <jni.h>
