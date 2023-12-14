@@ -11,13 +11,9 @@ static struct ptp_function ptp_functions_nikon_dslr[] = {
 	{0, NULL, NULL},
 };
 
-#ifdef VCAM_FUJI
 extern struct ptp_function ptp_functions_fuji_wifi[];
-#endif
 
-#ifdef VCAM_CANON
 extern struct ptp_function ptp_functions_canon[];
-#endif
 
 static struct ptp_map_functions {
 	vcameratype		type;
@@ -26,14 +22,8 @@ static struct ptp_map_functions {
 } ptp_functions[] = {
 	{GENERIC_PTP,	ptp_functions_generic, 0},
 	{CAM_NIKON_D750,	ptp_functions_nikon_dslr, 0},
-
-#ifdef VCAM_CANON
 	{CAM_CANON,	ptp_functions_canon, 0},
-#endif
-
-#ifdef VCAM_FUJI
 	{CAM_FUJI_WIFI,	ptp_functions_fuji_wifi, 0},
-#endif
 };
 
 static struct ptp_property {

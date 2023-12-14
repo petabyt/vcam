@@ -1,6 +1,7 @@
 # TODO: depend on config.mak rather than make CLI flags
 -include config.mak
 
+# WiFi hardware for spoofing (requires AP support)
 WIFI_DEV?=wlp0s20f3
 
 # Set this to a folder with images (as it appears to PTP)
@@ -20,28 +21,18 @@ SO_FILES=$(VCAM_CORE) src/libusb.o
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+="-D VCAMERADIR=\"$(VCAMERADIR)\""
+CFLAGS+="-D PWD=\"$(shell pwd)\""
 CFLAGS+=-I../camlib/src/
 
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
-libusb.so: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
 SO_FILES+=src/canon.o src/fuji.o src/tcp-fuji.o
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
-FUJI_FILES=$(VCAM_CORE) src/tcp-fuji.o src/fuji.o src/main.o
-fuji: CFLAGS+=-D VCAM_FUJI -D CAM_HAS_EXTERN_DEV_INFO
-fuji: $(FUJI_FILES)
-	$(CC) $(FUJI_FILES) $(CFLAGS) -o fuji $(LDFLAGS) -lexif
-
-canon: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
-CANON_FILES=$(VCAM_CORE) src/tcp-ip.o src/canon.o src/main.o src/fuji.o src/tcp-fuji.o
-canon: $(CANON_FILES)
-	$(CC) $(CANON_FILES) $(CFLAGS) -o canon $(LDFLAGS) -lexif
-
 vcam: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
-VCAM_FILES=$(VCAM_CORE) src/tcp-ip.o src/canon.o src/main.o src/fuji.o src/tcp-fuji.o
+VCAM_FILES=$(VCAM_CORE) src/tcp-ip.o src/tcp-fuji.o src/canon.o src/main.o src/fuji.o
 vcam: $(VCAM_FILES)
 	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
 
@@ -66,9 +57,9 @@ kill-fuji:
 ap-fuji:
 	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-A2-ABCD
 test-fuji:
-	@while make fuji; do \
+	@while make vcam; do \
 	echo '------------------------------------------'; \
-	./fuji; \
+	./vcam fuji_x_a2; \
 	done
 
 setup-canon:
@@ -83,7 +74,7 @@ ap-canon:
 kill-canon:
 	sudo ip link delete canon_dummy
 test-canon:
-	@while make canon; do \
+	@while make vcam; do \
 	echo '------------------------------------------'; \
-	./canon; \
+	./vcam canon_1300d; \
 	done

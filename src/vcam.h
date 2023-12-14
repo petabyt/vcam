@@ -67,23 +67,18 @@ typedef struct ptpcontainer {
 	unsigned int has_data_phase;
 } ptpcontainer;
 
+struct PtpPropList {
+	int code;
+	void *data;
+	void *next;
+};
+
 // All members are garunteed to be zero by calloc()
 typedef struct vcamera {
 	int (*init)(struct vcamera*);
 	int (*exit)(struct vcamera*);
 	int (*open)(struct vcamera*, const char *port);
 	int (*close)(struct vcamera*);
-
-	int (*read)(struct vcamera*,  int ep, unsigned char *data, int bytes);
-	int (*readint)(struct vcamera*,  unsigned char *data, int bytes, int timeout);
-	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
-
-	unsigned short	vendor, product;
-
-	vcameratype	type;
-	//vcameravariant variant;
-
-	struct CamConfig *conf;
 
 	unsigned char	*inbulk;
 	int		nrinbulk;
@@ -92,6 +87,22 @@ typedef struct vcamera {
 	unsigned int	seqnr;
 	unsigned int	session;
 	ptpcontainer	ptpcmd;
+
+	int (*read)(struct vcamera*, int ep, unsigned char *data, int bytes);
+	int (*readint)(struct vcamera*, unsigned char *data, int bytes, int timeout);
+	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
+
+	struct PtpPropList *list;
+	void (*wprop)(struct vcamera *, int code, uint32_t data); // write prop
+	void (*wpropd)(struct vcamera *, int code, void *data, int size); // write prop data
+	void (*rprop)(struct vcamera *, int code, int max);
+
+	uint16_t vendor;
+	uint16_t product;
+
+	vcameratype	type;
+
+	struct CamConfig *conf;
 
 	// Generic camera internal properties
 	int exposurebias;

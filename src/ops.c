@@ -85,6 +85,7 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 
 	cnt = 0;
 	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
+		if (ptp_functions[i].type != cam->type) continue;
 		for (int x = 0; x < ptp_functions[i].functions[x].code != 0; x++) {
 			cnt++;
 		}
@@ -92,11 +93,12 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 
 	opcodes = malloc(cnt * sizeof(uint16_t));
 
-	int y = 0;
+	cnt = 0;
 	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
+		if (ptp_functions[i].type != cam->type) continue;
 		for (int z = 0; z < ptp_functions[i].functions[z].code != 0; z++) {
-			opcodes[y] = ptp_functions[i].functions[z].code;
-			y++;
+			opcodes[cnt] = ptp_functions[i].functions[z].code;
+			cnt++;
 		}
 	}
 
@@ -417,13 +419,14 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
-#ifdef VCAM_FUJI
-	// The probably switches when start+size partialobject calls
-	// meet end of file, but this will do for now
-	if (size != 0x100000) {
-		fuji_downloaded_object(cam);
+
+	if (cam->type == CAM_FUJI_WIFI) {
+		// The probably switches when start+size partialobject calls
+		// meet end of file, but this will do for now
+		if (size != 0x100000) {
+			fuji_downloaded_object(cam);
+		}
 	}
-#endif
 	return 1;
 }
 

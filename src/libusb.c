@@ -11,13 +11,6 @@
 
 #include <vcam.h>
 
-#ifdef VCAM_CANON
-	#define VENDOR_ID 0x4A9
-	#ifdef CANON_IS_1300D
-		#define PRODUCT_ID 0x0
-	#endif
-#endif
-
 struct _GPPortPrivateLibrary {
 	int isopen;
 	vcamera *vcamera;
@@ -29,11 +22,11 @@ struct libusb_device_handle {
 };
 
 struct libusb_device {
-	int x;
-	// Magic implementation
+	GPPort *dev;
 };
 
 int libusb_init(libusb_context **ctx) {
+	vcam_log("vcam init\n");
 	// No allocation is needed as per spec. Implementation is hidden.
 	*ctx = NULL;
 	return 0;
@@ -50,8 +43,11 @@ int libusb_get_device_descriptor(libusb_device *dev, struct libusb_device_descri
 	desc->bLength = sizeof(struct libusb_device_descriptor);
 	desc->bDescriptorType = 1;
 	desc->bNumConfigurations = 1;
-	desc->idVendor = VENDOR_ID;
-	desc->idProduct = PRODUCT_ID;
+
+	// Canon EOS
+	desc->idVendor = 0x4A9;
+	desc->idProduct = 0x0;
+
 	return 0;
 }
 
@@ -101,6 +97,8 @@ int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	port->pl->vcamera->init(port->pl->vcamera);
 
 	(*dev_handle)->dev = port;
+
+	dev->dev = port;
 
 	if (port->pl->isopen)
 		return -1;

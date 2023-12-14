@@ -19,6 +19,8 @@ int main(int argc, char *argv[]) {
 		vcam_get_variant_info(argv[i], &options);
 		if (!strcmp(argv[i], "--local")) {
 			options.use_local = 1;
+		} else if (!strcmp(argv[i], "--select-img")) {
+			options.is_select_multiple_images = 1;
 		}
 	}
 

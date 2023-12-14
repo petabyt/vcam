@@ -54,10 +54,11 @@ void vcam_dump(void *ptr, size_t len) {
 }
 
 int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
-	FILE *file = fopen(path, "rb");
+	char new[64];
+	sprintf(new, "%s/%s", PWD, path);
+	FILE *file = fopen(new, "rb");
 	if (file == NULL) {
 		vcam_log("vcam_generic_send_file: File %s not found\n", path);
-		exit(-1);
 	}
 
 	fseek(file, 0, SEEK_END);
@@ -74,6 +75,19 @@ int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
 	fclose(file);
 
 	return 0;
+}
+
+void vcam_set_prop_int(vcamera *cam, int code, uint32_t value) {
+	if (cam->list == NULL) {
+		cam->list = calloc(1, sizeof(struct PtpPropList));
+	}
+
+	cam->list->code = code;
+	cam->list->data = malloc(sizeof(uint32_t));
+	memcpy(cam->list->data, &value, sizeof(uint32_t));
+	cam->list->next = calloc(1, sizeof(struct PtpPropList));
+
+	cam->list = cam->list->next;
 }
 
 uint32_t get_32bit_le(unsigned char *data) {
@@ -353,13 +367,13 @@ int ptp_battery_getdesc(vcamera *cam, PTPDevicePropDesc *desc) {
 	desc->FORM.Range.MinimumValue.u8 = 0;
 	desc->FORM.Range.MaximumValue.u8 = 100;
 	desc->FORM.Range.StepSize.u8 = 1;
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5001, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5001, 0xffffffff);
 	return 1;
 }
 
 int ptp_battery_getvalue(vcamera *cam, PTPPropertyValue *val) {
 	val->u8 = 50;
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5001, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5001, 0xffffffff);
 	return 1;
 }
 
@@ -376,13 +390,13 @@ int ptp_imagesize_getdesc(vcamera *cam, PTPDevicePropDesc *desc) {
 	desc->FORM.Enum.SupportedValue[1].str = strdup("1024x768");
 	desc->FORM.Enum.SupportedValue[2].str = strdup("2048x1536");
 
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5003, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5003, 0xffffffff);
 	return 1;
 }
 
 int ptp_imagesize_getvalue(vcamera *cam, PTPPropertyValue *val) {
 	val->str = strdup("640x480");
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5003, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5003, 0xffffffff);
 	return 1;
 }
 
@@ -407,18 +421,18 @@ int ptp_shutterspeed_getdesc(vcamera *cam, PTPDevicePropDesc *desc) {
 	desc->FORM.Enum.SupportedValue[7].u32 = 12;
 	desc->FORM.Enum.SupportedValue[8].u32 = 1;
 
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x500D, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x500D, 0xffffffff);
 	return 1;
 }
 
 int ptp_shutterspeed_getvalue(vcamera *cam, PTPPropertyValue *val) {
 	val->u32 = cam->shutterspeed;
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x500d, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x500d, 0xffffffff);
 	return 1;
 }
 
 int ptp_shutterspeed_setvalue(vcamera *cam, PTPPropertyValue *val) {
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x500d, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x500d, 0xffffffff);
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->u32);
 	cam->shutterspeed = val->u32;
 	return 1;
@@ -454,18 +468,18 @@ int ptp_fnumber_getdesc(vcamera *cam, PTPDevicePropDesc *desc) {
 	desc->FORM.Enum.SupportedValue[16].u16 = 2000;
 	desc->FORM.Enum.SupportedValue[17].u16 = 2200;
 
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5007, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5007, 0xffffffff);
 	return 1;
 }
 
 int ptp_fnumber_getvalue(vcamera *cam, PTPPropertyValue *val) {
 	val->u16 = cam->fnumber;
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5007, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5007, 0xffffffff);
 	return 1;
 }
 
 int ptp_fnumber_setvalue(vcamera *cam, PTPPropertyValue *val) {
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5007, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5007, 0xffffffff);
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->u16);
 	cam->fnumber = val->u16;
 	return 1;
@@ -496,18 +510,18 @@ int ptp_exposurebias_getdesc(vcamera *cam, PTPDevicePropDesc *desc) {
 	desc->FORM.Enum.SupportedValue[11].i16 = 2500;
 	desc->FORM.Enum.SupportedValue[12].i16 = 3000;
 
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5010, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5010, 0xffffffff);
 	return 1;
 }
 
 int ptp_exposurebias_getvalue(vcamera *cam, PTPPropertyValue *val) {
 	val->i16 = cam->exposurebias;
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5010, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5010, 0xffffffff);
 	return 1;
 }
 
 int ptp_exposurebias_setvalue(vcamera *cam, PTPPropertyValue *val) {
-	ptp_inject_interrupt(cam, 1000, 0x4006, 1, 0x5010, 0xffffffff);
+	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5010, 0xffffffff);
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->i16);
 	cam->exposurebias = val->i16;
 	return 1;
@@ -527,7 +541,7 @@ int ptp_datetime_getdesc(vcamera *cam, PTPDevicePropDesc *desc) {
 	desc->FactoryDefaultValue.str = strdup(xdate);
 	desc->CurrentValue.str = strdup(xdate);
 	desc->FormFlag = 0; /* no form */
-	/*ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5011, 0xffffffff);*/
+	/*ptp_inject_interrupt (cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5011, 0xffffffff);*/
 	return 1;
 }
 
@@ -540,7 +554,7 @@ int ptp_datetime_getvalue(vcamera *cam, PTPPropertyValue *val) {
 	tm = gmtime(&xtime);
 	sprintf(xdate, "%04d%02d%02dT%02d%02d%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 	val->str = strdup(xdate);
-	/*ptp_inject_interrupt (cam, 1000, 0x4006, 1, 0x5011, 0xffffffff);*/
+	/*ptp_inject_interrupt (cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5011, 0xffffffff);*/
 	return 1;
 }
 
@@ -910,6 +924,8 @@ vcamera *vcamera_new(vcameratype type) {
 	cam->exit = vcam_exit;
 	cam->open = vcam_open;
 	cam->close = vcam_close;
+
+	cam->wprop = vcam_set_prop_int;
 
 	cam->read = vcam_read;
 	cam->readint = vcam_readint;

@@ -24,6 +24,9 @@ struct EosEventUint {
 };
 
 int vcam_canon_setup(vcamera *cam) {
+
+	cam->wprop(cam, 0x5001, 123);
+
 	return 0;
 }
 
@@ -45,15 +48,15 @@ static int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 static int ptp_eos_generic(vcamera *cam, ptpcontainer *ptp) {
 	switch (ptp->code) {
 	case PTP_OC_EOS_SetRemoteMode:
-	case PTP_OC_EOS_SetEventMode: {
-		CHECK_PARAM_COUNT(1);
-	}
+	case PTP_OC_EOS_SetEventMode:
+		{ CHECK_PARAM_COUNT(1); }
 		eos_info.first_events = 1;
-		break;
+		ptp_response(cam, PTP_RC_OK, 0);
+		return 1;
 	}
 
-	vcam_log("Warning: Unimplemented generic 0x%X opcode - returning OK\n", ptp->code);
-	ptp_response(cam, PTP_RC_OK, 0);
+	vcam_log("Error: Error generic 0x%X opcode\n", ptp->code);
+	ptp_response(cam, PTP_RC_OperationNotSupported, 0);
 	return 1;
 }
 
@@ -119,11 +122,13 @@ static int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
 static int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
 
-#if 0
 	if (eos_info.first_events) {
-		ptp_senddata(cam, ptp->code, (unsigned char *)bin_eos_events_bin, bin_eos_events_bin_len);
+		vcam_generic_send_file(EOS_EVENTS_BIN, cam, ptp);
 		eos_info.first_events = 0;
-	} else {
+	}
+
+#if 0
+	{
 		void *buffer = malloc(1000);
 		int curr = 0;
 

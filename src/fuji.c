@@ -93,7 +93,7 @@ int vcam_fuji_setup(vcamera *cam) {
 	}
 
 	if (cam->conf->is_select_multiple_images) {
-		vcam_log("Configuring camera to select multiple images");
+		vcam_log("Configuring fuji to select multiple images\n");
 		fuji_info.camera_state = FUJI_MULTIPLE_TRANSFER;
 	}
 
