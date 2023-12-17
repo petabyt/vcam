@@ -77,17 +77,40 @@ int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-void vcam_set_prop_int(vcamera *cam, int code, uint32_t value) {
-	if (cam->list == NULL) {
-		cam->list = calloc(1, sizeof(struct PtpPropList));
+void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data) {
+	struct PtpPropList *list = NULL;
+	for (list = cam->list; list->next != NULL; list = list->next) {
+		if (list->code == code) break;
+	}
+	
+	if (list == NULL) {
+		printf("vcam_set_prop_avail: Can't find prop\n");
+		exit(1);
 	}
 
-	cam->list->code = code;
-	cam->list->data = malloc(sizeof(uint32_t));
-	memcpy(cam->list->data, &value, sizeof(uint32_t));
-	cam->list->next = calloc(1, sizeof(struct PtpPropList));
+	list->avail = data;
+	list->avail_size = size;
+	list->avail_cnt = cnt;
+}
 
-	cam->list = cam->list->next;
+void vcam_set_prop(vcamera *cam, int code, uint32_t value) {
+	cam->list_tail->code = code;
+	cam->list_tail->data = malloc(sizeof(uint32_t));
+	cam->list_tail->length = sizeof(uint32_t);
+	memcpy(cam->list_tail->data, &value, sizeof(uint32_t));
+	cam->list_tail->next = calloc(1, sizeof(struct PtpPropList));
+
+	cam->list_tail = cam->list_tail->next;
+}
+
+void vcam_set_prop_data(vcamera *cam, int code, void *data, int length) {
+	cam->list_tail->code = code;
+	cam->list_tail->data = malloc(length);
+	cam->list_tail->length = length;
+	memcpy(cam->list_tail->data, data, length);
+	cam->list_tail->next = calloc(1, sizeof(struct PtpPropList));
+
+	cam->list_tail = cam->list_tail->next;
 }
 
 uint32_t get_32bit_le(unsigned char *data) {
@@ -925,7 +948,9 @@ vcamera *vcamera_new(vcameratype type) {
 	cam->open = vcam_open;
 	cam->close = vcam_close;
 
-	cam->wprop = vcam_set_prop_int;
+	// Property linked list
+	cam->list_tail = calloc(1, sizeof(struct PtpPropList));
+	cam->list = cam->list_tail;
 
 	cam->read = vcam_read;
 	cam->readint = vcam_readint;

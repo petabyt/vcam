@@ -70,6 +70,12 @@ typedef struct ptpcontainer {
 struct PtpPropList {
 	int code;
 	void *data;
+	int length;
+
+	void *avail;
+	int avail_size;
+	int avail_cnt;
+
 	void *next;
 };
 
@@ -92,10 +98,9 @@ typedef struct vcamera {
 	int (*readint)(struct vcamera*, unsigned char *data, int bytes, int timeout);
 	int (*write)(struct vcamera*, int ep, const unsigned char *data, int bytes);
 
+	// Linked list containing bulk properties
 	struct PtpPropList *list;
-	void (*wprop)(struct vcamera *, int code, uint32_t data); // write prop
-	void (*wpropd)(struct vcamera *, int code, void *data, int size); // write prop data
-	void (*rprop)(struct vcamera *, int code, int max);
+	struct PtpPropList *list_tail;
 
 	uint16_t vendor;
 	uint16_t product;
@@ -143,6 +148,10 @@ int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp);
 
 void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes);
 void ptp_response(vcamera *cam, uint16_t code, int nparams, ...);
+
+void vcam_set_prop(vcamera *cam, int code, uint32_t value);
+void vcam_set_prop_data(vcamera *cam, int code, void *data, int length);
+void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data);
 
 // Standard PTP opcode implementations
 int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp);
@@ -328,5 +337,23 @@ struct CamGenericEvent ptp_pop_event(vcamera *cam);
 #include "canon.h"
 #include "fuji.h"
 #include "ops.h"
+
+uint32_t ptp_write_u32(void *dat, uint32_t v);
+uint8_t ptp_write_u8(void *dat, uint8_t v);
+uint32_t ptp_read_u32(void *dat, uint32_t *buf);
+uint16_t ptp_read_u16(void *dat, uint16_t *buf);
+uint8_t ptp_read_u8(void *dat, uint8_t *buf);
+
+uint8_t ptp_read_uint8(void *dat);
+uint16_t ptp_read_uint16(void *dat);
+uint32_t ptp_read_uint32(void *dat);
+void ptp_read_string(void *dat, char *string, int max);
+int ptp_read_uint16_array(void *dat, uint16_t *buf, int max);
+int ptp_read_uint32_array(void *dat, uint16_t *buf, int max);
+int ptp_wide_string(char *buffer, int max, char *input);
+void ptp_write_uint8(void *dat, uint8_t b);
+int ptp_write_uint32(void *dat, uint32_t b);
+int ptp_write_string(void *dat, char *string);
+int ptp_write_utf8_string(void *dat, char *string);
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

@@ -13,10 +13,13 @@ VCAMERADIR=$(PWD)/sd
 $(info Using '$(VCAMERADIR)')
 endif
 
-VCAM_CORE=src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o
+VCAM_CORE=src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/tcp-fuji.o src/tcp-ip.o
+VCAM_CORE+=src/canon_setup.o src/data.o
 
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
 SO_FILES=$(VCAM_CORE) src/libusb.o
+
+VCAM_FILES=$(VCAM_CORE) src/main.o
 
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
@@ -27,12 +30,9 @@ CFLAGS+=-I../camlib/src/
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
-SO_FILES+=src/canon.o src/fuji.o src/tcp-fuji.o
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
 
-vcam: CFLAGS+=-D VCAM_CANON -D CAM_HAS_EXTERN_DEV_INFO
-VCAM_FILES=$(VCAM_CORE) src/tcp-ip.o src/tcp-fuji.o src/canon.o src/main.o src/fuji.o
 vcam: $(VCAM_FILES)
 	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
 
@@ -43,6 +43,9 @@ vcam: $(VCAM_FILES)
 clean:
 	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o
 	$(RM) fuji canon vcam
+
+ln:
+	ln ../../camlib/src/ptp.h ptp.h
 
 # Wireless AP networking Hacks
 

@@ -93,7 +93,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
 	ssize_t size;
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 10; i++) {
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 
 		#ifdef TCP_NOISY
@@ -102,7 +102,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 
 		if (size == 0) {
 			vcam_log("Initiator isn't sending anything, trying again\n");
-			usleep(1000 * 1000);
+			usleep(1000 * 500); // 1s
 			continue;
 		}
 

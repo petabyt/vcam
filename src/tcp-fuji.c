@@ -72,7 +72,7 @@ static int tcp_recieve_all(int client_socket) {
 
 		if (size == 0) {
 			vcam_log("Initiator isn't sending anything, trying again\n");
-			usleep(1000 * 1000);
+			usleep(1000 * 500);
 			continue;
 		}
 

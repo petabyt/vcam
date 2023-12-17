@@ -23,13 +23,6 @@ struct EosEventUint {
 	uint32_t value;
 };
 
-int vcam_canon_setup(vcamera *cam) {
-
-	cam->wprop(cam, 0x5001, 123);
-
-	return 0;
-}
-
 static int ptp_eos_viewfinder_data(vcamera *cam, ptpcontainer *ptp) {
 	usleep(1000 * 10);
 	eos_info.calls_to_liveview++;
@@ -119,12 +112,62 @@ static int ptp_eos_remote_release(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+static int eos_pack_all_props(vcamera *cam, void *buf, int *size) {
+	int cnt = 0;
+
+	struct PtpPropList *list = NULL;
+
+	printf("%X\n", cam->list->code);
+
+	for (list = cam->list; list->next != NULL; list = list->next) {
+		cnt += ptp_write_u32(buf + cnt, 16);
+		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_PropValueChanged);
+		cnt += ptp_write_u32(buf + cnt, list->code);		
+		memcpy(buf + cnt, list->data, list->length);
+		cnt += list->length;
+	}
+
+	for (list = cam->list; list->next != NULL; list = list->next) {
+		int size = list->avail_size * list->avail_cnt;
+		cnt += ptp_write_u32(buf + cnt, 5 * 4 + size);
+		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_AvailListChanged);
+		cnt += ptp_write_u32(buf + cnt, list->code);
+		cnt += ptp_write_u32(buf + cnt, 3);
+		cnt += ptp_write_u32(buf + cnt, list->avail_cnt);
+
+		memcpy(buf + cnt, list->avail, size);
+		cnt += size;
+	}
+
+	(*size) = cnt;
+
+	return 0;
+};
+
 static int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
 
+#if 0
 	if (eos_info.first_events) {
 		vcam_generic_send_file(EOS_EVENTS_BIN, cam, ptp);
 		eos_info.first_events = 0;
+		ptp_response(cam, PTP_RC_OK, 0);
+		return 1;
+	}
+#endif
+
+	if (eos_info.first_events) {
+		int size = 0;
+		char *buffer = malloc(10000);
+		eos_pack_all_props(cam, buffer, &size);
+
+		ptp_senddata(cam, ptp->code, (unsigned char *)buffer, size);
+		ptp_response(cam, PTP_RC_OK, 0);
+
+		free(buffer);
+
+		eos_info.first_events = 0;
+		return 1;
 	}
 
 #if 0
