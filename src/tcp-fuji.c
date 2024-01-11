@@ -107,7 +107,7 @@ static int tcp_recieve_all(int client_socket) {
 		perror("Error reading data from socket");
 		return -1;
 	} else if (size != packet_length) {
-		vcam_log("Couldn't read the rest of the packet, only got %d/%d\n", size, packet_length);
+		vcam_log("Couldn't read the rest of the packet, only got %d out of %d\n", size, packet_length);
 		return -1;
 	}
 

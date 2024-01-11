@@ -85,11 +85,7 @@ static int ptp_eos_set_property_data(vcamera *cam, ptpcontainer *ptp, unsigned c
 	}
 
 	ptp_notify_event(cam, code, value);
-
-#if 0
-	struct CamGenericEvent ev = ptp_pop_event(cam);
-	printf("Code: %X\n", ev.code);
-#endif
+	vcam_set_prop(cam, code, value);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -117,8 +113,7 @@ static int eos_pack_all_props(vcamera *cam, void *buf, int *size) {
 
 	struct PtpPropList *list = NULL;
 
-	printf("%X\n", cam->list->code);
-
+	// Pack in all properties and their current values
 	for (list = cam->list; list->next != NULL; list = list->next) {
 		cnt += ptp_write_u32(buf + cnt, 16);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_PropValueChanged);
@@ -127,17 +122,26 @@ static int eos_pack_all_props(vcamera *cam, void *buf, int *size) {
 		cnt += list->length;
 	}
 
+	cnt += ptp_write_u32(buf + cnt, 0xc);
+	cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_InfoCheckComplete);
+	cnt += ptp_write_u32(buf + cnt, 0x20001);
+
+	// Pack in all property available value lists
 	for (list = cam->list; list->next != NULL; list = list->next) {
 		int size = list->avail_size * list->avail_cnt;
 		cnt += ptp_write_u32(buf + cnt, 5 * 4 + size);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_AvailListChanged);
 		cnt += ptp_write_u32(buf + cnt, list->code);
-		cnt += ptp_write_u32(buf + cnt, 3);
+		cnt += ptp_write_u32(buf + cnt, 3); // type can be 1/2/3
 		cnt += ptp_write_u32(buf + cnt, list->avail_cnt);
 
 		memcpy(buf + cnt, list->avail, size);
 		cnt += size;
 	}
+
+	cnt += ptp_write_u32(buf + cnt, 0xc);
+	cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_InfoCheckComplete);
+	cnt += ptp_write_u32(buf + cnt, 0x20001);
 
 	(*size) = cnt;
 
@@ -146,15 +150,6 @@ static int eos_pack_all_props(vcamera *cam, void *buf, int *size) {
 
 static int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
-
-#if 0
-	if (eos_info.first_events) {
-		vcam_generic_send_file(EOS_EVENTS_BIN, cam, ptp);
-		eos_info.first_events = 0;
-		ptp_response(cam, PTP_RC_OK, 0);
-		return 1;
-	}
-#endif
 
 	if (eos_info.first_events) {
 		int size = 0;
@@ -169,35 +164,6 @@ static int vusb_ptp_eos_events(vcamera *cam, ptpcontainer *ptp) {
 		eos_info.first_events = 0;
 		return 1;
 	}
-
-#if 0
-	{
-		void *buffer = malloc(1000);
-		int curr = 0;
-
-		if (eos_info.queue_length == 0) {
-			uint32_t nothing[2] = {0, 0};
-			memcpy(buffer, nothing, sizeof(nothing));
-			curr = sizeof(nothing);
-		}
-
-		for (int i = 0; i < eos_info.queue_length; i++) {
-			struct EosEventUint *prop = (struct EosEventUint *)((uint8_t *)buffer + curr);
-			prop->size = sizeof(struct EosEventUint);
-			prop->type = PTP_EC_EOS_PropValueChanged;
-			prop->code = eos_info.queue[i].code;
-			prop->value = eos_info.queue[i].data;
-			curr += prop->size;
-			if (curr >= 1000)
-				exit(1);
-		}
-
-		eos_info.queue_length = 0;
-
-		ptp_senddata(cam, ptp->code, (unsigned char *)buffer, curr);
-		free(buffer);
-	}
-#endif
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

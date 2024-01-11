@@ -11,7 +11,7 @@
 #include <vcam.h>
 
 // Event handler
-struct ptp_interrupt *first_interrupt;
+struct ptp_interrupt *first_interrupt = NULL;
 
 // Filesystem index
 struct ptp_dirent *first_dirent = NULL;
@@ -88,7 +88,16 @@ void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data) 
 		exit(1);
 	}
 
-	list->avail = data;
+	// Realloc when list changes
+	void *dup = NULL;
+	if (list->avail == NULL) {
+		dup = malloc(size * cnt);
+		memcpy(dup, data, size * cnt);
+	} else {
+		dup = realloc(list->avail, size * cnt);
+	}
+
+	list->avail = dup;
 	list->avail_size = size;
 	list->avail_cnt = cnt;
 }
@@ -877,16 +886,17 @@ int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uin
 	return 1;
 }
 
-struct CamGenericEvent ptp_pop_event(vcamera *cam) {
-	struct CamGenericEvent ev;
-	memcpy(&ev, first_interrupt->data, sizeof(struct CamGenericEvent));
+int ptp_pop_event(vcamera *cam, struct GenericEvent *ev) {
+	if (first_interrupt == NULL) return 1;
+
+	memcpy(ev, first_interrupt->data, sizeof(struct GenericEvent));
 
 	struct ptp_interrupt *prev = first_interrupt;
 	first_interrupt = first_interrupt->next;
 	free(prev->data);
 	free(prev);
 
-	return ev;
+	return 0;
 }
 
 // Reads ints into 'data' with max 'bytes'

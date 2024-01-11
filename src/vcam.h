@@ -321,7 +321,7 @@ void vcam_virtual_pop_object(int id);
 int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
 #pragma pack(push, 1)
-struct CamGenericEvent {
+struct GenericEvent {
 	uint32_t size;
 	uint16_t x;
 	uint16_t code;
@@ -332,7 +332,7 @@ struct CamGenericEvent {
 
 int ptp_notify_event(vcamera *cam, uint16_t code, uint32_t value);
 
-struct CamGenericEvent ptp_pop_event(vcamera *cam);
+int ptp_pop_event(vcamera *cam, struct GenericEvent *ev);
 
 #include "canon.h"
 #include "fuji.h"

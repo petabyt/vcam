@@ -1,7 +1,6 @@
 #include <vcam.h>
 
 int vcam_canon_setup(vcamera *cam) {
-
 	vcam_set_prop(cam, PTP_PC_EOS_AutoExposureMode, 0x3);
 	vcam_set_prop(cam, PTP_PC_EOS_FocusMode, 0x3);
 	vcam_set_prop(cam, PTP_PC_EOS_DriveMode, 0x11);
@@ -282,6 +281,6 @@ int vcam_canon_setup(vcamera *cam) {
 	vcam_set_prop_avail(cam, 0xD175, 4, 1, avail_list_d175);
 	uint8_t avail_list_d14a[] = {};
 	vcam_set_prop_avail(cam, 0xD14A, 0, 0, avail_list_d14a);
-	
 
+	return 0;
 }

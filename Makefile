@@ -25,7 +25,7 @@ CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+="-D VCAMERADIR=\"$(VCAMERADIR)\""
 CFLAGS+="-D PWD=\"$(shell pwd)\""
-CFLAGS+=-I../camlib/src/
+#CFLAGS+=-I../camlib/src/
 
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
@@ -45,7 +45,8 @@ clean:
 	$(RM) fuji canon vcam
 
 ln:
-	ln ../../camlib/src/ptp.h ptp.h
+	ln ../camlib/src/ptp.h src/ptp.h
+	ln ../camlib/src/cl_data.h src/cl_data.h
 
 # Wireless AP networking Hacks
 
