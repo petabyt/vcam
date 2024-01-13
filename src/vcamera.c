@@ -34,6 +34,14 @@ int vcam_get_variant_info(char *arg, struct CamConfig *o) {
 		o->image_explore_version = 4;
 		o->remote_version = 0x00020004;
 		o->remote_image_explore_version = 2;
+	} else if (!strcmp(arg, "fuji_x_s10")) {
+		strcpy(o->model, "X-T20");
+		o->type = CAM_FUJI_WIFI;
+		o->variant = V_FUJI_X_T20;
+		o->image_get_version = 3;
+		o->image_explore_version = 4;
+		o->remote_version = 0x0002000a;
+		o->remote_image_explore_version = 2;
 	} else if (!strcmp(arg, "canon_1300d")) {
 		strcpy(o->model, "Canon EOS Rebel T6");
 		strcpy(o->version, "3-1.2.0");
@@ -887,6 +895,7 @@ int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uin
 }
 
 int ptp_pop_event(vcamera *cam, struct GenericEvent *ev) {
+	// first_interrupt is allowed to be NULL, will produce timeout (no events)
 	if (first_interrupt == NULL) return 1;
 
 	memcpy(ev, first_interrupt->data, sizeof(struct GenericEvent));

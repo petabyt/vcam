@@ -1005,7 +1005,7 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
 	if (cam->type == CAM_FUJI_WIFI) {
-		if (fuji_set_prop_supported(ptp->params[0])) {
+		if (fuji_set_prop_supported(cam, ptp->params[0])) {
 			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 			return 1;
 		} else {

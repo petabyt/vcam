@@ -13,7 +13,7 @@ VCAMERADIR=$(PWD)/sd
 $(info Using '$(VCAMERADIR)')
 endif
 
-VCAM_CORE=src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/tcp-fuji.o src/tcp-ip.o
+VCAM_CORE:=src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/tcp-fuji.o src/tcp-ip.o
 VCAM_CORE+=src/canon_setup.o src/data.o
 
 SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
@@ -23,9 +23,8 @@ VCAM_FILES=$(VCAM_CORE) src/main.o
 
 CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
 LDFLAGS=-L. -Wl,-rpath=.
-CFLAGS+="-D VCAMERADIR=\"$(VCAMERADIR)\""
-CFLAGS+="-D PWD=\"$(shell pwd)\""
-#CFLAGS+=-I../camlib/src/
+CFLAGS+='-D VCAMERADIR="$(VCAMERADIR)"'
+CFLAGS+='-D PWD="$(shell pwd)"'
 
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
@@ -36,9 +35,9 @@ libusb.so: $(SO_FILES)
 vcam: $(VCAM_FILES)
 	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
 
-# Recompile when headers change
-%.o: %.c $(H) $(wildcard src/*.h)
-	$(CC) -c $< $(CFLAGS) -o $@
+-include src/*.d
+%.o: %.c $(H)
+	$(CC) -MMD -c $< $(CFLAGS) -o $@
 
 clean:
 	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o

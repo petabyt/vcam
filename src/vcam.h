@@ -10,10 +10,11 @@
 #include <ptp.h>
 #include "gphoto.h"
 
+#define FUZZMODE_PROTOCOL	0
+#define FUZZMODE_NORMAL		1
+
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
-
-int ptp_get_object_count();
 
 // Generic options setup by CLI, put in cam->conf
 // All are 0 by default
@@ -86,13 +87,13 @@ typedef struct vcamera {
 	int (*open)(struct vcamera*, const char *port);
 	int (*close)(struct vcamera*);
 
-	unsigned char	*inbulk;
-	int		nrinbulk;
-	unsigned char	*outbulk;
-	int		nroutbulk;
-	unsigned int	seqnr;
-	unsigned int	session;
-	ptpcontainer	ptpcmd;
+	unsigned char *inbulk;
+	int	nrinbulk;
+	unsigned char *outbulk;
+	int	nroutbulk;
+	unsigned int seqnr;
+	unsigned int session;
+	ptpcontainer ptpcmd;
 
 	int (*read)(struct vcamera*, int ep, unsigned char *data, int bytes);
 	int (*readint)(struct vcamera*, unsigned char *data, int bytes, int timeout);
@@ -104,45 +105,49 @@ typedef struct vcamera {
 
 	uint16_t vendor;
 	uint16_t product;
-
 	vcameratype	type;
 
 	struct CamConfig *conf;
 
 	// Generic camera internal properties
-	int exposurebias;
-	unsigned int shutterspeed;
-	unsigned int fnumber;
-	unsigned int focal_length;
-	unsigned int target_distance_feet;
+		int exposurebias;
+		unsigned int shutterspeed;
+		unsigned int fnumber;
+		unsigned int focal_length;
+		unsigned int target_distance_feet;
 
 	// Fujifilm server related attributes
-	int fuji_test_cam_attr;
+		int function_mode;
+		int camera_state;
+		int remote_version;
+		int obj_count;
+		int compress_small;
+		int no_compressed;
+		uint8_t camera_internal_state;
+		int sent_images;
 
 	// Canon PTP/IP server related things
 	int is_lv_ready;
 
 #ifdef FUZZING
-	int		fuzzmode;
-#define FUZZMODE_PROTOCOL	0
-#define FUZZMODE_NORMAL		1
-	FILE*		fuzzf;
-	unsigned int	fuzzpending;
+	int	fuzzmode;
+	FILE *fuzzf;
+	unsigned int fuzzpending;
 #endif
 } vcamera;
 
 vcamera *vcamera_new(vcameratype);
+
+int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes);
+int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes);
+int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout);
 
 int vcam_get_variant_info(char *arg, struct CamConfig *o);
 
 int vcam_fuji_setup(vcamera *cam);
 int vcam_canon_setup(vcamera *cam);
 
-struct ptp_function {
-	int	code;
-	int	(*write)(vcamera *cam, ptpcontainer *ptp);
-	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
-};
+int ptp_get_object_count();
 
 int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp);
 
@@ -152,6 +157,12 @@ void ptp_response(vcamera *cam, uint16_t code, int nparams, ...);
 void vcam_set_prop(vcamera *cam, int code, uint32_t value);
 void vcam_set_prop_data(vcamera *cam, int code, void *data, int length);
 void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data);
+
+struct ptp_function {
+	int	code;
+	int	(*write)(vcamera *cam, ptpcontainer *ptp);
+	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
+};
 
 // Standard PTP opcode implementations
 int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp);
@@ -238,7 +249,6 @@ int ptp_fnumber_setvalue(vcamera *, PTPPropertyValue *);
 int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
 int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
 int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
-
 
 // A bunch of janky macros
 #define CHECK(result)               \
@@ -338,11 +348,11 @@ int ptp_pop_event(vcamera *cam, struct GenericEvent *ev);
 #include "fuji.h"
 #include "ops.h"
 
-uint32_t ptp_write_u32(void *dat, uint32_t v);
-uint8_t ptp_write_u8(void *dat, uint8_t v);
-uint32_t ptp_read_u32(void *dat, uint32_t *buf);
-uint16_t ptp_read_u16(void *dat, uint16_t *buf);
-uint8_t ptp_read_u8(void *dat, uint8_t *buf);
+int ptp_write_u32(void *dat, uint32_t v);
+int ptp_write_u8(void *dat, uint8_t v);
+int ptp_read_u32(void *dat, uint32_t *buf);
+int ptp_read_u16(void *dat, uint16_t *buf);
+int ptp_read_u8(void *dat, uint8_t *buf);
 
 uint8_t ptp_read_uint8(void *dat);
 uint16_t ptp_read_uint16(void *dat);

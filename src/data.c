@@ -2,27 +2,32 @@
 #include <stdint.h>
 #include <string.h>
 
-uint32_t ptp_write_u32(void *dat, uint32_t v) {
+int ptp_write_u32(void *dat, uint32_t v) {
 	((uint32_t *)dat)[0] = v;
 	return 4;
 }
 
-uint8_t ptp_write_u8(void *dat, uint8_t v) {
+int ptp_write_u16(void *dat, uint16_t v) {
+	((uint16_t *)dat)[0] = v;
+	return 2;
+}
+
+int ptp_write_u8(void *dat, uint8_t v) {
 	((uint8_t *)dat)[0] = v;
 	return 1;
 }
 
-uint8_t ptp_read_u8(void *dat, uint8_t *buf) {
+int ptp_read_u8(void *dat, uint8_t *buf) {
 	(*buf) = ((uint8_t *)dat)[0];
 	return 1;
 }
 
-uint16_t ptp_read_u16(void *dat, uint16_t *buf) {
+int ptp_read_u16(void *dat, uint16_t *buf) {
 	(*buf) = ((uint16_t *)dat)[0];
 	return 2;
 }
 
-uint32_t ptp_read_u32(void *dat, uint32_t *buf) {
+int ptp_read_u32(void *dat, uint32_t *buf) {
 	(*buf) = ((uint32_t *)dat)[0];
 	return 4;
 }
