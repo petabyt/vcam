@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <vcam.h>
+#include <fujiptp.h>
 
 static const char *server_ip_address = "192.168.0.1";
 

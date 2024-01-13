@@ -194,7 +194,7 @@ int fuji_set_prop_supported(vcamera *cam, int code) {
 	int codes[] = {
 	    PTP_PC_FUJI_CameraState,
 	    PTP_PC_FUJI_FunctionMode,
-	    PTP_PC_FUJI_ImageExploreVersion,
+	    PTP_PC_FUJI_GetObjectVersion,
 	    PTP_PC_FUJI_NoCompression,
 	    PTP_PC_FUJI_CompressSmall,
 		PTP_PC_FUJI_ImageGetVersion
@@ -202,7 +202,7 @@ int fuji_set_prop_supported(vcamera *cam, int code) {
 
 	int codes_remote_only[] = {
 	    PTP_PC_FUJI_RemoteVersion,
-	    PTP_PC_FUJI_RemoteImageExploreVersion,		
+	    PTP_PC_FUJI_RemoteGetObjectVersion,		
 	};
 
 	for (size_t i = 0; i < (sizeof(codes) / sizeof(codes[0])); i++) {
@@ -238,7 +238,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		assert(uint[0] == 0x2000B);
 		cam->remote_version = uint[0];
 		break;
-	case PTP_PC_FUJI_ImageExploreVersion:
+	case PTP_PC_FUJI_GetObjectVersion:
 		break;
 	case PTP_PC_FUJI_CompressSmall:
 		cam->compress_small = uint16[0];
@@ -249,7 +249,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		if (uint16[0] == 1) usleep(1000 * 500); // Fuji seems to take a while here
 		cam->no_compressed = uint16[0];
 		break;
-	case PTP_PC_FUJI_RemoteImageExploreVersion:
+	case PTP_PC_FUJI_RemoteGetObjectVersion:
 		assert(len == 4);
 		break;
 	case PTP_PC_FUJI_CameraState:
@@ -382,13 +382,13 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		data = cam->conf->image_get_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_ImageExploreVersion: {
-		data = cam->conf->image_explore_version;
+	case PTP_PC_FUJI_GetObjectVersion: {
+		data = cam->conf->get_object_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		} break;
-	case PTP_PC_FUJI_RemoteImageExploreVersion:
-		if (cam->conf->remote_image_explore_version) {
-			data = cam->conf->remote_image_explore_version;
+	case PTP_PC_FUJI_RemoteGetObjectVersion:
+		if (cam->conf->remote_get_object_version) {
+			data = cam->conf->remote_get_object_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		}
 		break;

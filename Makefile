@@ -40,7 +40,7 @@ vcam: $(VCAM_FILES)
 	$(CC) -MMD -c $< $(CFLAGS) -o $@
 
 clean:
-	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o
+	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d
 	$(RM) fuji canon vcam
 
 ln:

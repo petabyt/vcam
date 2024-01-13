@@ -45,10 +45,10 @@
 #define PTP_PC_FUJI_Unknown5		0xd500
 #define PTP_PC_FUJI_Unknown_D52F	0xd52f // probably version code
 #define PTP_PC_FUJI_ImageGetVersion	0xdf21
-#define PTP_PC_FUJI_ImageExploreVersion	0xdf22
+#define PTP_PC_FUJI_GetObjectVersion	0xdf22 // version for GetObjectInfo and GetObject
 #define PTP_PC_FUJI_Unknown10		0xdf23 // another version prop?
 #define PTP_PC_FUJI_RemoteVersion	0xdf24
-#define PTP_PC_FUJI_RemoteImageExploreVersion	0xdf25
+#define PTP_PC_FUJI_RemoteGetObjectVersion	0xdf25
 #define PTP_PC_FUJI_ImageGetLimitedVersion	0xdf26
 #define PTP_PC_FUJI_Unknown13		0xdf27
 #define PTP_PC_FUJI_Unknown_DF28	0xdf28

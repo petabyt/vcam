@@ -32,9 +32,9 @@ struct CamConfig {
 	// Fuji stuff
 	int is_select_multiple_images;
 	int image_get_version;
-	int image_explore_version;
+	int get_object_version;
 	int remote_version;
-	int remote_image_explore_version;
+	int remote_get_object_version;
 
 	// Canon stuff
 	int digic;

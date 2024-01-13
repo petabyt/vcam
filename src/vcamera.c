@@ -24,24 +24,24 @@ int vcam_get_variant_info(char *arg, struct CamConfig *o) {
 		o->type = CAM_FUJI_WIFI;
 		o->variant = V_FUJI_X_A2;
 		o->image_get_version = 1;
-		o->image_explore_version = 2;
+		o->get_object_version = 2;
 		o->remote_version = 0;
 	} else if (!strcmp(arg, "fuji_x_t20")) {
 		strcpy(o->model, "X-T20");
 		o->type = CAM_FUJI_WIFI;
 		o->variant = V_FUJI_X_T20;
 		o->image_get_version = 3;
-		o->image_explore_version = 4;
+		o->get_object_version = 4;
 		o->remote_version = 0x00020004;
-		o->remote_image_explore_version = 2;
+		o->remote_get_object_version = 2;
 	} else if (!strcmp(arg, "fuji_x_s10")) {
 		strcpy(o->model, "X-T20");
 		o->type = CAM_FUJI_WIFI;
 		o->variant = V_FUJI_X_T20;
 		o->image_get_version = 3;
-		o->image_explore_version = 4;
+		o->get_object_version = 4;
 		o->remote_version = 0x0002000a;
-		o->remote_image_explore_version = 2;
+		o->remote_get_object_version = 2;
 	} else if (!strcmp(arg, "canon_1300d")) {
 		strcpy(o->model, "Canon EOS Rebel T6");
 		strcpy(o->version, "3-1.2.0");
