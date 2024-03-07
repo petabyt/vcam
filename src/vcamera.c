@@ -37,11 +37,19 @@ int vcam_get_variant_info(char *arg, struct CamConfig *o) {
 	} else if (!strcmp(arg, "fuji_x_s10")) {
 		strcpy(o->model, "X-T20");
 		o->type = CAM_FUJI_WIFI;
-		o->variant = V_FUJI_X_T20;
+		o->variant = V_FUJI_X_S10;
 		o->image_get_version = 3;
 		o->get_object_version = 4;
 		o->remote_version = 0x0002000a;
-		o->remote_get_object_version = 2;
+		o->remote_get_object_version = 4;
+	} else if (!strcmp(arg, "fuji_x_h1")) {
+		strcpy(o->model, "X-H1");
+		o->type = CAM_FUJI_WIFI;
+		o->variant = V_FUJI_X_H1;
+		o->image_get_version = 3;
+		o->get_object_version = 4;
+		o->remote_version = 0x00020006;
+		o->remote_get_object_version = 4;
 	} else if (!strcmp(arg, "canon_1300d")) {
 		strcpy(o->model, "Canon EOS Rebel T6");
 		strcpy(o->version, "3-1.2.0");
@@ -660,6 +668,11 @@ int vcam_close(vcamera *cam) {
 void vcam_process_output(vcamera *cam) {
 	ptpcontainer ptp;
 	int i, j;
+
+	if (cam->next_cmd_kills_connection) {
+		gp_log_("Killing connection\n");
+		exit(0);
+	}
 
 	if (cam->nroutbulk < 4)
 		return; /* wait for more data */

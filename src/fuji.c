@@ -84,6 +84,8 @@ int vcam_fuji_setup(vcamera *cam) {
 	if (cam->conf->is_select_multiple_images) {
 		vcam_log("Configuring fuji to select multiple images\n");
 		cam->camera_state = FUJI_MULTIPLE_TRANSFER;
+		// First dirent is DCIM
+		first_dirent->next->id = 1;
 	}
 
 	return 0;
@@ -132,13 +134,6 @@ static size_t generic_file_size(char *path) {
 	fclose(file);
 
 	return file_size;
-}
-
-int fuji_get_thumb(vcamera *cam, ptpcontainer *ptp) {
-	vcam_log("Get thumb for object %d\n", ptp->params[0]);
-	vcam_generic_send_file(FUJI_DUMMY_THUMB, cam, ptp);
-	ptp_response(cam, PTP_RC_OK, 0);
-	return 1;
 }
 
 int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp) {
@@ -232,6 +227,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	case PTP_PC_FUJI_FunctionMode:
 		assert(len == 2);
 		cam->function_mode = uint[0];
+//		usleep(1000 * 2000); // Fuji accepts OK on the camera here
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		assert(len == 4);
@@ -468,20 +464,21 @@ void fuji_downloaded_object(vcamera *cam) {
 	// In MULTIPLE_TRANSFER mode, the camera 'deletes' the first object and replaces it with
 	// the second object, once a partialtransfer or object is completely downloaded.
 	if (cam->camera_state == FUJI_MULTIPLE_TRANSFER) {
+		printf("Dirent %s\n", first_dirent->next->fsname);
 		struct ptp_dirent *next = first_dirent->next;
-		next->id = first_dirent->id;
+		next->id = 1;
 		first_dirent = next;
+
+		if (cam->sent_images == 3) {
+			vcam_log("Enough images send %d, killing connection\n", cam->sent_images);
+			cam->next_cmd_kills_connection = 1;
+		}
 
 		// Then we resend the events from the start of the connection
 		ptp_notify_event(cam, PTP_PC_FUJI_CameraState, cam->camera_state);
 		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
 
 		cam->sent_images++;
-
-		if (cam->sent_images == 3) {
-			vcam_log("Enough images send, killing connection\n");
-			exit(0);
-		}
 	}
 }
 

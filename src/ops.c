@@ -409,7 +409,7 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 	}
 
 	char *buffer = malloc(size);
-	int read = fread(buffer, 1, size, file);
+	int read = fread(buffer, 1, size, file); // TODO: check for folder
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, read);
 	vcam_log("Generic sending %d\n", read);
@@ -419,11 +419,10 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
-
 	if (cam->type == CAM_FUJI_WIFI) {
-		// The probably switches when start+size partialobject calls
-		// meet end of file, but this will do for now
-		if (size != 0x100000) {
+		// Once the end of the file is read, cam seems to switch
+		// Can be triggered by cam's size being lower or request size being lower (TODO: just the latter)
+		if (read != 0x100000 || size != 0x100000) {
 			fuji_downloaded_object(cam);
 		}
 	}
@@ -642,9 +641,7 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-// #ifdef VCAM_FUJI
-	// return fuji_get_thumb(cam, ptp);
-// #endif
+	//usleep(1000 * 500);
 
 	gp_log_("Processing thumb call for %d\n", ptp->params[0]);
 

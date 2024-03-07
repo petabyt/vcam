@@ -62,7 +62,7 @@ ap-fuji:
 test-fuji:
 	@while make vcam; do \
 	echo '------------------------------------------'; \
-	./vcam fuji_x_a2; \
+	./vcam fuji_x_a2 --local; \
 	done
 
 setup-canon:

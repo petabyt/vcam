@@ -23,8 +23,8 @@
 #define PTP_PC_FUJI_NoCompression	0xD227 // Enable full image download
 
 // Fuji Camera Connect has this version - 2.11 if parsed as bytes. Or 11.2
-#define FUJI_CAM_CONNECT_REMOTE_VER 0x2000B00
-// XS10 on reported 0x02000A00, camera connect set to 2000B00
+// XS10 on reported 0x02000A, camera connect set to 2000B
+#define FUJI_CAM_CONNECT_REMOTE_VER 0x2000B
 
 // Downloader opcodes, mostly unknown
 #define PTP_OC_FUJI_Unknown1	0x9054
@@ -44,12 +44,12 @@
 #define PTP_PC_FUJI_Unknown8		0xd407
 #define PTP_PC_FUJI_Unknown5		0xd500
 #define PTP_PC_FUJI_Unknown_D52F	0xd52f // probably version code
-#define PTP_PC_FUJI_ImageGetVersion	0xdf21
-#define PTP_PC_FUJI_GetObjectVersion	0xdf22 // version for GetObjectInfo and GetObject
+#define PTP_PC_FUJI_ImageGetVersion	0xdf21 // Another prop used for image related things
+#define PTP_PC_FUJI_GetObjectVersion	0xdf22 // version for GetObjectInfo and GetObject behavior
 #define PTP_PC_FUJI_Unknown10		0xdf23 // another version prop?
 #define PTP_PC_FUJI_RemoteVersion	0xdf24
-#define PTP_PC_FUJI_RemoteGetObjectVersion	0xdf25
-#define PTP_PC_FUJI_ImageGetLimitedVersion	0xdf26
+#define PTP_PC_FUJI_RemoteGetObjectVersion	0xdf25 // same as GetObjectVersion, but for cams that support remote mode
+#define PTP_PC_FUJI_ImageGetLimitedVersion	0xdf26 // supports less features
 #define PTP_PC_FUJI_Unknown13		0xdf27
 #define PTP_PC_FUJI_Unknown_DF28	0xdf28
 #define PTP_PC_FUJI_LocationGetterVersion	0xdf31

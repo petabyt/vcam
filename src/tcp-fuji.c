@@ -35,9 +35,6 @@ static int ptpip_cmd_write(void *to, int length) {
 
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
-#ifdef TCP_NOISY
-	vcam_log("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
-#endif
 	return rc;
 }
 
@@ -54,9 +51,6 @@ static int ptpip_cmd_read(void *to, int length) {
 
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
-#ifdef TCP_NOISY
-	vcam_log("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
-#endif
 	return rc;
 }
 
@@ -66,10 +60,6 @@ static int tcp_recieve_all(int client_socket) {
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
-
-#ifdef TCP_NOISY
-		vcam_log("Read %d\n", size);
-#endif
 
 		if (size == 0) {
 			vcam_log("Initiator isn't sending anything, trying again\n");
@@ -122,9 +112,6 @@ static int tcp_recieve_all(int client_socket) {
 	// Detect data phase from vcam
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
 	if (port->pl->vcamera->nrinbulk == 0 && c->code != 0x0) {
-#ifdef TCP_NOISY
-		vcam_log("Doing data phase response\n");
-#endif
 		free(buffer);
 
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
@@ -225,8 +212,8 @@ static int new_ptp_tcp_socket(int port) {
 		exit(EXIT_FAILURE);
 	}
 
-	int true = 1;
-	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &true, sizeof(int)) < 0) {
+	int tru = 1;
+	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &tru, sizeof(int)) < 0) {
 		perror("Failed to set sockopt");
 	}
 

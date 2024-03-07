@@ -55,6 +55,7 @@ typedef enum vcameravariant {
 	V_FUJI_X_A2 = 1,
 	V_FUJI_X_T20,
 	V_FUJI_X_S10,
+	V_FUJI_X_H1,
 	V_CANON_1300D,
 } vcameravariant;
 
@@ -125,6 +126,7 @@ typedef struct vcamera {
 		int no_compressed;
 		uint8_t camera_internal_state;
 		int sent_images;
+		uint8_t next_cmd_kills_connection;
 
 	// Canon PTP/IP server related things
 	int is_lv_ready;
