@@ -60,6 +60,43 @@ static int ptp_eos_exec_evproc(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 static int ptp_eos_exec_evproc_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	int of = 0;
+
+	char name[64];
+	of += ptp_read_utf8_string(data + of, name, sizeof(name));
+
+	printf("Name: %s\n", name);
+
+	uint32_t length, type, val, p3, p4, temp;
+	of += ptp_read_u32(data + of, &length);
+
+	printf("length: %d\n", length);
+
+	for (uint32_t i = 0; i < length; i++) {
+		of += ptp_read_u32(data + of, &type);
+		if (type == 2) {
+			of += ptp_read_u32(data + of, &val);
+			of += ptp_read_u32(data + of, &p3);
+			of += ptp_read_u32(data + of, &p4);
+			printf("- Int param: %X (%X, %X)\n", val, p3, p4);
+			of += ptp_read_u32(data + of, &temp);
+		} else if (type == 4) {
+			of += ptp_read_u32(data + of, &val);
+			printf("%x\n", val);
+			of += ptp_read_u32(data + of, &temp); printf("%x\n", temp);
+			of += ptp_read_u32(data + of, &temp); printf("%x\n", temp);
+			of += ptp_read_u32(data + of, &temp); printf("%x\n", temp);
+			of += ptp_read_u32(data + of, &temp); printf("%x\n", temp);
+			of += ptp_read_u32(data + of, &temp); printf("%x\n", temp);
+
+			of += ptp_read_utf8_string(data + of, name, sizeof(name));
+			printf("- String param: %s\n", name);
+		} else {
+			printf("Unknown type %x\n", type);
+		}
+
+	}
+
 	vcam_log("Evproc data phase\n");
 	return 1;
 }

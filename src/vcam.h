@@ -350,11 +350,13 @@ int ptp_pop_event(vcamera *cam, struct GenericEvent *ev);
 #include "fuji.h"
 #include "ops.h"
 
-int ptp_write_u32(void *dat, uint32_t v);
-int ptp_write_u8(void *dat, uint8_t v);
-int ptp_read_u32(void *dat, uint32_t *buf);
-int ptp_read_u16(void *dat, uint16_t *buf);
-int ptp_read_u8(void *dat, uint8_t *buf);
+inline static int ptp_write_u8 (void *buf, uint8_t out) { ((uint8_t *)buf)[0] = out; return 1; }
+inline static int ptp_write_u16(void *buf, uint16_t out) { ((uint16_t *)buf)[0] = out; return 2; }
+inline static int ptp_write_u32(void *buf, uint32_t out) { ((uint32_t *)buf)[0] = out; return 4; }
+inline static int ptp_read_u32 (void *buf, uint32_t *out) { *out = ((uint32_t *)buf)[0]; return 4; }
+inline static int ptp_read_u16 (void *buf, uint16_t *out) { *out = ((uint16_t *)buf)[0]; return 2; }
+inline static int ptp_read_u8  (void *buf, uint8_t *out) { *out = ((uint8_t *)buf)[0]; return 1; }
+int ptp_read_utf8_string(void *dat, char *string, int max);
 
 uint8_t ptp_read_uint8(void *dat);
 uint16_t ptp_read_uint16(void *dat);

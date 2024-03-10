@@ -21,7 +21,7 @@ SO_FILES=$(VCAM_CORE) src/libusb.o
 
 VCAM_FILES=$(VCAM_CORE) src/main.o
 
-CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF
+CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF -Wall
 LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+='-D VCAMERADIR="$(VCAMERADIR)"'
 CFLAGS+='-D PWD="$(shell pwd)"'

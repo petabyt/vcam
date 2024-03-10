@@ -2,34 +2,19 @@
 #include <stdint.h>
 #include <string.h>
 
-int ptp_write_u32(void *dat, uint32_t v) {
-	((uint32_t *)dat)[0] = v;
-	return 4;
-}
+int ptp_read_utf8_string(void *dat, char *string, int max) {
+	char *d = (char *)dat;
+	int x = 0;
+	while (d[x] != '\0') {
+		string[x] = d[x];
+		x++;
+		if (x > max - 1) break;
+	}
 
-int ptp_write_u16(void *dat, uint16_t v) {
-	((uint16_t *)dat)[0] = v;
-	return 2;
-}
+	string[x] = '\0';
+	x++;
 
-int ptp_write_u8(void *dat, uint8_t v) {
-	((uint8_t *)dat)[0] = v;
-	return 1;
-}
-
-int ptp_read_u8(void *dat, uint8_t *buf) {
-	(*buf) = ((uint8_t *)dat)[0];
-	return 1;
-}
-
-int ptp_read_u16(void *dat, uint16_t *buf) {
-	(*buf) = ((uint16_t *)dat)[0];
-	return 2;
-}
-
-int ptp_read_u32(void *dat, uint32_t *buf) {
-	(*buf) = ((uint32_t *)dat)[0];
-	return 4;
+	return x;
 }
 
 uint8_t ptp_read_uint8(void *dat) {
@@ -111,16 +96,6 @@ int ptp_write_string(void **dat, char *string) {
 	return (length * 2) + 2;
 }
 
-int ptp_write_utf8_string(void **dat, char *string) {
-	for (int i = 0; string[i] != '\0'; i++) {
-		ptp_write_uint8(dat, string[i]);
-	}
-
-	ptp_write_uint8(dat, '\0');
-
-	return strlen(string) + 1;
-}
-
 // Write null-terminated UTF16 string
 int ptp_write_unicode_string(char *dat, char *string) {
 	int i;
@@ -145,20 +120,4 @@ int ptp_read_unicode_string(char *buffer, char *dat, int max) {
 
 	buffer[(i / 2)] = '\0';
 	return i / 2;
-}
-
-// Read null terminated UTF8 string
-void ptp_read_utf8_string(void **dat, char *string, int max) {
-	uint8_t **p = (uint8_t **)dat;
-
-	int y = 0;
-	while ((char)(**p) != '\0') {
-		string[y] = (char)(**p);
-		(*p)++;
-		y++;
-		if (y >= max) { break; }
-	}
-
-	(*p)++;
-	string[y] = '\0';
 }
