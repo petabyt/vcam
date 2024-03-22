@@ -38,6 +38,7 @@ int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp) {
 		ptp_response(cam, PTP_RC_SessionAlreadyOpened, 0);
 		return 1;
 	}
+	cam->seqnr = 0;
 	cam->session = ptp->params[0];
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

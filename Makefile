@@ -21,7 +21,9 @@ SO_FILES=$(VCAM_CORE) src/libusb.o
 
 VCAM_FILES=$(VCAM_CORE) src/main.o
 
-CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -fPIC -D HAVE_LIBEXIF -Wall
+VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
+
+CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall
 LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+='-D VCAMERADIR="$(VCAMERADIR)"'
 CFLAGS+='-D PWD="$(shell pwd)"'
@@ -34,6 +36,9 @@ libusb.so: $(SO_FILES)
 
 vcam: $(VCAM_FILES)
 	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
+
+vcam-otg: $(VCAM_OTG_FILES)
+	$(CC) $(VCAM_OTG_FILES) $(CFLAGS) -o vcam-otg $(LDFLAGS) -lexif
 
 -include src/*.d
 %.o: %.c $(H)
@@ -81,3 +86,7 @@ test-canon:
 	echo '------------------------------------------'; \
 	./vcam canon_1300d; \
 	done
+
+gfs:
+	-mkdir /dev/gadget
+	mount -t gadgetfs gadgetfs /dev/gadget
