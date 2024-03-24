@@ -50,14 +50,14 @@ struct io_thread_args {
 static struct io_thread_args thread_args;
 pthread_t thread_ctx;
 
-#define CONFIG_VALUE 2
+#define CONFIG_VALUE 1
 static struct usb_string stringtab [] = {
-    { STRINGID_MANUFACTURER, "Canon, Inc.", },
-    { STRINGID_PRODUCT,      "EOS Rebel T6", },
+    { STRINGID_MANUFACTURER, "Canon Inc.", },
+    { STRINGID_PRODUCT,      "Canon Digital Camera", },
     { STRINGID_SERIAL,       "12345678", },
     { STRINGID_CONFIG_HS,    "High speed configuration", },
     { STRINGID_CONFIG_LS,    "Low speed configuration", },
-    { STRINGID_INTERFACE,    "Custom interface", },
+    { STRINGID_INTERFACE,    "MTP", },
     { STRINGID_MAX, NULL},
 };
 
@@ -119,17 +119,8 @@ static void* io_thread(void* arg)
     FD_SET(thread_args->fd_in, &write_set);
     ret = select(max_write_fd+1, NULL, &write_set, NULL, NULL);
 
-    while (!thread_args->stop)
-    {
-
-        // Timeout
-        if (ret == 0)
-            continue;
-
-        // Error
-        if (ret < 0)
-            break;
-
+    while (!thread_args->stop) {
+		printf("Waiting on read...\n");
         ret = read (thread_args->fd_out, buffer, sizeof(buffer));
 
         if (ret > 0)
@@ -143,25 +134,30 @@ static void* io_thread(void* arg)
 			break;
 		}
 
-        // Error
-        if (ret < 0)
-            break;
-
-		fcntl(thread_args->fd_in, F_SETFL, fcntl(thread_args->fd_in, F_GETFL) | O_NONBLOCK);
+		//fcntl(thread_args->fd_in, F_SETFL, fcntl(thread_args->fd_in, F_GETFL) | O_NONBLOCK);
 
 		struct pollfd pfd;
 		pfd.fd = thread_args->fd_in;
 		pfd.events = POLLOUT;
 
-		ret = poll(&pfd, 1, 2000);
+		//ret = poll(&pfd, 1, 2000);
 
 		vcam_log("%d bytes in queue\n", priv_gpport->pl->vcamera->nrinbulk);
-	    ret = write (thread_args->fd_in, priv_gpport->pl->vcamera->inbulk, priv_gpport->pl->vcamera->nrinbulk);
+
+		struct PtpBulkContainer *first = (struct PtpBulkContainer *)priv_gpport->pl->vcamera->inbulk;
+
+		ret = write (thread_args->fd_in, first, first->length);
+		printf("otg: Was able to write %d bytes\n", ret);
+
+		if (first->type == PTP_PACKET_TYPE_DATA) {
+			first = (struct PtpBulkContainer *)(priv_gpport->pl->vcamera->inbulk + first->length);
+			ret = write(thread_args->fd_in, first, first->length);
+			printf("otg: Was able to write %d bytes\n", ret);
+		}
+
 		priv_gpport->pl->vcamera->nrinbulk = 0;
 
-		fcntl(thread_args->fd_in, F_SETFL, fcntl(thread_args->fd_in, F_GETFL) & ~O_NONBLOCK);
-
-        printf("otg: Write status: %d\n", ret);
+		//fcntl(thread_args->fd_in, F_SETFL, fcntl(thread_args->fd_in, F_GETFL) & ~O_NONBLOCK);
     }
 
     close (thread_args->fd_in);
@@ -460,7 +456,7 @@ int main()
 
     device_descriptor.bLength = USB_DT_DEVICE_SIZE;
     device_descriptor.bDescriptorType = USB_DT_DEVICE;
-    device_descriptor.bDeviceClass = USB_CLASS_COMM;
+    device_descriptor.bDeviceClass = 0;
     device_descriptor.bDeviceSubClass = 0;
     device_descriptor.bDeviceProtocol = 0;
     device_descriptor.idVendor = 0x4a9; // My own id
@@ -496,7 +492,7 @@ int main()
     if_descriptor.bInterfaceNumber = 0;
     if_descriptor.bAlternateSetting = 0;
     if_descriptor.bNumEndpoints = 3;
-	if_descriptor.iInterface = 1;
+	if_descriptor.iInterface = STRINGID_INTERFACE;
     if_descriptor.bInterfaceClass = 6; // Imaging	
     if_descriptor.bInterfaceSubClass = 1; // Still image capture
     if_descriptor.bInterfaceProtocol = 1; // PTP
