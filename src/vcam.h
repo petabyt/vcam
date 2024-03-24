@@ -45,7 +45,6 @@ int canon_wifi_main(struct CamConfig *options);
 
 typedef enum vcameratype {
 	GENERIC_PTP = 1,
-	CAM_NIKON_D750,
 	CAM_NIKON,
 	CAM_CANON,
 	CAM_FUJI_WIFI,
@@ -54,9 +53,13 @@ typedef enum vcameratype {
 typedef enum vcameravariant {
 	V_FUJI_X_A2 = 1,
 	V_FUJI_X_T20,
+	V_FUJI_X_T2,
+	V_FUJI_X_F10,
 	V_FUJI_X_S10,
 	V_FUJI_X_H1,
+
 	V_CANON_1300D,
+	CAM_NIKON_D750,
 } vcameravariant;
 
 typedef struct ptpcontainer {
@@ -348,7 +351,6 @@ int ptp_pop_event(vcamera *cam, struct GenericEvent *ev);
 
 #include "canon.h"
 #include "fuji.h"
-#include "ops.h"
 
 inline static int ptp_write_u8 (void *buf, uint8_t out) { ((uint8_t *)buf)[0] = out; return 1; }
 inline static int ptp_write_u16(void *buf, uint16_t out) { ((uint16_t *)buf)[0] = out; return 2; }

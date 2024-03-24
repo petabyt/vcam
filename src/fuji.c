@@ -19,23 +19,16 @@ struct FujiPropEventSend {
 	unsigned int value;
 };
 
-#define CAM_STATE_READY 0
-#define CAM_STATE_IDLE 1
-#define CAM_STATE_FIRST_REMOTE 2
-#define CAM_STATE_IDLE_REMOTE 3
-
-static struct CamFujiInfo {
-	int function_mode;
-	int camera_state;
-	int remote_version;
-	int obj_count;
-	int compress_small;
-	int no_compressed;
-
-	uint8_t camera_internal_state;
-
-	int sent_images;
-}fuji_info;
+enum CameraStates {
+	// Initial state before ACK
+	CAM_STATE_READY,
+	// Idle in normal mode
+	CAM_STATE_IDLE,
+	// Setup phase of remote
+	CAM_STATE_INIT_REMOTE,
+	// Idle remote (gallery or liveview)
+	CAM_STATE_IDLE_REMOTE,
+};
 
 uint8_t *fuji_get_ack_packet(vcamera *cam) {
 	static struct FujiInitPacket p = {
@@ -231,7 +224,6 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		assert(len == 4);
-		assert(uint[0] == 0x2000B);
 		cam->remote_version = uint[0];
 		break;
 	case PTP_PC_FUJI_GetObjectVersion:
@@ -276,7 +268,7 @@ static void add_events(struct PtpFujiEvents *ev, struct FujiPropEventSend *p, si
 extern struct ptp_interrupt *first_interrupt;
 
 int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
-	struct PtpFujiEvents *ev = calloc(1, 2048);
+	struct PtpFujiEvents *ev = calloc(1, 4096);
 
 	struct GenericEvent ev_info;
 	while (!ptp_pop_event(cam, &ev_info)) {
@@ -305,16 +297,16 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 			ev->length++;
 		}
 
-		// Properties sent over on init, by newer cams
-		if (cam->camera_internal_state == CAM_STATE_IDLE_REMOTE) {
-			struct FujiPropEventSend newer_remote_props[] = {
-				{PTP_PC_FUJI_Unknown_D52F, 1},
-				{PTP_PC_FUJI_Unknown_D400, 1},
-			};
-			add_events(ev, newer_remote_props, sizeof(newer_remote_props) / sizeof(newer_remote_props[0]));
-		}
-
 		cam->camera_internal_state = CAM_STATE_IDLE;
+	}
+
+	// Properties sent over on init, by newer cams
+	if (cam->camera_internal_state == CAM_STATE_IDLE_REMOTE) {
+		struct FujiPropEventSend newer_remote_props[] = {
+			{PTP_PC_FUJI_Unknown_D52F, 1},
+			{PTP_PC_FUJI_Unknown_D400, 1},
+		};
+		add_events(ev, newer_remote_props, sizeof(newer_remote_props) / sizeof(newer_remote_props[0]));
 	}
 
 	if (cam->camera_internal_state == CAM_STATE_IDLE_REMOTE) {
@@ -363,6 +355,7 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 	case PTP_PC_FUJI_EventsList:
 		return fuji_send_events(cam, ptp);
 	case PTP_PC_FUJI_ObjectCount:
+	case PTP_PC_FUJI_ObjectCount2:
 		data = cam->obj_count;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
@@ -429,9 +422,40 @@ int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
+static int devinfo_add_prop(char *data, int length, int code, uint8_t *payload) {
+	int of = 0;
+	of += ptp_write_u32(data + of, length);
+	of += ptp_write_u16(data + of, code);
+	memcpy(data + of, payload, length - 2 - 4);
+	of += length - 2 - 4;
+	return of;
+}
+
 int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp) {
 	// TODO: Pack data
-	ptp_senddata(cam, ptp->code, (unsigned char *)fuji_device_info_x_t1, sizeof(fuji_device_info_x_t1));
+
+	char *data = malloc(2048);
+	int of = 0;
+	of += ptp_write_u32(data + of, 8);
+
+	uint8_t payload_5012[] = {0x4, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0, 0x2, 0x0, 0x4, 0x0, };
+	of += devinfo_add_prop(data + of, 22, PTP_PC_CaptureDelay, payload_5012);
+	uint8_t payload_500c[] = {0x4, 0x0, 0x1, 0x2, 0x0, 0x9, 0x80, 0x2, 0x2, 0x0, 0x9, 0x80, 0xa, 0x80, };
+	of += devinfo_add_prop(data + of, 20, PTP_PC_FlashMode, payload_500c);
+	uint8_t payload_5005[] = {0x4, 0x0, 0x1, 0x2, 0x0, 0x2, 0x0, 0x2, 0xa, 0x0, 0x2, 0x0, 0x4, 0x0, 0x6, 0x80, 0x1, 0x80, 0x2, 0x80, 0x3, 0x80, 0x6, 0x0, 0xa, 0x80, 0xb, 0x80, 0xc, 0x80, };
+	of += devinfo_add_prop(data + of, 36, PTP_PC_WhiteBalance, payload_5005);
+	uint8_t payload_5010[] = {0x3, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x13, 0x0, 0x48, 0xf4, 0x95, 0xf5, 0xe3, 0xf6, 0x30, 0xf8, 0x7d, 0xf9, 0xcb, 0xfa, 0x18, 0xfc, 0x65, 0xfd, 0xb3, 0xfe, 0x0, 0x0, 0x4d, 0x1, 0x9b, 0x2, 0xe8, 0x3, 0x35, 0x5, 0x83, 0x6, 0xd0, 0x7, 0x1d, 0x9, 0x6b, 0xa, 0xb8, 0xb, };
+	of += devinfo_add_prop(data + of, 54, PTP_PC_ExposureBiasCompensation, payload_5010);
+	uint8_t payload_d001[] = {0x4, 0x0, 0x1, 0x1, 0x0, 0x2, 0x0, 0x2, 0xb, 0x0, 0x1, 0x0, 0x2, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5, 0x0, 0x6, 0x0, 0x7, 0x0, 0x8, 0x0, 0x9, 0x0, 0xa, 0x0, 0xb, 0x0, };
+	of += devinfo_add_prop(data + of, 38, PTP_PC_FUJI_FilmSimulation, payload_d001);
+	uint8_t payload_d02a[] = {0x6, 0x0, 0x1, 0xff, 0xff, 0xff, 0xff, 0x0, 0x19, 0x0, 0x80, 0x2, 0x19, 0x0, 0x90, 0x1, 0x0, 0x80, 0x20, 0x3, 0x0, 0x80, 0x40, 0x6, 0x0, 0x80, 0x80, 0xc, 0x0, 0x80, 0x0, 0x19, 0x0, 0x80, 0x64, 0x0, 0x0, 0x40, 0xc8, 0x0, 0x0, 0x0, 0xfa, 0x0, 0x0, 0x0, 0x40, 0x1, 0x0, 0x0, 0x90, 0x1, 0x0, 0x0, 0xf4, 0x1, 0x0, 0x0, 0x80, 0x2, 0x0, 0x0, 0x20, 0x3, 0x0, 0x0, 0xe8, 0x3, 0x0, 0x0, 0xe2, 0x4, 0x0, 0x0, 0x40, 0x6, 0x0, 0x0, 0xd0, 0x7, 0x0, 0x0, 0xc4, 0x9, 0x0, 0x0, 0x80, 0xc, 0x0, 0x0, 0xa0, 0xf, 0x0, 0x0, 0x88, 0x13, 0x0, 0x0, 0x0, 0x19, 0x0, 0x0, 0x0, 0x32, 0x0, 0x40, 0x0, 0x64, 0x0, 0x40, 0x0, 0xc8, 0x0, 0x40, };
+	of += devinfo_add_prop(data + of, 120, PTP_PC_FUJI_ExposureIndex, payload_d02a);
+	uint8_t payload_d019[] = {0x4, 0x0, 0x1, 0x1, 0x0, 0x1, 0x0, 0x2, 0x2, 0x0, 0x0, 0x0, 0x1, 0x0, };
+	of += devinfo_add_prop(data + of, 20, PTP_PC_FUJI_RecMode, payload_d019);
+	uint8_t payload_d17c[] = {0x6, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x4, 0x4, 0x2, 0x3, 0x1, 0x0, 0x0, 0x0, 0x0, 0x7, 0x7, 0x9, 0x10, 0x1, 0x0, 0x0, 0x0, };
+	of += devinfo_add_prop(data + of, 30, PTP_PC_FUJI_FocusMeteringMode, payload_d17c);
+
+	ptp_senddata(cam, ptp->code, (void *)data, of);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 0;
 }
@@ -454,6 +478,7 @@ int ptp_fuji_liveview(int socket) {
 	fclose(file);
 
 	int rc = send(socket, buffer, file_size, 0);
+	if (rc) return -1;
 
 	free(buffer);
 

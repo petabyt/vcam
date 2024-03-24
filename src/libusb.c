@@ -32,6 +32,26 @@ int libusb_init(libusb_context **ctx) {
 	return 0;
 }
 
+void libusb_exit(libusb_context *ctx) {
+	vcam_log("Deinit");
+}
+
+void libusb_set_debug	(	libusb_context * 	ctx,
+int 	level 
+) {}
+
+libusb_device* libusb_ref_device	(	libusb_device * 	dev	)	 {
+	return dev;
+}
+void libusb_unref_device	(	libusb_device * 	dev	)	{}
+
+int libusb_get_configuration	(	libusb_device_handle * 	dev_handle,
+int * 	config 
+) {
+	*config = 0;
+	return 0;
+}
+
 ssize_t libusb_get_device_list(libusb_context *ctx, libusb_device ***list) {
 	// No value for libusb_device is necessary
 	*list = malloc(sizeof(void *) * 1);
@@ -84,6 +104,7 @@ void libusb_free_config_descriptor(struct libusb_config_descriptor *config) {
 }
 
 int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
+	puts(__func__);
 	*dev_handle = (libusb_device_handle *)malloc(sizeof(struct libusb_device_handle));
 
 	struct CamConfig *conf = calloc(sizeof(struct CamConfig), 1);
@@ -107,6 +128,13 @@ int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	port->pl->isopen = 1;
 
 	return 0;
+}
+
+libusb_device_handle *libusb_open_quick() {
+	libusb_device_handle *handle;
+	libusb_device *dev = malloc(sizeof(libusb_device));
+	libusb_open(dev, &handle);
+	return handle;
 }
 
 int libusb_get_string_descriptor_ascii(libusb_device_handle *devh, uint8_t desc_idx, unsigned char *data, int length) {
@@ -142,6 +170,7 @@ int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoin
 		*transferred = port->pl->vcamera->write(port->pl->vcamera, endpoint, (unsigned char *)data, length);
 		return 0;
 	} else if (endpoint == 0x81) {
+		printf("Doing read: %d %p %d\n", endpoint, data, length);
 		*transferred = port->pl->vcamera->read(port->pl->vcamera, endpoint, (unsigned char *)data, length);
 		return 0;
 	}
@@ -149,3 +178,4 @@ int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoin
 	*transferred = 0;
 	return 0;
 }
+

@@ -34,7 +34,7 @@ static int ptpip_cmd_write(void *to, int length) {
 	}
 
 	C_PARAMS(port && port->pl && port->pl->vcamera);
-	int rc = port->pl->vcamera->write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
+	int rc = vcam_write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
 	return rc;
 }
 
@@ -50,7 +50,7 @@ static int ptpip_cmd_read(void *to, int length) {
 	}
 
 	C_PARAMS(port && port->pl && port->pl->vcamera);
-	int rc = port->pl->vcamera->read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
+	int rc = vcam_read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
 	return rc;
 }
 

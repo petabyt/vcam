@@ -23,7 +23,7 @@ VCAM_FILES=$(VCAM_CORE) src/main.o
 
 VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
 
-CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall
+CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall -fPIC
 LDFLAGS=-L. -Wl,-rpath=.
 CFLAGS+='-D VCAMERADIR="$(VCAMERADIR)"'
 CFLAGS+='-D PWD="$(shell pwd)"'
@@ -32,7 +32,7 @@ $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
 libusb.so: $(SO_FILES)
-	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -fPIC -lexif -shared -o libusb.so
+	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb.so
 
 vcam: $(VCAM_FILES)
 	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
@@ -63,7 +63,7 @@ setup-fuji:
 kill-fuji:
 	sudo ip link delete fuji_dummy
 ap-fuji:
-	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-A2-ABCD
+	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-H1-ABCD
 test-fuji:
 	@while make vcam; do \
 	echo '------------------------------------------'; \

@@ -60,7 +60,7 @@ int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp) {
 
 int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	unsigned char *data;
-	int x = 0, i, cnt, vendor;
+	int x = 0, i, cnt;
 	uint16_t *opcodes, *devprops;
 	uint16_t imageformats[1];
 	uint16_t events[5];
@@ -87,7 +87,7 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	cnt = 0;
 	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
 		if (ptp_functions[i].type != cam->type) continue;
-		for (int x = 0; x < ptp_functions[i].functions[x].code != 0; x++) {
+		for (int x = 0; x < ptp_functions[i].functions[x].code; x++) {
 			cnt++;
 		}
 	}
@@ -97,7 +97,7 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	cnt = 0;
 	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
 		if (ptp_functions[i].type != cam->type) continue;
-		for (int z = 0; z < ptp_functions[i].functions[z].code != 0; z++) {
+		for (int z = 0; z < ptp_functions[i].functions[z].code; z++) {
 			opcodes[cnt] = ptp_functions[i].functions[z].code;
 			cnt++;
 		}
@@ -445,17 +445,39 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-	cur = first_dirent;
-	while (cur) {
-		if (cur->id == ptp->params[0])
-			break;
-		cur = cur->next;
+	time_t time1;
+	time(&time1);
+
+	struct ptp_dirent fake = {
+		.id = 0xdeadbeef,
+		.name = "test.png",
+		.fsname = "bin/test.png",
+		.stbuf = {
+			.st_mode = 0,
+			.st_size = 1234,
+			.st_atime = time1,
+			.st_mtime = time1,
+			.st_ctime = time1,
+		},
+		.parent = NULL
+	};
+
+	if (ptp->params[0] == 0xdeadbeef) {
+		cur = &fake;
+	} else {
+		cur = first_dirent;
+		while (cur) {
+			if (cur->id == ptp->params[0])
+				break;
+			cur = cur->next;
+		}
+		if (!cur) {
+			gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+			ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+			return 1;
+		}
 	}
-	if (!cur) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
-		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
-		return 1;
-	}
+
 	data = malloc(2000);
 	x += put_32bit_le(data + x, 0x10000001); /* StorageID */
 	//x += put_32bit_le(data + x, 0x00010001); /* StorageID */
@@ -535,11 +557,9 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	uint32_t compressed_size = cur->stbuf.st_size;
 
 	// Fuji weirdness
-#ifdef VCAM_FUJI
 	if (fuji_is_compressed_mode(cam)) {
 		compressed_size = 0x19000;
 	}
-#endif
 
 	x += put_16bit_le(data + x, ofc);
 	x += put_16bit_le(data + x, 0);			 /* ProtectionStatus, no protection */
