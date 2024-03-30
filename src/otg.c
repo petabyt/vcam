@@ -1,3 +1,11 @@
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <string.h>
+#include <pthread.h>
+#include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -5,13 +13,6 @@
 #include <linux/types.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadgetfs.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <string.h>
-#include <pthread.h>
-#include <errno.h>
 #include <poll.h>
 #include <signal.h>
 #include <vcam.h>
@@ -113,11 +114,11 @@ static void* io_thread(void* arg)
     timeout.tv_sec = 0;
     timeout.tv_usec = 10000; // 10ms
 
-    ret = select(max_read_fd+1, &read_set, NULL, NULL, &timeout);
+    ret = select(max_read_fd + 1, &read_set, NULL, NULL, &timeout);
 
     FD_ZERO(&write_set);
     FD_SET(thread_args->fd_in, &write_set);
-    ret = select(max_write_fd+1, NULL, &write_set, NULL, NULL);
+    ret = select(max_write_fd + 1, NULL, &write_set, NULL, NULL);
 
     while (!thread_args->stop) {
 		printf("Waiting on read...\n");
@@ -158,6 +159,7 @@ static void* io_thread(void* arg)
 		priv_gpport->pl->vcamera->nrinbulk = 0;
 
 		//fcntl(thread_args->fd_in, F_SETFL, fcntl(thread_args->fd_in, F_GETFL) & ~O_NONBLOCK);
+		fflush(stdout);
     }
 
     close (thread_args->fd_in);
@@ -419,17 +421,27 @@ end:
 static int gadget_fd;
 
 void kill_sig(int x) {
-	puts("Killing...");
+	fprintf(stderr, "Killing...\n");
 	pthread_kill(thread_ctx, SIGUSR1);
 	usleep(500);
     close (thread_args.fd_in);
     close (thread_args.fd_out);
 	close(gadget_fd);
+	exit(0);
+}
+
+void *kill_thread(void *arg) {
+	while (1) {
+		int ch = fgetc(stdin);
+		kill_sig(1);
+	}
 }
 
 int main()
 {
 	signal(SIGINT, kill_sig);
+	pthread_t killtd;
+	pthread_create(&killtd, NULL, kill_thread, NULL);
 
 	start_vcam();
 
