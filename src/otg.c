@@ -192,7 +192,7 @@ static int init_ep(int* fd_in, int* fd_out, int *fd_int)
 		FETCH(ep_descriptor_in);
 		FETCH(ep_descriptor_in);
 
-		send_size = (uint32_t)cp-(uint32_t)init_config;
+		send_size = (uint32_t)cp - (uint32_t)init_config;
 		ret = write(*fd_in, init_config, send_size);
 
 		if (ret != send_size)
@@ -220,7 +220,7 @@ static int init_ep(int* fd_in, int* fd_out, int *fd_int)
 		FETCH(ep_descriptor_out);
 		FETCH(ep_descriptor_out);
 
-		send_size = (uint32_t)cp-(uint32_t)init_config;
+		send_size = (uint32_t)cp - (uint32_t)init_config;
 		ret = write(*fd_out, init_config, send_size);
 
 		if (ret != send_size)

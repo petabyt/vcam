@@ -366,8 +366,8 @@ int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	x += put_64bit_le(data + x, 0x42424242);   /* MaxCapacity */
 	x += put_64bit_le(data + x, 0x21212121);   /* FreeSpaceInBytes */
 	x += put_32bit_le(data + x, 150);	   /* FreeSpaceInImages ... around 150 */
-	x += put_string(data + x, "GPVC Storage"); /* StorageDescription */
-	x += put_string(data + x, "GPVCS Label");  /* VolumeLabel */
+	x += put_string(data + x, "Fake Storage"); /* StorageDescription */
+	x += put_string(data + x, "Fake Label");  /* VolumeLabel */
 
 	ptp_senddata(cam, 0x1005, data, x);
 	free(data);
