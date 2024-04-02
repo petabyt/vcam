@@ -1,10 +1,9 @@
 # vcam
 This is a virtual camera emulator to spoof and communicate with official vendor software. It currently emulates the
 responder (server) side of PTP/USB, PTP/IP, UPnP, and (eventually) Bluetooth. It also perfectly emulates the networking
-too (requires a recent WiFi card) so that means it can [spoof official vendor apps](https://twitter.com/danielcdev/status/1696271427240902894) without patching.
+too (requires a recent WiFi card) so that means it can spoof official vendor apps:
 
-<img src="bin/Screenshot_20240402-140041" width="400">
-<img src="bin/Screenshot_20240402-140506" width="400">
+<img title="Fujifilm Camera Connect connected to spoofed X-H1-ABCD" src="bin/Screenshot_20240402-140041.png" width="300"><img src="bin/Screenshot_20240402-140506.png" width="300">
 
 ## Roadmap
 - [x] Basic PTP responder implementation (thanks Marcus Meissner)
@@ -18,13 +17,13 @@ too (requires a recent WiFi card) so that means it can [spoof official vendor ap
 - [x] OTG raspberry pi zero device - works in explorer.exe
 
 ## Why
-- For regression testing - link a PTP client again the fake `libusb.so` and test functionality in CI
+- For regression testing - link a PTP client against the fake `libusb.so` and test functionality in CI
 - For easier prototyping - vcam can be used instead of a physical camera (no need to wait for a camera to recharge to continue testing)
 - [Black box testing](https://en.wikipedia.org/wiki/Black-box_testing) - test against vendor software without disassembling
 - Note that this tool is very *experimental*, and the code quality reflects that.
 
 ## Compiling
-Run on linux.
+Run on linux. It can work on WSL if you can figure out networking.
 ```
 make vcam
 ./vcam canon_1300d
