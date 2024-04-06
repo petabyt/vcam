@@ -290,6 +290,8 @@ static int init_vcam(struct CamConfig *options) {
 
 	port->pl->vcamera->open(port->pl->vcamera, port->settings.usb.port);
 	port->pl->isopen = 1;
+
+	return 0;
 }
 
 int fuji_wifi_main(struct CamConfig *options) {

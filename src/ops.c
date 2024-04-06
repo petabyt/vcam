@@ -113,10 +113,10 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	events[4] = 0x400d;
 	x += put_16bit_le_array(data + x, events, sizeof(events) / sizeof(events[0])); /* EventsSupported */
 
-	devprops = malloc(sizeof(ptp_properties) / sizeof(ptp_properties[0]) * sizeof(uint16_t));
-	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++)
+	devprops = malloc(ptp_get_properties_length() * sizeof(uint16_t));
+	for (i = 0; i < ptp_get_properties_length(); i++)
 		devprops[i] = ptp_properties[i].code;
-	x += put_16bit_le_array(data + x, devprops, sizeof(ptp_properties) / sizeof(ptp_properties[0])); /* DevicePropertiesSupported */
+	x += put_16bit_le_array(data + x, devprops, ptp_get_properties_length()); /* DevicePropertiesSupported */
 	free(devprops);
 
 	imageformats[0] = 0x3801;
@@ -552,8 +552,6 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	}
 #endif
 
-	gp_log_("Image %s is %dx%d\n", cur->fsname, imagewidth, imageheight);
-
 	uint32_t compressed_size = cur->stbuf.st_size;
 
 	// Fuji weirdness
@@ -605,9 +603,6 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	} else {
 		x += put_string(data + x, "Orientation: 1");
 	}
-
-	printf("Sending objectinfo length %x\n", x);
-	vcam_dump(data, x);
 
 	ptp_senddata(cam, 0x1008, data, x);
 	free(data);
@@ -939,11 +934,11 @@ int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
+	for (i = 0; i < ptp_get_properties_length(); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
 			break;
 	}
-	if (i == sizeof(ptp_properties) / sizeof(ptp_properties[0])) {
+	if (i == ptp_get_properties_length()) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
@@ -994,11 +989,11 @@ int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 		return fuji_get_property(cam, ptp);
 	}
 
-	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
+	for (i = 0; i < ptp_get_properties_length(); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
 			break;
 	}
-	if (i == sizeof(ptp_properties) / sizeof(ptp_properties[0])) {
+	if (i == ptp_get_properties_length()) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
@@ -1031,11 +1026,11 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 		}
 	}
 
-	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
+	for (i = 0; i < ptp_get_properties_length(); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
 			break;
 	}
-	if (i == sizeof(ptp_properties) / sizeof(ptp_properties[0])) {
+	if (i == ptp_get_properties_length()) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
@@ -1105,11 +1100,11 @@ int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned 
 		return fuji_set_property(cam, ptp, data, len);
 	}
 
-	for (i = 0; i < sizeof(ptp_properties) / sizeof(ptp_properties[0]); i++) {
+	for (i = 0; i < ptp_get_properties_length(); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
 			break;
 	}
-	if (i == sizeof(ptp_properties) / sizeof(ptp_properties[0])) {
+	if (i == ptp_get_properties_length()) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		/* we emitted the response already in _write */
 		return 1;

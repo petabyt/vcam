@@ -309,35 +309,6 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 		add_events(ev, newer_remote_props, sizeof(newer_remote_props) / sizeof(newer_remote_props[0]));
 	}
 
-	if (cam->camera_internal_state == CAM_STATE_IDLE_REMOTE) {
-		// Taken from a dump, not documented yet
-		struct FujiPropEventSend remote_props[] = {
-			{PTP_PC_FUJI_DeviceError, 0},
-			{PTP_PC_FlashMode, 0x800a},
-			{PTP_PC_CaptureDelay, 0},
-			{PTP_PC_FUJI_CaptureRemaining, 0x761},
-			{PTP_PC_FUJI_MovieRemainingTime, 0x19d1},
-			{PTP_PC_ExposureProgramMode, 0x3},
-			{PTP_PC_FUJI_BatteryLevel, 0xa},
-			{PTP_PC_FUJI_Quality, 0x4},
-			{PTP_PC_FUJI_ImageAspectRatio, 0xa},
-			{PTP_PC_FUJI_ExposureIndex, 0x80003200},
-			{PTP_PC_FUJI_MovieISO, 0x80003200},
-			{PTP_PC_FUJI_ShutterSpeed2, 0xffffffff},
-			{PTP_PC_FUJI_CommandDialMode, 0x0},
-			{PTP_PC_FNumber, 0xa},
-			{PTP_PC_ExposureBiasCompensation, 0x0},
-			{PTP_PC_WhiteBalance, 0x2},
-			{PTP_PC_FUJI_FilmSimulation, 0x6},
-			{PTP_PC_FocusMode, 0x8001},
-			{PTP_PC_FUJI_FocusMeteringMode, 0x03020604},
-			{PTP_PC_FUJI_AFStatus, 0x0},
-			{PTP_PC_FUJI_DriveMode, 0xa}
-		};
-
-		add_events(ev, remote_props, sizeof(remote_props) / sizeof(remote_props[0]));		
-	}
-
 	vcam_log("Sending %d events\n", ev->length);
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)ev, 2 + (6 * ev->length));
@@ -414,8 +385,30 @@ int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
 		cam->camera_internal_state = CAM_STATE_IDLE_REMOTE;
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
-		cam->camera_internal_state = CAM_STATE_IDLE_REMOTE;		
-	} 
+		cam->camera_internal_state = CAM_STATE_IDLE_REMOTE;
+		vcam_log("One time sending all remote props\n");
+		ptp_notify_event(cam, PTP_PC_FUJI_DeviceError, 0);
+		ptp_notify_event(cam, PTP_PC_FlashMode, 0x800a);
+		ptp_notify_event(cam, PTP_PC_CaptureDelay, 0);
+		ptp_notify_event(cam, PTP_PC_FUJI_CaptureRemaining, 0x761);
+		ptp_notify_event(cam, PTP_PC_FUJI_MovieRemainingTime, 0x19d1);
+		ptp_notify_event(cam, PTP_PC_ExposureProgramMode, 0x3);
+		ptp_notify_event(cam, PTP_PC_FUJI_BatteryLevel, 0xa);
+		ptp_notify_event(cam, PTP_PC_FUJI_Quality, 0x4);
+		ptp_notify_event(cam, PTP_PC_FUJI_ImageAspectRatio, 0xa);
+		ptp_notify_event(cam, PTP_PC_FUJI_ExposureIndex, 0x80003200);
+		ptp_notify_event(cam, PTP_PC_FUJI_MovieISO, 0x80003200);
+		ptp_notify_event(cam, PTP_PC_FUJI_ShutterSpeed2, 0xffffffff);
+		ptp_notify_event(cam, PTP_PC_FUJI_CommandDialMode, 0x0);
+		ptp_notify_event(cam, PTP_PC_FNumber, 0xa);
+		ptp_notify_event(cam, PTP_PC_ExposureBiasCompensation, 0x0);
+		ptp_notify_event(cam, PTP_PC_WhiteBalance, 0x2);
+		ptp_notify_event(cam, PTP_PC_FUJI_FilmSimulation, 0x6);
+		ptp_notify_event(cam, PTP_PC_FocusMode, 0x8001);
+		ptp_notify_event(cam, PTP_PC_FUJI_FocusMeteringMode, 0x03020604);
+		ptp_notify_event(cam, PTP_PC_FUJI_AFStatus, 0x0);
+		ptp_notify_event(cam, PTP_PC_FUJI_DriveMode, 0xa);
+	}
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
@@ -432,8 +425,6 @@ static int devinfo_add_prop(char *data, int length, int code, uint8_t *payload) 
 }
 
 int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp) {
-	// TODO: Pack data
-
 	char *data = malloc(2048);
 	int of = 0;
 	of += ptp_write_u32(data + of, 8);
@@ -457,6 +448,7 @@ int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp) {
 
 	ptp_senddata(cam, ptp->code, (void *)data, of);
 	ptp_response(cam, PTP_RC_OK, 0);
+	free(data);
 	return 0;
 }
 

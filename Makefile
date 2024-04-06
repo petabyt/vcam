@@ -14,7 +14,7 @@ $(info Using '$(VCAMERADIR)')
 endif
 
 VCAM_CORE += src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fujiip.o src/canonip.o
-VCAM_CORE += src/canon_setup.o src/data.o
+VCAM_CORE += src/canon_setup.o src/data.o src/props.o
 
 SO_CFLAGS := $(shell pkg-config --cflags libusb-1.0)
 SO_FILES := $(VCAM_CORE) src/libusb.o
@@ -62,7 +62,7 @@ setup-fuji:
 kill-fuji:
 	sudo ip link delete fuji_dummy
 ap-fuji:
-	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-H1-ABCD
+	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-F10-ABCD
 test-fuji:
 	@while make vcam; do \
 	echo '------------------------------------------'; \

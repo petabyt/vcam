@@ -87,6 +87,11 @@ struct PtpPropList {
 
 // All members are garunteed to be zero by calloc()
 typedef struct vcamera {
+#ifdef FUZZING
+	int	fuzzmode;
+	FILE *fuzzf;
+	unsigned int fuzzpending;
+#endif
 	int (*init)(struct vcamera*);
 	int (*exit)(struct vcamera*);
 	int (*open)(struct vcamera*, const char *port);
@@ -115,31 +120,25 @@ typedef struct vcamera {
 	struct CamConfig *conf;
 
 	// Generic camera internal properties
-		int exposurebias;
-		unsigned int shutterspeed;
-		unsigned int fnumber;
-		unsigned int focal_length;
-		unsigned int target_distance_feet;
+	int exposurebias;
+	unsigned int shutterspeed;
+	unsigned int fnumber;
+	unsigned int focal_length;
+	unsigned int target_distance_feet;
 
-	// Fujifilm server related attributes
-		int function_mode;
-		int camera_state;
-		int remote_version;
-		int obj_count;
-		int compress_small;
-		int no_compressed;
-		uint8_t camera_internal_state;
-		int sent_images;
-		uint8_t next_cmd_kills_connection;
+	// Fujifilm things
+	int function_mode;
+	int camera_state;
+	int remote_version;
+	int obj_count;
+	int compress_small;
+	int no_compressed;
+	uint8_t camera_internal_state;
+	int sent_images;
+	uint8_t next_cmd_kills_connection;
 
 	// Canon PTP/IP server related things
 	int is_lv_ready;
-
-#ifdef FUZZING
-	int	fuzzmode;
-	FILE *fuzzf;
-	unsigned int fuzzpending;
-#endif
 } vcamera;
 
 vcamera *vcamera_new(vcameratype);
@@ -239,22 +238,31 @@ struct _PTPDevicePropDesc {
 typedef struct _PTPDevicePropDesc PTPDevicePropDesc;
 
 // GetPropertyValue stubs
-int ptp_battery_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_battery_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_imagesize_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_imagesize_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_datetime_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_datetime_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_datetime_setvalue(vcamera *, PTPPropertyValue *);
-int ptp_shutterspeed_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_shutterspeed_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_shutterspeed_setvalue(vcamera *, PTPPropertyValue *);
-int ptp_fnumber_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_fnumber_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_fnumber_setvalue(vcamera *, PTPPropertyValue *);
-int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
-int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
-int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
+//int ptp_battery_getdesc(vcamera *, PTPDevicePropDesc *);
+//int ptp_battery_getvalue(vcamera *, PTPPropertyValue *);
+//int ptp_imagesize_getdesc(vcamera *, PTPDevicePropDesc *);
+//int ptp_imagesize_getvalue(vcamera *, PTPPropertyValue *);
+//int ptp_datetime_getdesc(vcamera *, PTPDevicePropDesc *);
+//int ptp_datetime_getvalue(vcamera *, PTPPropertyValue *);
+//int ptp_datetime_setvalue(vcamera *, PTPPropertyValue *);
+//int ptp_shutterspeed_getdesc(vcamera *, PTPDevicePropDesc *);
+//int ptp_shutterspeed_getvalue(vcamera *, PTPPropertyValue *);
+//int ptp_shutterspeed_setvalue(vcamera *, PTPPropertyValue *);
+//int ptp_fnumber_getdesc(vcamera *, PTPDevicePropDesc *);
+//int ptp_fnumber_getvalue(vcamera *, PTPPropertyValue *);
+//int ptp_fnumber_setvalue(vcamera *, PTPPropertyValue *);
+//int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
+//int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
+//int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
+
+struct ptp_property {
+	int code;
+	int (*getdesc)(vcamera *cam, PTPDevicePropDesc *);
+	int (*getvalue)(vcamera *cam, PTPPropertyValue *);
+	int (*setvalue)(vcamera *cam, PTPPropertyValue *);
+};
+
+int ptp_get_properties_length();
 
 // A bunch of janky macros
 #define CHECK(result)               \
