@@ -48,6 +48,7 @@ typedef enum vcameratype {
 	CAM_NIKON,
 	CAM_CANON,
 	CAM_FUJI_WIFI,
+	CAM_FUJI_USB,
 } vcameratype;
 
 typedef enum vcameravariant {
@@ -313,7 +314,7 @@ void vcam_dump(void *ptr, size_t len);
 
 void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd);
 
-// Data structure API
+// vcam  Data structure API
 int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt);
 int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt);
 char *get_string(unsigned char *data);

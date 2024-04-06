@@ -2,10 +2,10 @@
 -include config.mak
 
 # WiFi hardware for spoofing (requires AP support)
-WIFI_DEV?=wlp0s20f3
+WIFI_DEV ?= wlp0s20f3
 
 # Set this to a folder with images (as it appears to PTP)
-VCAMERADIR?=$(HOME)/Documents/fuji_sd/
+VCAMERADIR ?= ../fuji_sd/
 
 ifeq ($(wildcard $(VCAMERADIR).*),)
 $(info Directory '$(VCAMERADIR)' not found)
@@ -13,20 +13,19 @@ VCAMERADIR=$(PWD)/sd
 $(info Using '$(VCAMERADIR)')
 endif
 
-VCAM_CORE:=src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/tcp-fuji.o src/tcp-ip.o
-VCAM_CORE+=src/canon_setup.o src/data.o
+VCAM_CORE += src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fujiip.o src/canonip.o
+VCAM_CORE += src/canon_setup.o src/data.o
 
-SO_CFLAGS=$(shell pkg-config --cflags libusb-1.0)
-SO_FILES=$(VCAM_CORE) src/libusb.o
+SO_CFLAGS := $(shell pkg-config --cflags libusb-1.0)
+SO_FILES := $(VCAM_CORE) src/libusb.o
 
-VCAM_FILES=$(VCAM_CORE) src/main.o
-
+VCAM_FILES := $(VCAM_CORE) src/main.o
 VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
 
-CFLAGS=-g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall -fPIC
-LDFLAGS=-L. -Wl,-rpath=.
-CFLAGS+='-D VCAMERADIR="$(VCAMERADIR)"'
-CFLAGS+='-D PWD="$(shell pwd)"'
+CFLAGS += -g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall -fPIC
+LDFLAGS += -L. -Wl,-rpath=.
+CFLAGS += '-D VCAMERADIR="$(VCAMERADIR)"'
+CFLAGS += '-D PWD="$(shell pwd)"'
 
 $(SO_FILES): CFLAGS+=$(SO_CFLAGS)
 
@@ -46,7 +45,7 @@ vcam-otg: $(VCAM_OTG_FILES)
 
 clean:
 	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d
-	$(RM) fuji canon vcam
+	$(RM) fuji canon vcam vcam-otg
 
 ln:
 	ln ../camlib/src/ptp.h src/ptp.h

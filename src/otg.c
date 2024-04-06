@@ -445,7 +445,7 @@ int main()
 
 	start_vcam();
 
-    int fd=-1, ret, err=-1;
+    int fd = -1, ret, err = -1;
     uint32_t send_size;
     struct usb_config_descriptor config;
     struct usb_config_descriptor config_hs;
@@ -454,7 +454,7 @@ int main()
     uint8_t init_config[2048];
     uint8_t* cp;
 
-    fd = open(USB_DEV, O_RDWR|O_SYNC);
+    fd = open(USB_DEV, O_RDWR | O_SYNC);
 	gadget_fd = fd;
 
     if (fd <= 0)

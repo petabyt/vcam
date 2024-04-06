@@ -298,7 +298,7 @@ int fuji_wifi_main(struct CamConfig *options) {
 	init_vcam(options);
 
 	if (options->use_local) {
-		server_ip_address = "192.168.1.33";
+		server_ip_address = "0.0.0.0";
 	}
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
