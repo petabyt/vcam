@@ -283,12 +283,11 @@ static int init_vcam(struct CamConfig *options) {
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(CAM_FUJI_WIFI);
 	port->pl->vcamera->conf = options;
-	port->pl->vcamera->init(port->pl->vcamera);
 
 	if (port->pl->isopen)
 		return -1;
 
-	port->pl->vcamera->open(port->pl->vcamera, port->settings.usb.port);
+	vcam_open(port->pl->vcamera, port->settings.usb.port);
 	port->pl->isopen = 1;
 
 	return 0;

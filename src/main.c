@@ -4,7 +4,8 @@
 #include <sys/socket.h>
 #include <vcam.h>
 
-// Fill a config struct from model string
+// This should give specific info that describes what is different about different models 'variant'
+// of the same brand. All other behavior is assumed based on the 'type'
 int vcam_get_variant_info(char *arg, struct CamConfig *o) {
 	if (!strcmp(arg, "fuji_x_a2")) {
 		strcpy(o->model, "X-A2");

@@ -86,7 +86,6 @@ static int start_vcam() {
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(CAM_CANON);
 	port->pl->vcamera->conf = conf;
-	port->pl->vcamera->init(port->pl->vcamera);
 
 	priv_gpport = port;
 

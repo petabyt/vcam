@@ -17,7 +17,7 @@ void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
 
 // Generic options setup by CLI, put in cam->conf
-// All are 0 by default
+// All are 0 by default on vcam_new
 struct CamConfig {
 	int type;
 	int variant;
@@ -119,14 +119,14 @@ typedef struct vcamera {
 
 	struct CamConfig *conf;
 
-	// Generic camera internal properties
+	// Generic camera runtime vars
 	int exposurebias;
 	unsigned int shutterspeed;
 	unsigned int fnumber;
 	unsigned int focal_length;
 	unsigned int target_distance_feet;
 
-	// Fujifilm things
+	// Fujifilm runtime vars
 	int function_mode;
 	int camera_state;
 	int remote_version;
@@ -146,9 +146,10 @@ vcamera *vcamera_new(vcameratype);
 int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes);
 int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes);
 int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout);
-
+int vcam_open(vcamera *cam, const char *port);
 int vcam_get_variant_info(char *arg, struct CamConfig *o);
 
+// Called early before connection is established
 int vcam_fuji_setup(vcamera *cam);
 int vcam_canon_setup(vcamera *cam);
 
@@ -238,22 +239,6 @@ struct _PTPDevicePropDesc {
 typedef struct _PTPDevicePropDesc PTPDevicePropDesc;
 
 // GetPropertyValue stubs
-//int ptp_battery_getdesc(vcamera *, PTPDevicePropDesc *);
-//int ptp_battery_getvalue(vcamera *, PTPPropertyValue *);
-//int ptp_imagesize_getdesc(vcamera *, PTPDevicePropDesc *);
-//int ptp_imagesize_getvalue(vcamera *, PTPPropertyValue *);
-//int ptp_datetime_getdesc(vcamera *, PTPDevicePropDesc *);
-//int ptp_datetime_getvalue(vcamera *, PTPPropertyValue *);
-//int ptp_datetime_setvalue(vcamera *, PTPPropertyValue *);
-//int ptp_shutterspeed_getdesc(vcamera *, PTPDevicePropDesc *);
-//int ptp_shutterspeed_getvalue(vcamera *, PTPPropertyValue *);
-//int ptp_shutterspeed_setvalue(vcamera *, PTPPropertyValue *);
-//int ptp_fnumber_getdesc(vcamera *, PTPDevicePropDesc *);
-//int ptp_fnumber_getvalue(vcamera *, PTPPropertyValue *);
-//int ptp_fnumber_setvalue(vcamera *, PTPPropertyValue *);
-//int ptp_exposurebias_getdesc(vcamera *, PTPDevicePropDesc *);
-//int ptp_exposurebias_getvalue(vcamera *, PTPPropertyValue *);
-//int ptp_exposurebias_setvalue(vcamera *, PTPPropertyValue *);
 
 struct ptp_property {
 	int code;

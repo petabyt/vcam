@@ -115,7 +115,6 @@ int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
 	port->pl->vcamera = vcamera_new(CAM_CANON);
 	port->pl->vcamera->conf = conf;
-	port->pl->vcamera->init(port->pl->vcamera);
 
 	(*dev_handle)->dev = port;
 
@@ -124,7 +123,7 @@ int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	if (port->pl->isopen)
 		return -1;
 
-	port->pl->vcamera->open(port->pl->vcamera, port->settings.usb.port);
+	vcam_open(port->pl->vcamera, port->settings.usb.port);
 	port->pl->isopen = 1;
 
 	return 0;
