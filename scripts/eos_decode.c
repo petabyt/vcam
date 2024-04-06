@@ -147,10 +147,6 @@ int events(uint8_t *data, int dat_length) {
 		} break;
 		}
 
-		// auto allocated system to handle property available lists
-		// it changes often
-		// 
-
 		// Move dp over for the next entry
 		dp += size;
 	}
