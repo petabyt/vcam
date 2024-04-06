@@ -56,7 +56,7 @@ int vcam_fuji_setup(vcamera *cam) {
 	cam->remote_version = 0;
 	cam->compress_small = 0;
 	cam->no_compressed = 0;
-	cam->camera_internal_state = CAM_STATE_READY;
+	cam->internal_state = CAM_STATE_READY;
 	cam->sent_images = 0;
 
 	// TODO: Better way to ignore folders (Fuji doesn't show them)
@@ -275,7 +275,7 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 		ev->length++;
 	}
 
-	if (cam->camera_internal_state == CAM_STATE_READY) {
+	if (cam->internal_state == CAM_STATE_READY) {
 		ev->events[ev->length].code = PTP_PC_FUJI_CameraState;
 		ev->events[ev->length].value = cam->camera_state;
 		ev->length++;
@@ -294,11 +294,11 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 			ev->length++;
 		}
 
-		cam->camera_internal_state = CAM_STATE_IDLE;
+		cam->internal_state = CAM_STATE_IDLE;
 	}
 
 	// Properties sent over on init, by newer cams
-	if (cam->camera_internal_state == CAM_STATE_IDLE_REMOTE) {
+	if (cam->internal_state == CAM_STATE_IDLE_REMOTE) {
 		struct FujiPropEventSend newer_remote_props[] = {
 			{PTP_PC_FUJI_Unknown_D52F, 1},
 			{PTP_PC_FUJI_Unknown_D400, 1},
@@ -380,9 +380,9 @@ int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
 	fuji_open_remote_port++;
 
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
-		cam->camera_internal_state = CAM_STATE_IDLE_REMOTE;
+		cam->internal_state = CAM_STATE_IDLE_REMOTE;
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
-		cam->camera_internal_state = CAM_STATE_IDLE_REMOTE;
+		cam->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("One time sending all remote props\n");
 		ptp_notify_event(cam, PTP_PC_FUJI_DeviceError, 0);
 		ptp_notify_event(cam, PTP_PC_FlashMode, 0x800a);

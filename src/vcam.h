@@ -133,7 +133,7 @@ typedef struct vcamera {
 	int obj_count;
 	int compress_small;
 	int no_compressed;
-	uint8_t camera_internal_state;
+	uint8_t internal_state;
 	int sent_images;
 	uint8_t next_cmd_kills_connection;
 
@@ -155,6 +155,7 @@ int vcam_canon_setup(vcamera *cam);
 
 int ptp_get_object_count();
 
+// Temporary function to help with unimplemented data structures
 int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp);
 
 void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes);
