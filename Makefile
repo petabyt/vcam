@@ -53,6 +53,8 @@ ln:
 
 # Wireless AP networking Hacks
 
+SSID ?= FUJIFILM-X30-ABCD
+
 setup-fuji:
 	sudo ip link add fuji_dummy type dummy
 	sudo ip address add 10.0.0.1/24 dev fuji_dummy
@@ -62,7 +64,7 @@ setup-fuji:
 kill-fuji:
 	sudo ip link delete fuji_dummy
 ap-fuji:
-	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy FUJIFILM-X-F10-ABCD
+	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy $(SSID) $(PASSWORD)
 test-fuji:
 	@while make vcam; do \
 	echo '------------------------------------------'; \
@@ -77,7 +79,7 @@ setup-canon:
 	sudo ip address add 192.168.1.10/24 brd + dev canon_dummy noprefixroute
 	ip a
 ap-canon:
-	sudo bash scripts/create_ap $(WIFI_DEV) canon_dummy 'EOST6{-464_Canon0A' zzzzzzzz -g 192.168.1.2 --ieee80211n
+	sudo bash scripts/create_ap $(WIFI_DEV) canon_dummy 'EOST6{-464_Canon0A' $(PASSWORD) -g 192.168.1.2 --ieee80211n
 kill-canon:
 	sudo ip link delete canon_dummy
 test-canon:
