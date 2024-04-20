@@ -53,6 +53,7 @@ typedef enum vcameratype {
 
 typedef enum vcameravariant {
 	V_FUJI_X_A2 = 1,
+	V_FUJI_X30,
 	V_FUJI_X_T20,
 	V_FUJI_X_T2,
 	V_FUJI_X_F10,

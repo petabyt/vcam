@@ -1,4 +1,4 @@
-// Emulator for non-standard Fujifilm PTP/USB over TCP
+// Fujifilm PTP over TCP reimplementation
 // Copyright Daniel C - GNU Lesser General Public License v2.1
 #include <stdlib.h>
 #include <string.h>
@@ -66,7 +66,7 @@ int vcam_fuji_setup(vcamera *cam) {
 
 	// Check if remote mode is supported
 	if (cam->conf->remote_version) {
-		cam->camera_state = FUJI_FULL_ACCESS;
+		cam->camera_state = 3;
 	} else {
 		cam->camera_state = FUJI_REMOTE_ACCESS;
 	}
@@ -74,8 +74,23 @@ int vcam_fuji_setup(vcamera *cam) {
 	if (cam->conf->is_select_multiple_images) {
 		vcam_log("Configuring fuji to select multiple images\n");
 		cam->camera_state = FUJI_MULTIPLE_TRANSFER;
-		// First dirent is DCIM
+		// ID 0 is DCIM, set to 1, which is first jpeg
 		first_dirent->next->id = 1;
+	}
+
+	// Common startup events for all cameras
+	ptp_notify_event(cam, PTP_PC_FUJI_CameraState, cam->camera_state);
+
+	if (cam->camera_state == FUJI_MULTIPLE_TRANSFER) {
+		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
+	}
+
+	ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, cam->obj_count);
+
+	if (cam->conf->remote_version) {
+		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount2, cam->obj_count);
+		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
+		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
 	}
 
 	return 0;
@@ -83,96 +98,6 @@ int vcam_fuji_setup(vcamera *cam) {
 
 int fuji_is_compressed_mode(vcamera *cam) {
 	return (int)(cam->compress_small);
-}
-
-static int send_partial_object(char *path, vcamera *cam, ptpcontainer *ptp) {
-	FILE *file = fopen(path, "rb");
-	if (file == NULL) {
-		vcam_log("File %s not found\n", path);
-		exit(-1);
-	}
-
-	if (fseek(file, (size_t)ptp->params[1], SEEK_SET) == -1) {
-		vcam_log("fseek failure\n");
-		exit(-1);
-	}
-
-	size_t max = (size_t)ptp->params[2];
-	char *buffer = malloc(max);
-	int read = fread(buffer, 1, max, file);
-
-	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, read);
-	vcam_log("Generic sending %d\n", read);
-
-	free(buffer);
-	fclose(file);
-
-	return 0;
-}
-
-static size_t generic_file_size(char *path) {
-	FILE *file = fopen(path, "rb");
-	if (file == NULL) {
-		vcam_log("File %s not found", path);
-		exit(-1);
-	}
-
-	fseek(file, 0, SEEK_END);
-	size_t file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	fclose(file);
-
-	return file_size;
-}
-
-int fuji_get_object_info(vcamera *cam, ptpcontainer *ptp) {
-	vcam_log("Get object info for %d\n", ptp->params[0]);
-	FILE *file = NULL;
-	if (cam->no_compressed) {
-		file = fopen(FUJI_DUMMY_OBJ_INFO, "rb");
-	} else {
-		file = fopen(FUJI_DUMMY_OBJ_INFO_CUT, "rb");
-	}
-
-	if (file == NULL) {
-		vcam_log("File not found\n");
-		exit(-1);
-	}
-
-	fseek(file, 0, SEEK_END);
-	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	char *buffer = malloc(file_size);
-	fread(buffer, 1, file_size, file);
-	fclose(file);
-
-	struct PtpObjectInfo *oi = (struct PtpObjectInfo *)buffer;
-	if (cam->no_compressed) {
-		oi->compressed_size = generic_file_size(FUJI_DUMMY_JPEG_FULL);
-	} else {
-		oi->compressed_size = generic_file_size(FUJI_DUMMY_JPEG_COMPRESSED);
-	}
-
-	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, file_size);
-
-	ptp_response(cam, PTP_RC_OK, 0);
-
-	return 1;
-}
-
-int fuji_get_partial_object(vcamera *cam, ptpcontainer *ptp) {
-	vcam_log("GetPartialObject request for %d\n", ptp->params[0]);
-	if (cam->no_compressed) {
-		send_partial_object(FUJI_DUMMY_JPEG_FULL, cam, ptp);
-	} else {
-		send_partial_object(FUJI_DUMMY_JPEG_COMPRESSED, cam, ptp);
-	}
-
-	ptp_response(cam, PTP_RC_OK, 0);
-
-	return 1;
 }
 
 int fuji_set_prop_supported(vcamera *cam, int code) {
@@ -209,15 +134,13 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
 
-	// TODO: More asserts for len
-
-	vcam_log("Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
+	vcam_log("Fuji Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_FunctionMode:
 		assert(len == 2);
 		cam->function_mode = uint[0];
-//		usleep(1000 * 2000); // Fuji accepts OK on the camera here
+		usleep(1000 * 1000 * 3);
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		assert(len == 4);
@@ -231,8 +154,9 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	case PTP_PC_FUJI_NoCompression:
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
-		if (uint16[0] == 1) usleep(1000 * 500); // Fuji seems to take a while here
 		cam->no_compressed = uint16[0];
+		usleep(1000 * 5000); // Fuji seems to take a while here
+		//if (cam->no_compressed == 0) while (1);
 		break;
 	case PTP_PC_FUJI_RemoteGetObjectVersion:
 		assert(len == 4);
@@ -262,48 +186,14 @@ static void add_events(struct PtpFujiEvents *ev, struct FujiPropEventSend *p, si
 	}
 }
 
-extern struct ptp_interrupt *first_interrupt;
-
 int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 	struct PtpFujiEvents *ev = calloc(1, 4096);
 
 	struct GenericEvent ev_info;
 	while (!ptp_pop_event(cam, &ev_info)) {
-		vcam_log("Fuji: Popping event from stack\n");
 		ev->events[ev->length].code = ev_info.code;
 		ev->events[ev->length].value = ev_info.value;
 		ev->length++;
-	}
-
-	if (cam->internal_state == CAM_STATE_READY) {
-		ev->events[ev->length].code = PTP_PC_FUJI_CameraState;
-		ev->events[ev->length].value = cam->camera_state;
-		ev->length++;
-
-		if (cam->camera_state == FUJI_MULTIPLE_TRANSFER) {
-			ev->events[ev->length].code = PTP_PC_FUJI_SelectedImgsMode;
-			ev->events[ev->length].value = 1;
-			ev->length++;
-		} else {
-			ev->events[ev->length].code = PTP_PC_FUJI_ObjectCount2;
-			ev->events[ev->length].value = cam->obj_count;
-			ev->length++;
-
-			ev->events[ev->length].code = PTP_PC_FUJI_ObjectCount;
-			ev->events[ev->length].value = cam->obj_count;
-			ev->length++;
-		}
-
-		cam->internal_state = CAM_STATE_IDLE;
-	}
-
-	// Properties sent over on init, by newer cams
-	if (cam->internal_state == CAM_STATE_IDLE_REMOTE) {
-		struct FujiPropEventSend newer_remote_props[] = {
-			{PTP_PC_FUJI_Unknown_D52F, 1},
-			{PTP_PC_FUJI_Unknown_D400, 1},
-		};
-		add_events(ev, newer_remote_props, sizeof(newer_remote_props) / sizeof(newer_remote_props[0]));
 	}
 
 	vcam_log("Sending %d events\n", ev->length);
@@ -363,10 +253,16 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		break;
 	case PTP_PC_FUJI_StorageID:
 		data = 0;
-		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1); // used to be 2, fuji sends 00
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1);
+		break;
+	case PTP_PC_FUJI_Unknown_D52F:
+		data = 0;
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	default:
 		vcam_log("Fuji Unknown %X\n", ptp->params[0]);
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
+		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
 
@@ -477,6 +373,7 @@ int ptp_fuji_liveview(int socket) {
 void fuji_downloaded_object(vcamera *cam) {
 	// In MULTIPLE_TRANSFER mode, the camera 'deletes' the first object and replaces it with
 	// the second object, once a partialtransfer or object is completely downloaded.
+	// It seems we get this notification once GetPartialObject calls reach the end of an object.
 	if (cam->camera_state == FUJI_MULTIPLE_TRANSFER) {
 		printf("Dirent %s\n", first_dirent->next->fsname);
 		struct ptp_dirent *next = first_dirent->next;
