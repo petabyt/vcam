@@ -140,7 +140,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	case PTP_PC_FUJI_FunctionMode:
 		assert(len == 2);
 		cam->function_mode = uint[0];
-		usleep(1000 * 1000 * 3);
+		//usleep(1000 * 1000 * 3);
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		assert(len == 4);

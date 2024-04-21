@@ -14,7 +14,7 @@ $(info Using '$(VCAMERADIR)')
 endif
 
 VCAM_CORE += src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fujiip.o src/canonip.o
-VCAM_CORE += src/canon_setup.o src/data.o src/props.o
+VCAM_CORE += src/canon_setup.o src/data.o src/props.o src/variant.o
 
 SO_CFLAGS := $(shell pkg-config --cflags libusb-1.0)
 SO_FILES := $(VCAM_CORE) src/libusb.o
