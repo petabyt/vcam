@@ -107,7 +107,8 @@ int fuji_set_prop_supported(vcamera *cam, int code) {
 	    PTP_PC_FUJI_GetObjectVersion,
 	    PTP_PC_FUJI_NoCompression,
 	    PTP_PC_FUJI_CompressSmall,
-		PTP_PC_FUJI_ImageGetVersion
+		PTP_PC_FUJI_ImageGetVersion,
+		PTP_PC_FUJI_GeoTagVersion
 	};
 
 	int codes_remote_only[] = {
@@ -155,7 +156,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
 		cam->no_compressed = uint16[0];
-		usleep(1000 * 5000); // Fuji seems to take a while here
+		//usleep(1000 * 5000); // Fuji seems to take a while here
 		//if (cam->no_compressed == 0) while (1);
 		break;
 	case PTP_PC_FUJI_RemoteGetObjectVersion:
@@ -169,6 +170,8 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, cam->obj_count);
+		break;
+	case PTP_PC_FUJI_GeoTagVersion:
 		break;
 	}
 

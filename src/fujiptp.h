@@ -52,7 +52,7 @@
 #define PTP_PC_FUJI_ImageGetLimitedVersion	0xdf26 // supports less features
 #define PTP_PC_FUJI_Unknown13		0xdf27
 #define PTP_PC_FUJI_Unknown_DF28	0xdf28
-#define PTP_PC_FUJI_LocationGetterVersion	0xdf31
+#define PTP_PC_FUJI_GeoTagVersion	0xdf31
 #define PTP_PC_FUJI_Unknown11		0xdf44
 #define PTP_PC_FUJI_Unknown17		0xD621
 
@@ -112,7 +112,7 @@
 #define PTP_PC_FUJI_CommandDialMode			0xD028
 #define PTP_PC_FUJI_Shadowing				0xD029
 /* d02a - d02c also appear in setafmode */
-#define PTP_PC_FUJI_ExposureIndex			0xD02A
+#define PTP_PC_FUJI_ExposureIndex			0xD02A // ISO
 #define PTP_PC_FUJI_MovieISO				0xD02B
 #define PTP_PC_FUJI_WideDynamicRange			0xD02E
 #define PTP_PC_FUJI_TNumber				0xD02F

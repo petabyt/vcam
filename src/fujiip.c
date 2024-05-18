@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 #include <vcam.h>
 #include <fujiptp.h>
@@ -217,6 +220,15 @@ static int new_ptp_tcp_socket(int port) {
 		perror("Failed to set sockopt");
 	}
 
+	int falso = 0;
+	if (setsockopt(server_socket, SOL_SOCKET, TCP_QUICKACK, &falso, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
+	}
+
+	if (setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, &tru, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
+	}
+
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
 	serverAddress.sin_family = AF_INET;
@@ -299,8 +311,7 @@ int fuji_wifi_main(struct CamConfig *options) {
 	init_vcam(options);
 
 	if (options->use_local) {
-		//server_ip_address = "0.0.0.0";
-		server_ip_address = "192.168.1.33";
+		server_ip_address = "0.0.0.0";
 	}
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
