@@ -1,3 +1,9 @@
+Emulates a camera's WiFi interface on Linux.
+```
+sudo apt install dnsmasq iptables hostapd iproute2 util-linux procps
+```
+
+*old README: create_ap docs*
 ## Features
 * Create an AP (Access Point) at any channel.
 * Choose one of the following encryptions: WPA, WPA2, WPA/WPA2, Open (no encryption).
