@@ -36,18 +36,10 @@ void libusb_exit(libusb_context *ctx) {
 	vcam_log("Deinit");
 }
 
-void libusb_set_debug	(	libusb_context * 	ctx,
-int 	level 
-) {}
-
-libusb_device* libusb_ref_device	(	libusb_device * 	dev	)	 {
-	return dev;
-}
-void libusb_unref_device	(	libusb_device * 	dev	)	{}
-
-int libusb_get_configuration	(	libusb_device_handle * 	dev_handle,
-int * 	config 
-) {
+void libusb_set_debug(libusb_context *ctx, int level) {}
+libusb_device* libusb_ref_device(libusb_device *dev)	 { return dev; }
+void libusb_unref_device(libusb_device *dev) {}
+int libusb_get_configuration(libusb_device_handle *dev_handle, int *config) {
 	*config = 0;
 	return 0;
 }
@@ -137,7 +129,7 @@ libusb_device_handle *libusb_open_quick() {
 }
 
 int libusb_get_string_descriptor_ascii(libusb_device_handle *devh, uint8_t desc_idx, unsigned char *data, int length) {
-	strncpy(data, "vcam", length);
+	strncpy((char *)data, "vcam", length);
 }
 
 void libusb_free_device_list(libusb_device **list, int unref_devices) {
@@ -166,11 +158,10 @@ int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoin
 	C_PARAMS(port && port->pl && port->pl->vcamera);
 
 	if (endpoint == 0x2) {
-		*transferred = port->pl->vcamera->write(port->pl->vcamera, endpoint, (unsigned char *)data, length);
+		*transferred = vcam_write(port->pl->vcamera, endpoint, (unsigned char *)data, length);
 		return 0;
 	} else if (endpoint == 0x81) {
-		printf("Doing read: %d %p %d\n", endpoint, data, length);
-		*transferred = port->pl->vcamera->read(port->pl->vcamera, endpoint, (unsigned char *)data, length);
+		*transferred = vcam_read(port->pl->vcamera, endpoint, (unsigned char *)data, length);
 		return 0;
 	}
 

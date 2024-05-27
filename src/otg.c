@@ -77,10 +77,8 @@ struct _GPPortPrivateLibrary {
 };
 GPPort *priv_gpport;
 
-static int start_vcam() {
-	struct CamConfig *conf = calloc(sizeof(struct CamConfig), 1);
-
-	vcam_get_variant_info("canon_1300d", conf);
+static int start_vcam(int argc, char **argv) {
+	struct CamConfig *conf = vcam_new_config(argc, argv);
 
 	GPPort *port = malloc(sizeof(GPPort));
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
@@ -436,13 +434,13 @@ void *kill_thread(void *arg) {
 	}
 }
 
-int main()
+int main(int argc, char **argv)
 {
 	signal(SIGINT, kill_sig);
 	pthread_t killtd;
 	pthread_create(&killtd, NULL, kill_thread, NULL);
 
-	start_vcam();
+	start_vcam(argc, argv);
 
     int fd = -1, ret, err = -1;
     uint32_t send_size;

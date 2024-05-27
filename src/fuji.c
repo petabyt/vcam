@@ -4,9 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/socket.h>
-
 #include <vcam.h>
-
 #include <fujiptp.h>
 #include <cl_data.h>
 #include "fuji.h"

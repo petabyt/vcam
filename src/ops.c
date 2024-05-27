@@ -135,7 +135,6 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 
 	x += put_string(data + x, cam->conf->model);
 	x += put_string(data + x, cam->conf->version);
-	x += put_string(data + x, cam->conf->version);
 	x += put_string(data + x, cam->conf->serial);
 
 	ptp_senddata(cam, 0x1001, data, x);

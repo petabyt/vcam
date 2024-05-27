@@ -2,6 +2,39 @@
 #include <string.h>
 #include <vcam.h>
 
+struct CamConfig *vcam_new_config(int argc, char **argv) {
+	struct CamConfig *options = calloc(sizeof(struct CamConfig), 1);
+
+	options->type = -1;
+
+	strcpy(options->model, "Generic");
+	strcpy(options->version, "1.0");
+	strcpy(options->serial, "1");
+
+	if (argc < 2) {
+		return NULL;
+	}
+
+	vcam_get_variant_info(argv[1], options);
+
+	for (int i = 2; i < argc; i++) {
+		if (!strcmp(argv[i], "--local")) {
+			options->use_local = 1;
+		} else if (!strcmp(argv[i], "--select-img")) {
+			options->is_select_multiple_images = 1;
+		} else if (!strcmp(argv[i], "--fs")) {
+			extern char *vcamera_filesystem;
+			vcamera_filesystem = argv[i + 1];
+			i++;
+		} else {
+			printf("Unknown option %s\n", argv[i]);
+			return NULL;
+		}
+	}
+
+	return options;
+}
+
 // This should give specific info that describes what is different about different models 'variant'
 // of the same brand. All other behavior is assumed based on the 'type'
 int vcam_get_variant_info(char *arg, struct CamConfig *o) {

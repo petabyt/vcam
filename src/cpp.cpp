@@ -28,3 +28,16 @@ int main() {
 		start_camera(cam);
 	}
 }
+
+struct VCamera {
+	// ...
+};
+
+
+struct FUjifilmX_A2 *fuji(vcamera *cam) {
+	return (struct FUjifilmX_A2 *)cam->info;
+}
+
+void fuji_do_thing(vcamera *cam) {
+	fuji(cam)->prop = 0x0;
+}
