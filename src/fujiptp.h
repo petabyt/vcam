@@ -18,20 +18,20 @@
 #define PTP_PC_FUJI_SelectedImgsMode	0xd220
 #define PTP_PC_FUJI_ObjectCount		0xd222
 #define PTP_PC_FUJI_CameraState		0xdf00 
-#define PTP_PC_FUJI_FunctionMode	0xdf01 // should be (CameraReportedState??)
+#define PTP_PC_FUJI_ClientState		0xdf01
 #define PTP_PC_FUJI_CompressSmall	0xD226 // compress into 400-800kb
 #define PTP_PC_FUJI_NoCompression	0xD227 // Enable full image download
 
 // Fuji Camera Connect has this version - 2.11 if parsed as bytes. Or 11.2
 // XS10 on reported 0x02000A, camera connect set to 2000B
-#define FUJI_CAM_CONNECT_REMOTE_VER 0x2000B
+#define FUJI_CAM_CONNECT_REMOTE_VER 0x2000C
 
 // Downloader opcodes, mostly unknown
 #define PTP_OC_FUJI_Unknown1	0x9054
 #define PTP_OC_FUJI_Unknown2	0x9055
 
-// Property codes, others are in camlib ptp.h
-#define PTP_PC_FUJI_Unknown4		0xD228
+// Device property codes, IP only
+#define PTP_PC_FUJI_UnknownD228		0xD228
 #define PTP_PC_FUJI_Unknown15		0xD22B
 #define PTP_PC_FUJI_CompressionCutOff	0xD235
 #define PTP_PC_FUJI_StorageID		0xd244
@@ -46,7 +46,7 @@
 #define PTP_PC_FUJI_Unknown_D52F	0xd52f // probably version code
 #define PTP_PC_FUJI_ImageGetVersion	0xdf21 // Another prop used for image related things
 #define PTP_PC_FUJI_GetObjectVersion	0xdf22 // version for GetObjectInfo and GetObject behavior
-#define PTP_PC_FUJI_Unknown10		0xdf23 // another version prop?
+#define PTP_PC_FUJI_Unknown10		0xdf23 // AutoSaveVersion?
 #define PTP_PC_FUJI_RemoteVersion	0xdf24
 #define PTP_PC_FUJI_RemoteGetObjectVersion	0xdf25 // same as GetObjectVersion, but for cams that support remote mode
 #define PTP_PC_FUJI_ImageGetLimitedVersion	0xdf26 // supports less features
@@ -56,33 +56,55 @@
 #define PTP_PC_FUJI_Unknown11		0xdf44
 #define PTP_PC_FUJI_Unknown17		0xD621
 
-// Function Modes
-#define FUJI_VIEW_MULTIPLE	1
-#define FUJI_VIEW_ALL_IMGS	2
-#define FUJI_MODE_UNKNOWN2	3
-#define FUJI_MODE_UNKNOWN1	4
-#define FUJI_REMOTE_MODE	5
-#define FUJI_MODE_UNKNOWN3	6
-#define FUJI_CAMERA_ERR		7
-#define FUJI_SELECTED_FRAME	8
-#define FUJI_MODE_IMG_VIEW_IN_CAM	9
-#define FUJI_GPS_ASSIST_V2	10
-#define FUJI_MODE_REMOTE_IMG_VIEW	11
-#define FUJI_MODE_SET_GPS	17
-#define FUJI_LIMITED_IMG_TRANSMISSION	18
-#define FUJI_MODE_TRANSFER_FIRMARE	19
-#define FUJI_MODE_REMOTE_IMG_VIEW_BLE	20 // ????
+// Client States
+enum ClientStates {
+	// Set if camera state is FUJI_MULTIPLE_TRANSFER,
+	FUJI_VIEW_MULTIPLE = 1,
+	// Set to view all images and have normal PTP functionality
+	FUJI_VIEW_ALL_IMGS = 2,
+	// Old remote - maybe from 2015-2017
+	FUJI_OLD_REMOTE = 3,
+	FUJI_MODE_UNKNOWN1 = 4,
+	// Set to enter full remote mode
+	FUJI_REMOTE_MODE = 5,
+	FUJI_MODE_UNKNOWN3 = 6,
+	// Set to tell camera that client has an error
+	FUJI_CAMERA_ERR = 7,
+	// Set to a similar (but completely different) version of FUJI_MULTIPLE_TRANSFER.
+	// Client requests this, and user selects images on camera.
+	FUJI_MULTIPLE_TRANSFER_REQ = 8,
+	FUJI_MODE_IMG_VIEW_IN_CAM = 9,
+	FUJI_GPS_ASSIST_V2 = 10,
+	// Set to quiet down the liveview/remote functionality (still running I think) and start the image gallery
+	// This is only for remote cameras. Better name would be IMG_VIEW_EXTENDED (?)
+	FUJI_MODE_REMOTE_IMG_VIEW = 11,
+	// Set GPS on cam, haven't tested
+	FUJI_MODE_SET_GPS = 17,
+	// All seem to be new or bluetooth only functionality
+	FUJI_LIMITED_IMG_TRANSMISSION = 18,
+	FUJI_MODE_TRANSFER_FIRMWARE = 19,
+	FUJI_MODE_REMOTE_IMG_VIEW_BLE = 20
+};
 
 // Modes for SelectedImgsMode
 #define FUJI_SELECT_MULTIPLE_MODE_1 1
 
 // Camera states
-#define FUJI_WAIT_FOR_ACCESS	0
-#define FUJI_MULTIPLE_TRANSFER	1
-#define FUJI_FULL_ACCESS	2
-#define FUJI_REMOTE_ACCESS	6
+enum FujiStates {
+	// We need to wait and poll camera for access
+	FUJI_WAIT_FOR_ACCESS = 0,
+	// Camera has indicated it has single or multiple photos to transfer. Go into loop to accept them.
+	FUJI_MULTIPLE_TRANSFER = 1,
+	// We have full access to the camera (non-remote), we can run the photo gallery, download photos,
+	// and do normal PTP stuff.
+	FUJI_FULL_ACCESS = 2,
+	// PC save software (over WiFi -> UPnP)
+	FUJI_PC_AUTO_SAVE = 3,
+	// We have all features of FUJI_FULL_ACCESS and remote mode.
+	FUJI_REMOTE_ACCESS = 6,
+};
 
-// ECs and PCs stuff from libgphoto2 ptp.h - most are innacurate
+// ECs and PCs stuff from libgphoto2 ptp.h - most are inaccurate
 #define PTP_EC_FUJI_PreviewAvailable		0xC001
 #define PTP_EC_FUJI_ObjectAdded			0xC004
 
@@ -112,7 +134,7 @@
 #define PTP_PC_FUJI_CommandDialMode			0xD028
 #define PTP_PC_FUJI_Shadowing				0xD029
 /* d02a - d02c also appear in setafmode */
-#define PTP_PC_FUJI_ExposureIndex			0xD02A // ISO
+#define PTP_PC_FUJI_ExposureIndex			0xD02A
 #define PTP_PC_FUJI_MovieISO				0xD02B
 #define PTP_PC_FUJI_WideDynamicRange			0xD02E
 #define PTP_PC_FUJI_TNumber				0xD02F
@@ -319,6 +341,8 @@
 #define PTP_OC_FUJI_FmSendObject			0x9041
 #define PTP_OC_FUJI_FmSendPartialObject			0x9042
 
+#pragma pack(push, 1)
+
 struct FujiInitPacket {
 	uint32_t length;
 	uint32_t type;
@@ -329,5 +353,53 @@ struct FujiInitPacket {
 	uint32_t guid4;
 	char device_name[54]; // unicode string
 };
+
+// Response to struct FujiInitPacket
+struct PtpFujiInitResp {
+	uint32_t x1;
+	uint32_t x2;
+	uint32_t x3;
+	uint32_t x4;
+	char cam_name[54];
+};
+
+// Appears to be an array for events
+struct PtpFujiEvents {
+	uint16_t length;
+	struct PtpFujiEventsEntry {
+		uint16_t code;
+		uint32_t value;
+	}events[];
+};
+
+// Looks very similar to standard ISO ObjectInfo, but random bits moved around.
+// variable data starts at same location.
+struct PtpFujiObjectInfo {
+	uint32_t storage_id;
+	uint16_t obj_format;
+	uint16_t protection;
+	uint32_t fuji_max_partial_size;
+	uint8_t fuji_unknown2;
+	uint32_t compressed_size;
+	uint16_t fuji_unknown3;
+	uint16_t fuji_unknown4;
+	uint8_t fuji_unknown5;
+	uint32_t img_width;
+	uint32_t img_height;
+	uint32_t img_bit_depth;
+	uint32_t parent_obj;
+	uint16_t assoc_type;
+	uint32_t assoc_desc;
+	uint32_t sequence_num;
+
+#define PTP_FUJI_OBJ_INFO_VAR_START 52
+
+	char filename[64];
+	char date_created[32];
+	char settings[32];
+	char meta[32];
+};
+
+#pragma pack(pop)
 
 #endif

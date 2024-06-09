@@ -49,7 +49,7 @@ uint8_t *fuji_get_ack_packet(vcamera *cam) {
 }
 
 int vcam_fuji_setup(vcamera *cam) {
-	cam->function_mode = 2;
+	cam->client_state = 2;
 	cam->camera_state = 0;
 	cam->remote_version = 0;
 	cam->compress_small = 0;
@@ -67,6 +67,10 @@ int vcam_fuji_setup(vcamera *cam) {
 		cam->camera_state = 3;
 	} else {
 		cam->camera_state = FUJI_REMOTE_ACCESS;
+	}
+
+	if (cam->conf->do_discovery) {
+		cam->camera_state = FUJI_PC_AUTO_SAVE;
 	}
 
 	if (cam->conf->is_select_multiple_images) {
@@ -100,13 +104,15 @@ int fuji_is_compressed_mode(vcamera *cam) {
 
 int fuji_set_prop_supported(vcamera *cam, int code) {
 	int codes[] = {
-	    PTP_PC_FUJI_CameraState,
-	    PTP_PC_FUJI_FunctionMode,
-	    PTP_PC_FUJI_GetObjectVersion,
-	    PTP_PC_FUJI_NoCompression,
-	    PTP_PC_FUJI_CompressSmall,
+		PTP_PC_FUJI_CameraState,
+		PTP_PC_FUJI_ClientState,
+		PTP_PC_FUJI_GetObjectVersion,
+		PTP_PC_FUJI_NoCompression,
+		PTP_PC_FUJI_CompressSmall,
 		PTP_PC_FUJI_ImageGetVersion,
-		PTP_PC_FUJI_GeoTagVersion
+		PTP_PC_FUJI_GeoTagVersion,
+		PTP_PC_FUJI_Unknown10,
+		PTP_PC_FUJI_UnknownD228,
 	};
 
 	int codes_remote_only[] = {
@@ -136,9 +142,9 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	vcam_log("Fuji Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
-	case PTP_PC_FUJI_FunctionMode:
+	case PTP_PC_FUJI_ClientState:
 		assert(len == 2);
-		cam->function_mode = uint[0];
+		cam->client_state = uint[0];
 		//usleep(1000 * 1000 * 3);
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
@@ -170,6 +176,10 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, cam->obj_count);
 		break;
 	case PTP_PC_FUJI_GeoTagVersion:
+		break;
+	case PTP_PC_FUJI_Unknown10:
+		break;
+	case PTP_PC_FUJI_UnknownD228:
 		break;
 	}
 
@@ -218,8 +228,8 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		data = cam->obj_count;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_FunctionMode:
-		data = cam->function_mode;
+	case PTP_PC_FUJI_ClientState:
+		data = cam->client_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_CameraState:
@@ -260,6 +270,10 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
+	case PTP_PC_FUJI_Unknown10:
+		data = 1;
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
+		break;		
 	default:
 		vcam_log("Fuji Unknown %X\n", ptp->params[0]);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);

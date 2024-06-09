@@ -30,6 +30,8 @@ struct CamConfig {
 	int is_mirrorless;
 
 	// Fuji stuff
+	int do_discovery;
+	int do_register;
 	int is_select_multiple_images;
 	int image_get_version;
 	int get_object_version;
@@ -120,8 +122,8 @@ typedef struct vcamera {
 	unsigned int target_distance_feet;
 
 	// === Fujifilm runtime vars ===
-	/// @brief Current value for PTP_PC_FUJI_FunctionMode
-	int function_mode;
+	/// @brief Current value for PTP_PC_FUJI_ClientState
+	int client_state;
 	/// @brief Current value for PTP_PC_FUJI_CameraState
 	int camera_state;
 	/// @brief Current value for PTP_PC_FUJI_RemoteVersion

@@ -305,10 +305,24 @@ static int init_vcam(struct CamConfig *options) {
 	return 0;
 }
 
+int fuji_ssdp_register(const char *ip, char *name, char *model);
+int fuji_ssdp_import(const char *ip, char *name);
+
 int fuji_wifi_main(struct CamConfig *options) {
 	printf("Fuji vcam - running '%s'\n", options->model);
 
 	init_vcam(options);
+
+	if (options->do_register) {
+		server_ip_address = "192.168.1.39";
+		fuji_ssdp_register(server_ip_address, "VCAM", "X-H1");
+		return 0;
+	}
+
+	if (options->do_discovery) {
+		server_ip_address = "192.168.1.39";
+		fuji_ssdp_import(server_ip_address, "VCAM");
+	}
 
 	if (options->use_local) {
 		server_ip_address = "0.0.0.0";

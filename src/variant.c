@@ -26,6 +26,10 @@ struct CamConfig *vcam_new_config(int argc, char **argv) {
 			extern char *vcamera_filesystem;
 			vcamera_filesystem = argv[i + 1];
 			i++;
+		} else if (!strcmp(argv[i], "--discovery")) {
+			options->do_discovery = 1;
+		} else if (!strcmp(argv[i], "--register")) {
+			options->do_register = 1;
 		} else {
 			printf("Unknown option %s\n", argv[i]);
 			return NULL;
