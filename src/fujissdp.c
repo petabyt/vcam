@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 // TODO:
 // - HTTP buffers not null terminated
@@ -21,10 +22,26 @@ struct ClientInfo {
 	char name[64];
 };
 
-static int start_invite_server(int port, char *ip) {
+static int set_nonblocking_io(int sockfd, int enable) {
+	int flags = fcntl(sockfd, F_GETFL, 0);
+	if (flags == -1)
+		return -1;
+
+	if (enable) {
+		flags |= O_NONBLOCK;
+	} else {
+		flags &= ~O_NONBLOCK;
+	}
+
+	return fcntl(sockfd, F_SETFL, flags);
+}
+
+static int connect_to_invite_server(int port, char *ip) {
 	int server_socket, client_socket;
 	struct sockaddr_in server_addr, client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
+
+	printf("Connecting to invite server on %s:%d\n", ip, port);
 
 	server_socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_socket < 0) {
@@ -37,10 +54,13 @@ static int start_invite_server(int port, char *ip) {
 	sa.sin_family = AF_INET;
 	sa.sin_port = htons(port);
 	if (inet_pton(AF_INET, ip, &(sa.sin_addr)) <= 0) {
+		perror("inet_pton");
 		abort();
 	}
 
-	if (connect(server_socket, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+	set_nonblocking_io(server_socket, 1);
+
+	if (connect(server_socket, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
 		if (errno != EINPROGRESS) {
 			printf("Connect fail\n");
 			abort();
@@ -58,19 +78,24 @@ static int start_invite_server(int port, char *ip) {
 		int so_error = 0;
 		socklen_t len = sizeof(so_error);
 		if (getsockopt(server_socket, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
-			printf("Sockopt fail\n");
+			printf("Sockopt fail: %d\n", errno);
 			abort();
 		}
 
 		if (so_error == 0) {
 			printf("invite server: Connection established\n");
+			set_nonblocking_io(server_socket, 0);
 			return server_socket;
+		} else {
+			printf("so_error: %d\n", so_error);
 		}
+	} else {
+		printf("invite server: Select timed out\n");
 	}
 
 	close(server_socket);
 
-	return 0;	
+	return -1;
 }
 
 int fuji_accept_notify(struct ClientInfo *info) {
@@ -113,7 +138,7 @@ int fuji_accept_notify(struct ClientInfo *info) {
 		abort();
 	}
 
-	strncpy(info->ip, inet_ntoa(client_addr.sin_addr), sizeof(info->name));
+	strncpy(info->ip, inet_ntoa(client_addr.sin_addr), sizeof(info->ip));
 
 	printf("51540 server: Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
@@ -199,7 +224,13 @@ int fuji_ssdp_import(char *ip, char *name) {
 	struct ClientInfo info;
 	rc = fuji_accept_notify(&info);
 
-	int fd = start_invite_server(51541, info.ip);
+	usleep(1000 * 1000 * 2);
+
+	int fd = connect_to_invite_server(51541, info.ip);
+	if (fd < 0) {
+		printf("Failed to connect to invite server\n");
+		abort();
+	}
 
 	char register_msg[256];
 	sprintf(
@@ -215,7 +246,7 @@ int fuji_ssdp_import(char *ip, char *name) {
 
 	rc = send(fd, register_msg, strlen(register_msg), 0);
 	if (rc < 0) {
-		puts("Failed to send import\n");
+		printf("Failed to send import: %d\n", errno);
 		abort();
 	}
 
@@ -241,7 +272,11 @@ int fuji_ssdp_register(const char *ip, char *name, char *model) {
 	struct ClientInfo info;
 	rc = fuji_accept_notify(&info);
 
-	int fd = start_invite_server(51542, info.ip);
+	int fd = connect_to_invite_server(51542, info.ip);
+	if (fd < 0) {
+		printf("Failed to connect to invite server\n");
+		abort();
+	}
 
 	char register_msg[256];
 	sprintf(

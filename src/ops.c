@@ -660,6 +660,12 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 
 	gp_log_("Processing thumb call for %d\n", ptp->params[0]);
 
+	if (cam->conf->do_discovery) {
+		gp_log_("Returning nothing for discovery mode\n");
+		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
+		return 1;
+	}
+
 	cur = first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
