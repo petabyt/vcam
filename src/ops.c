@@ -404,8 +404,8 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 	size_t size = (size_t)ptp->params[2];
 
 	if (fseek(file, start, SEEK_SET) == -1) {
-		vcam_log("fseek failure\n");
-		exit(-1);
+		ptp_response(cam, PTP_RC_OK, 0);
+		return 1;
 	}
 
 	char *buffer = malloc(size);

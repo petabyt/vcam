@@ -41,7 +41,8 @@ static int connect_to_invite_server(int port, char *ip) {
 	struct sockaddr_in server_addr, client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
 
-	printf("Connecting to invite server on %s:%d\n", ip, port);
+	printf("Connecting to invite server on %s:%d...\n", ip, port);
+	usleep(1 * 1000 * 1000);
 
 	server_socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_socket < 0) {
@@ -142,15 +143,16 @@ int fuji_accept_notify(struct ClientInfo *info) {
 
 	printf("51540 server: Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
+	// We expect NOTIFY
 	char buffer[1024];
-	int rc = recv(client_socket, buffer, sizeof(buffer), 0);
+	int rc = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 	if (rc < 0) {
 		perror("recv fail");
 		abort();
 	}
+	buffer[rc] = '\0';
 
-	// We expect NOTIFY
-	printf("Client:\n%s\n", buffer);
+	//printf("Client:\n%s\n", buffer);
 
 	char *saveptr;
 	char *delim = " :\r\n";
@@ -251,7 +253,7 @@ int fuji_ssdp_import(char *ip, char *name) {
 	}
 
 	char buffer[512];
-	rc = recv(fd, buffer, sizeof(buffer), 0);
+	rc = recv(fd, buffer, sizeof(buffer) - 1, 0);
 	if (rc < 0) {
 		perror("recv fail");
 		abort();
@@ -259,6 +261,7 @@ int fuji_ssdp_import(char *ip, char *name) {
 		puts("Expected data");
 		abort();
 	}
+	buffer[rc] = '\0';
 
 	printf("Client:\n%s\n", buffer);
 
