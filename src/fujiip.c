@@ -167,7 +167,7 @@ static int tcp_send_all(int client_socket) {
 		return -1;
 	}
 
-	// And finally send our response to the initiator
+	// Send response (or data packet)
 	size = send(client_socket, buffer, packet_length, 0);
 	if (size <= 0) {
 		perror("Error sending data to client");
@@ -196,13 +196,15 @@ static int tcp_send_all(int client_socket) {
 			return -1;
 		}
 
-		// And finally send our response to the initiator
+		// Send our response
 		size = send(client_socket, buffer, packet_length, 0);
 		if (size <= 0) {
 			perror("Error sending data to client");
 			return -1;
 		}
 	}
+
+	free(buffer);
 
 	return 0;
 }
@@ -212,7 +214,7 @@ static int new_ptp_tcp_socket(int port) {
 
 	if (server_socket == -1) {
 		perror("Socket creation failed");
-		exit(EXIT_FAILURE);
+		abort();
 	}
 
 	int tru = 1;
@@ -305,27 +307,39 @@ static int init_vcam(struct CamConfig *options) {
 	return 0;
 }
 
-int fuji_ssdp_register(const char *ip, char *name, char *model);
-int fuji_ssdp_import(const char *ip, char *name);
+int fuji_ssdp_register(char *ip, char *name, char *model);
+int fuji_ssdp_import(char *ip, char *name);
+int fuji_tether_connect(char *ip, int port);
 
 int fuji_wifi_main(struct CamConfig *options) {
 	printf("Fuji vcam - running '%s'\n", options->model);
 
 	init_vcam(options);
 
+	char this_ip[64];
+	get_local_ip(this_ip);
+
+	if (options->do_tether) {
+		vcam_log("Fuji tether connect, skipping datagram\n");
+		fuji_tether_connect("192.168.1.7", 51560);
+	}
+
 	if (options->do_register) {
-		server_ip_address = "192.168.1.39";
+		vcam_log("Fuji register\n");
+		server_ip_address = this_ip;
 		fuji_ssdp_register(server_ip_address, "VCAM", "X-H1");
 		return 0;
 	}
 
 	if (options->do_discovery) {
-		server_ip_address = "192.168.1.39";
+		vcam_log("Fuji discovery\n");
+		server_ip_address = this_ip;
 		fuji_ssdp_import(server_ip_address, "VCAM");
 	}
 
 	if (options->use_local) {
-		server_ip_address = "0.0.0.0";
+		vcam_log("Fuji use local IP: %s\n", this_ip);
+		server_ip_address = this_ip;
 	}
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);

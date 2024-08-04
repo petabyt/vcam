@@ -9,9 +9,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-
-// TODO:
-// - HTTP buffers not null terminated
+#include "socket.h"
 
 #define FUJI_AUTOSAVE_REGISTER 51542
 #define FUJI_AUTOSAVE_CONNECT 51541
@@ -22,118 +20,26 @@ struct ClientInfo {
 	char name[64];
 };
 
-static int set_nonblocking_io(int sockfd, int enable) {
-	int flags = fcntl(sockfd, F_GETFL, 0);
-	if (flags == -1)
-		return -1;
-
-	if (enable) {
-		flags |= O_NONBLOCK;
-	} else {
-		flags &= ~O_NONBLOCK;
-	}
-
-	return fcntl(sockfd, F_SETFL, flags);
-}
-
-static int connect_to_invite_server(int port, char *ip) {
-	int server_socket, client_socket;
-	struct sockaddr_in server_addr, client_addr;
-	socklen_t client_addr_len = sizeof(client_addr);
-
+static int connect_to_invite_server(int port, const char *ip) {
 	printf("Connecting to invite server on %s:%d...\n", ip, port);
-	usleep(1 * 1000 * 1000);
-
-	server_socket = socket(AF_INET, SOCK_STREAM, 0);
-	if (server_socket < 0) {
-		perror("Failed to create TCP socket");
-		abort();
-	}
-
-	struct sockaddr_in sa;
-	memset(&sa, 0, sizeof(sa));
-	sa.sin_family = AF_INET;
-	sa.sin_port = htons(port);
-	if (inet_pton(AF_INET, ip, &(sa.sin_addr)) <= 0) {
-		perror("inet_pton");
-		abort();
-	}
-
-	set_nonblocking_io(server_socket, 1);
-
-	if (connect(server_socket, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-		if (errno != EINPROGRESS) {
-			printf("Connect fail\n");
-			abort();
-		}
-	}
-
-	fd_set fdset;
-	FD_ZERO(&fdset);
-	FD_SET(server_socket, &fdset);
-	struct timeval tv;
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
-
-	if (select(server_socket + 1, NULL, &fdset, NULL, &tv) == 1) {
-		int so_error = 0;
-		socklen_t len = sizeof(so_error);
-		if (getsockopt(server_socket, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
-			printf("Sockopt fail: %d\n", errno);
-			abort();
-		}
-
-		if (so_error == 0) {
-			printf("invite server: Connection established\n");
-			set_nonblocking_io(server_socket, 0);
-			return server_socket;
-		} else {
-			printf("so_error: %d\n", so_error);
-		}
-	} else {
-		printf("invite server: Select timed out\n");
-	}
-
-	close(server_socket);
-
-	return -1;
+	usleep(2 * 1000 * 1000);
+	return tcp_connect_socket(ip, port);
 }
 
 int fuji_accept_notify(struct ClientInfo *info) {
-	int server_socket, client_socket;
-	struct sockaddr_in server_addr, client_addr;
+	int client_socket;
+	struct sockaddr_in client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
 
-	server_socket = socket(AF_INET, SOCK_STREAM, 0);
+	int server_socket = tcp_accept_socket("0.0.0.0", FUJI_AUTOSAVE_NOTIFY);
 	if (server_socket < 0) {
-		perror("Failed to create TCP socket");
+		printf("Failed to create/accept socket\n");
 		abort();
 	}
 
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(51540);
-	server_addr.sin_addr.s_addr = INADDR_ANY;
+	printf("notify server is listening...\n");
 
-	int yes = 1;
-	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0) {
-		perror("Failed to set sockopt");
-		abort();
-	}
-
-	if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-		perror("upnp: Binding failed");
-		abort();
-	}
-
-	// Listen for incoming connections
-	if (listen(server_socket, 5) < 0) {
-		perror("upnp: Listening failed");
-		abort();
-	}
-
-	printf("51540 server is listening...\n");
-
-	client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+	client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_len);
 	if (client_socket < 0) {
 		perror("51540: Accepting connection failed");
 		abort();
@@ -141,9 +47,9 @@ int fuji_accept_notify(struct ClientInfo *info) {
 
 	strncpy(info->ip, inet_ntoa(client_addr.sin_addr), sizeof(info->ip));
 
-	printf("51540 server: Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+	printf("notify server: Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-	// We expect NOTIFY
+	// We expect a NOTIFY message
 	char buffer[1024];
 	int rc = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 	if (rc < 0) {
@@ -152,7 +58,7 @@ int fuji_accept_notify(struct ClientInfo *info) {
 	}
 	buffer[rc] = '\0';
 
-	//printf("Client:\n%s\n", buffer);
+	printf("Client:\n%s\n", buffer);
 
 	char *saveptr;
 	char *delim = " :\r\n";
@@ -177,7 +83,7 @@ int fuji_accept_notify(struct ClientInfo *info) {
 	return 0;
 }
 
-int fuji_ssdp_discover(int port, char *this_ip, char *target_name) {
+int fuji_ssdp_discover(int port, const char *this_ip, char *target_name) {
 	int fd;
 	struct sockaddr_in broadcast_addr;
 
@@ -198,8 +104,8 @@ int fuji_ssdp_discover(int port, char *this_ip, char *target_name) {
 		abort();
 	}
 
-	int broadcastEnable = 1;
-	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+	int yes = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes)) == -1) {
 		perror("setsockopt (SO_BROADCAST)");
 		abort();
 	}
@@ -220,15 +126,13 @@ int fuji_ssdp_discover(int port, char *this_ip, char *target_name) {
 	return 0;
 }
 
-int fuji_ssdp_import(char *ip, char *name) {
+int fuji_ssdp_import(const char *ip, char *name) {
 	printf("Sending datagram\n");
-	int rc = fuji_ssdp_discover(51541, "192.168.1.39", "desktop");
+	int rc = fuji_ssdp_discover(FUJI_AUTOSAVE_CONNECT, ip, "desktop");
 	struct ClientInfo info;
 	rc = fuji_accept_notify(&info);
 
-	usleep(1000 * 1000 * 2);
-
-	int fd = connect_to_invite_server(51541, info.ip);
+	int fd = connect_to_invite_server(FUJI_AUTOSAVE_CONNECT, info.ip);
 	if (fd < 0) {
 		printf("Failed to connect to invite server\n");
 		abort();
@@ -238,10 +142,10 @@ int fuji_ssdp_import(char *ip, char *name) {
 	sprintf(
 		register_msg, 
 		"IMPORT * HTTP/1.1\r\n"
-		"HOST:%s:51541\r\n"
+		"HOST:%s:%d\r\n"
 		"DSCNAME:%s\r\n"
 		"DSCPORT:$\r\n",
-		info.ip, name
+		info.ip, FUJI_AUTOSAVE_CONNECT, name
 	);
 
 	printf("Hello\n");
@@ -270,12 +174,18 @@ int fuji_ssdp_import(char *ip, char *name) {
 	return 0;
 }
 
+int fuji_tether_connect(char *ip, int port) {
+	// TODO: Listen to datagrams from client - we don't actually need to though
+	connect_to_invite_server(port, ip);
+	return 0;
+}
+
 int fuji_ssdp_register(const char *ip, char *name, char *model) {
-	int rc = fuji_ssdp_discover(51542, "192.168.1.39", "*");
+	int rc = fuji_ssdp_discover(FUJI_AUTOSAVE_REGISTER, ip, "*");
 	struct ClientInfo info;
 	rc = fuji_accept_notify(&info);
 
-	int fd = connect_to_invite_server(51542, info.ip);
+	int fd = connect_to_invite_server(FUJI_AUTOSAVE_REGISTER, info.ip);
 	if (fd < 0) {
 		printf("Failed to connect to invite server\n");
 		abort();
@@ -285,10 +195,10 @@ int fuji_ssdp_register(const char *ip, char *name, char *model) {
 	sprintf(
 		register_msg, 
 		"REGISTER * HTTP/1.1\r\n"
-		"HOST:%s:51542\r\n"
+		"HOST:%s:%d\r\n"
 		"DSCNAME:%s\r\n"
 		"DSCMODEL:%s\r\n",
-		info.ip, name, model // "FAKE_CAM", "X-H1"
+		info.ip, FUJI_AUTOSAVE_REGISTER, name, model
 	);
 
 	rc = send(fd, register_msg, strlen(register_msg), 0);
@@ -303,6 +213,7 @@ int fuji_ssdp_register(const char *ip, char *name, char *model) {
 		puts("Expected data");
 		abort();
 	}
+	buffer[rc] = '\0';
 
 	printf("Client:\n%s\n", buffer);
 

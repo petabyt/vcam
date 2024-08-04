@@ -32,6 +32,7 @@ struct CamConfig {
 	// Fuji stuff
 	int do_discovery;
 	int do_register;
+	int do_tether;
 	int is_select_multiple_images;
 	int image_get_version;
 	int get_object_version;
@@ -42,6 +43,7 @@ struct CamConfig {
 	int digic;
 };
 
+int get_local_ip(char buffer[64]);
 int fuji_wifi_main(struct CamConfig *options);
 int canon_wifi_main(struct CamConfig *options);
 
@@ -360,5 +362,7 @@ inline static int ptp_write_u32(void *buf, uint32_t out) { ((uint32_t *)buf)[0] 
 inline static int ptp_read_u32 (void *buf, uint32_t *out) { *out = ((uint32_t *)buf)[0]; return 4; }
 inline static int ptp_read_u16 (void *buf, uint16_t *out) { *out = ((uint16_t *)buf)[0]; return 2; }
 inline static int ptp_read_u8  (void *buf, uint8_t *out) { *out = ((uint8_t *)buf)[0]; return 1; }
+
+#include "socket.h"
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

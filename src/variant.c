@@ -30,6 +30,8 @@ struct CamConfig *vcam_new_config(int argc, char **argv) {
 			options->do_discovery = 1;
 		} else if (!strcmp(argv[i], "--register")) {
 			options->do_register = 1;
+		} else if (!strcmp(argv[i], "--tether")) {
+			options->do_tether = 1;
 		} else {
 			printf("Unknown option %s\n", argv[i]);
 			return NULL;
