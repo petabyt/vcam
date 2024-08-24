@@ -24,4 +24,8 @@ int fuji_is_compressed_mode(vcamera *cam);
 
 uint8_t *fuji_get_ack_packet(vcamera *cam);
 
+int fuji_ssdp_register(const char *ip, char *name, char *model);
+int fuji_ssdp_import(const char *ip, char *name);
+int fuji_tether_connect(const char *ip, int port);
+
 #endif

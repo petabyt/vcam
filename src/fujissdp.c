@@ -45,7 +45,7 @@ int fuji_accept_notify(struct ClientInfo *info) {
 		abort();
 	}
 
-	strncpy(info->ip, inet_ntoa(client_addr.sin_addr), sizeof(info->ip));
+	strncpy(info->ip, inet_ntoa(client_addr.sin_addr), sizeof(info->ip) - 1);
 
 	printf("notify server: Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 

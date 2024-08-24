@@ -217,19 +217,19 @@ static int new_ptp_tcp_socket(int port) {
 		abort();
 	}
 
-	int tru = 1;
-	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &tru, sizeof(int)) < 0) {
-		perror("Failed to set sockopt");
-	}
+	// int yes = 1;
+	// int no = 0;
+	// if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0) {
+	// 	perror("Failed to set sockopt");
+	// }
 
-	int falso = 0;
-	if (setsockopt(server_socket, SOL_SOCKET, TCP_QUICKACK, &falso, sizeof(int)) < 0) {
-		perror("Failed to set sockopt");
-	}
+	// if (setsockopt(server_socket, SOL_SOCKET, TCP_QUICKACK, &no, sizeof(int)) < 0) {
+	// 	perror("Failed to set sockopt");
+	// }
 
-	if (setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, &tru, sizeof(int)) < 0) {
-		perror("Failed to set sockopt");
-	}
+	// if (setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int)) < 0) {
+	// 	perror("Failed to set sockopt");
+	// }
 
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
@@ -249,7 +249,7 @@ static int new_ptp_tcp_socket(int port) {
 		return -1;
 	}
 
-	printf("Socket listening on %s:%d...\n", server_ip_address, port);
+	vcam_log("Socket listening on %s:%d...\n", server_ip_address, port);
 
 	return server_socket;
 }
@@ -263,19 +263,27 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 	struct sockaddr_in client_address_event;
 	socklen_t client_address_length_event = sizeof(client_address_event);
 	int client_socket_event = accept(event_socket, (struct sockaddr *)&client_address_event, &client_address_length_event);
+	if (client_socket_event == -1) {
+		vcam_log("Failed to accept event socket\n");
+		abort();
+	}
 
-	printf("Event port connection accepted from %s:%d\n", inet_ntoa(client_address_event.sin_addr), ntohs(client_address_event.sin_port));
+	vcam_log("Event port connection accepted from %s:%d\n", inet_ntoa(client_address_event.sin_addr), ntohs(client_address_event.sin_port));
 
 	struct sockaddr_in client_address_video;
 	socklen_t client_address_length_video = sizeof(client_address_video);
 	int client_socket_video = accept(video_socket, (struct sockaddr *)&client_address_video, &client_address_length_video);
+	if (client_socket_video == -1) {
+		vcam_log("Failed to accept video socket\n");
+		abort();
+	}
 
-	printf("Video port connection accepted from %s:%d\n", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
+	vcam_log("Video port connection accepted from %s:%d\n", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
 
 	ptp_fuji_liveview(client_socket_video);
 
 	while (1) {
-		printf("Liveview thread sleeping...\n");
+		vcam_log("Liveview thread sleeping...\n");
 		usleep(1000000);
 	}
 
@@ -289,7 +297,7 @@ static void fuji_accept_remote_ports() {
 		return;
 	}
 
-	printf("Started new thread to accept remote ports\n");
+	vcam_log("Started new thread to accept remote ports\n");
 }
 
 static int init_vcam(struct CamConfig *options) {
@@ -307,12 +315,8 @@ static int init_vcam(struct CamConfig *options) {
 	return 0;
 }
 
-int fuji_ssdp_register(char *ip, char *name, char *model);
-int fuji_ssdp_import(char *ip, char *name);
-int fuji_tether_connect(char *ip, int port);
-
 int fuji_wifi_main(struct CamConfig *options) {
-	printf("Fuji vcam - running '%s'\n", options->model);
+	vcam_log("Fuji vcam - running '%s'\n", options->model);
 
 	init_vcam(options);
 
@@ -332,19 +336,19 @@ int fuji_wifi_main(struct CamConfig *options) {
 	}
 
 	if (options->do_discovery) {
-		vcam_log("Fuji discovery\n");
+		vcam_log("Fuji discovery on %s\n", this_ip);
 		server_ip_address = this_ip;
 		fuji_ssdp_import(server_ip_address, "VCAM");
 	}
 
-	if (options->use_local) {
-		vcam_log("Fuji use local IP: %s\n", this_ip);
-		server_ip_address = this_ip;
+	if (options->use_custom_ip) {
+		server_ip_address = options->ip_address;
+		vcam_log("Fuji use local IP: %s\n", server_ip_address);
 	}
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
 	if (server_socket == -1) {
-		printf("Error, make sure to add virtual network device\n");
+		vcam_log("Error, make sure to add virtual network device\n");
 		return 1;
 	}
 
@@ -358,7 +362,7 @@ int fuji_wifi_main(struct CamConfig *options) {
 		return -1;
 	}
 
-	printf("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	while (1) {
 		if (tcp_recieve_all(client_socket)) {
@@ -379,7 +383,7 @@ int fuji_wifi_main(struct CamConfig *options) {
 	}
 
 	close(client_socket);
-	printf("Connection closed\n");
+	vcam_log("Connection closed\n");
 	close(server_socket);
 
 	return 0;

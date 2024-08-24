@@ -111,8 +111,8 @@ int fuji_set_prop_supported(vcamera *cam, int code) {
 		PTP_PC_FUJI_CompressSmall,
 		PTP_PC_FUJI_ImageGetVersion,
 		PTP_PC_FUJI_GeoTagVersion,
-		PTP_PC_FUJI_Unknown10,
-		PTP_PC_FUJI_UnknownD228,
+		PTP_PC_FUJI_AutoSaveVersion,
+		PTP_PC_FUJI_Unknown_D228,
 	};
 
 	int codes_remote_only[] = {
@@ -177,24 +177,15 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		break;
 	case PTP_PC_FUJI_GeoTagVersion:
 		break;
-	case PTP_PC_FUJI_Unknown10:
+	case PTP_PC_FUJI_AutoSaveVersion:
 		break;
-	case PTP_PC_FUJI_UnknownD228:
+	case PTP_PC_FUJI_Unknown_D228:
 		break;
 	}
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
 	return 1;
-}
-
-// Helper func only for fuji_send_events
-static void add_events(struct PtpFujiEvents *ev, struct FujiPropEventSend *p, size_t length) {
-	for (int i = 0; i < length; i++) {
-		ev->events[ev->length].code = p[i].code;
-		ev->events[ev->length].value = p[i].value;
-		ev->length++;
-	}
 }
 
 int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
@@ -270,7 +261,7 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_Unknown10:
+	case PTP_PC_FUJI_AutoSaveVersion:
 		data = 1;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;		

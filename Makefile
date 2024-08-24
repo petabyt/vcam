@@ -1,17 +1,7 @@
-# TODO: depend on config.mak rather than make CLI flags
 -include config.mak
 
 # WiFi hardware for spoofing (requires AP support)
 WIFI_DEV ?= wlp0s20f3
-
-# Set this to a folder with images (as it appears to PTP)
-VCAMERADIR ?= ../fuji_sd/
-
-ifeq ($(wildcard $(VCAMERADIR).*),)
-$(info Directory '$(VCAMERADIR)' not found)
-VCAMERADIR=$(PWD)/sd
-$(info Using '$(VCAMERADIR)')
-endif
 
 VCAM_CORE += src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fujiip.o src/canonip.o
 VCAM_CORE += src/canon_setup.o src/data.o src/props.o src/variant.o src/fujissdp.o src/socket.o
@@ -24,20 +14,25 @@ VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
 
 CFLAGS += -g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall -fPIC
 LDFLAGS += -L. -Wl,-rpath=.
-CFLAGS += '-D VCAMERADIR="$(VCAMERADIR)"'
+
+# Used to access bin/
 CFLAGS += '-D PWD="$(shell pwd)"'
 
-$(SO_FILES): CFLAGS+=$(SO_CFLAGS)
+# Is this actually needed by GCC?
+$(SO_FILES): CFLAGS += $(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
 libusb.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb.so
 
 vcam: $(VCAM_FILES)
-	$(CC) $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
+	$(CC) -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
 
 vcam-otg: $(VCAM_OTG_FILES)
 	$(CC) $(VCAM_OTG_FILES) $(CFLAGS) -o vcam-otg $(LDFLAGS) -lexif
+
+install: vcam
+	sudo cp vcam /usr/bin/vcam
 
 -include src/*.d
 %.o: %.c $(H)

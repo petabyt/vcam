@@ -26,8 +26,9 @@ struct CamConfig {
 	char serial[16];
 
 	int run_slow;
-	int use_local;
 	int is_mirrorless;
+	int use_custom_ip;
+	char ip_address[64]; 
 
 	// Fuji stuff
 	int do_discovery;

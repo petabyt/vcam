@@ -15,11 +15,20 @@ struct CamConfig *vcam_new_config(int argc, char **argv) {
 		return NULL;
 	}
 
+	char this_ip[64];
+	get_local_ip(this_ip);
+	strcpy(options->ip_address, this_ip);
+
 	vcam_get_variant_info(argv[1], options);
 
 	for (int i = 2; i < argc; i++) {
-		if (!strcmp(argv[i], "--local")) {
-			options->use_local = 1;
+		if (!strcmp(argv[i], "--ip")) {
+			options->use_custom_ip = 1;
+			i++;
+			strcpy(options->ip_address, argv[i ]);
+		} else if (!strcmp(argv[i], "--local_ip")) {
+			options->use_custom_ip = 1;
+			strcpy(options->ip_address, this_ip);
 		} else if (!strcmp(argv[i], "--select-img")) {
 			options->is_select_multiple_images = 1;
 		} else if (!strcmp(argv[i], "--fs")) {
