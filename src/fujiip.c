@@ -217,11 +217,11 @@ static int new_ptp_tcp_socket(int port) {
 		abort();
 	}
 
-	// int yes = 1;
-	// int no = 0;
-	// if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0) {
-	// 	perror("Failed to set sockopt");
-	// }
+	int yes = 1;
+	int no = 0;
+	if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
+	}
 
 	// if (setsockopt(server_socket, SOL_SOCKET, TCP_QUICKACK, &no, sizeof(int)) < 0) {
 	// 	perror("Failed to set sockopt");
@@ -236,6 +236,9 @@ static int new_ptp_tcp_socket(int port) {
 	serverAddress.sin_family = AF_INET;
 	serverAddress.sin_addr.s_addr = inet_addr(server_ip_address);
 	serverAddress.sin_port = htons(port);
+
+
+	vcam_log("Binding to %s:%d\n", server_ip_address, port);
 
 	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
 		perror("Binding failed");

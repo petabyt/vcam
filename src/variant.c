@@ -25,8 +25,8 @@ struct CamConfig *vcam_new_config(int argc, char **argv) {
 		if (!strcmp(argv[i], "--ip")) {
 			options->use_custom_ip = 1;
 			i++;
-			strcpy(options->ip_address, argv[i ]);
-		} else if (!strcmp(argv[i], "--local_ip")) {
+			strcpy(options->ip_address, argv[i]);
+		} else if (!strcmp(argv[i], "--local-ip")) {
 			options->use_custom_ip = 1;
 			strcpy(options->ip_address, this_ip);
 		} else if (!strcmp(argv[i], "--select-img")) {

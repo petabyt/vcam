@@ -6,3 +6,5 @@ config.mak
 *.txt
 DUMP
 *.d
+compile_commands.json
+.cache

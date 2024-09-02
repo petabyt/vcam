@@ -23,22 +23,48 @@ too (requires a recent WiFi card) so that means it can spoof official vendor app
 - Note that this tool is very *experimental*, and the code quality reflects that.
 
 ## Compiling
-Run on linux. It can work on WSL if you can figure out networking.
+Run on linux. It can work on WSL if you can route the IP through the Windows firewall.
 ```
 make vcam
-./vcam canon_1300d
+./vcam fuji_x_a2
 ```
-To compile libusb shared object:
+
+## Compiling fake libusb.so
+By default, will target Canon 1300D
 ```
+sudo apt install libusb-1.0-dev # Needed for libusb.h
 make libusb.so
 ```
 
-Helper targets for Canon PTP/IP spoofer:
-- `make setup-canon` - setup dummy net device
-- `make ip-canon` - start wireless AP on device `$(WIFI_DEV)`
-- `make test-canon` - starts program in a loop - will accept another connection after disconnect 
+## Running WiFi access point
+On target Raspberry Pi, install the depencencies needed to run the access point:
+```
+sudo apt install haveged hostapd
+```
+Power saving mode can make the TCP handshake way too slow:
+```
+# Doesn't last a reboot (I think)
+sudo iw dev wlan0 set power_save off
+```
+`pi.mak` gets ssh login info from `~/.config/secret.mak`
+```
+DEVICE_PORT := 22
+DEVICE_PASSWORD := xxx
+DEVICE_USERNAME := pi
+DEVICE_IP := 192.168.1.123
+endif
 
-Fuji test images: https://s1.danielc.dev/filedump/fuji_sd.tar.gz
+AP_PASS := password for ap, don't define for no password
+```
+### Compiling vcam for armhf
+I have a modified Linux x86_64 -> armhf GCC toolchain here: https://s1.danielc.dev/filedump/cross.tar.gz  
+I use this to target an armv7 raspberry pi zero.
+```
+make TARGET=pi vcam # Send binary over scp
+make TARGET=pi run # run vcam over ssh
+```
+
+Sample X-A2 JPEG images: https://s1.danielc.dev/filedump/fuji_sd.tar.gz -> export to /home/pi/fuji_sdcard
 
 ## Credits
 Original Author (vusb): Marcus Meissner <marcus@jet.franken.de>  
