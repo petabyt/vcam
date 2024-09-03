@@ -106,6 +106,7 @@ typedef struct vcamera {
 	unsigned int seqnr;
 	unsigned int session;
 	ptpcontainer ptpcmd;
+	long last_cmd_timestamp;
 
 	// Linked list containing bulk properties
 	struct PtpPropList *list;

@@ -283,17 +283,19 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 
 	vcam_log("Video port connection accepted from %s:%d\n", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
 
+	// TODO: Do this continuously with two frames? 
 	ptp_fuji_liveview(client_socket_video);
 
 	while (1) {
-		vcam_log("Liveview thread sleeping...\n");
+		uint32_t temp;
+		vcam_log("Liveview/event thread sleeping... (read attempts %d %d)\n", recv(client_socket_video, &temp, 4, 0), recv(client_socket_event, &temp, 4, 0));
 		usleep(1000000);
 	}
 
 	return (void *)0;
 }
 
-static void fuji_accept_remote_ports() {
+void fuji_accept_remote_ports() {
 	pthread_t thread;
 
 	if (pthread_create(&thread, NULL, fuji_accept_remote_ports_thread, NULL)) {
@@ -377,11 +379,6 @@ int fuji_wifi_main(struct CamConfig *options) {
 		// Read packet length
 		if (tcp_send_all(client_socket)) {
 			goto err;
-		}
-
-		if (fuji_open_remote_port == 1) {
-			fuji_accept_remote_ports();
-			fuji_open_remote_port++;
 		}
 	}
 

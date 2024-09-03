@@ -8,3 +8,5 @@ DUMP
 *.d
 compile_commands.json
 .cache
+vcam
+vcam-otg

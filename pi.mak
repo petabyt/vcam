@@ -44,6 +44,6 @@ pilocal:
 piap:
 	make TARGET=pi ap
 pirun:
-	make TARGET=pi run
+	make TARGET=pi ARG="fuji_x_h1" run
 
 .PHONY: pidiscovery pilocal piap pirun

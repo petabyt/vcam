@@ -64,9 +64,9 @@ int vcam_fuji_setup(vcamera *cam) {
 
 	// Check if remote mode is supported
 	if (cam->conf->remote_version) {
-		cam->camera_state = 3;
-	} else {
 		cam->camera_state = FUJI_REMOTE_ACCESS;
+	} else {
+		cam->camera_state = FUJI_FULL_ACCESS;
 	}
 
 	if (cam->conf->do_discovery) {
@@ -276,13 +276,12 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-extern int fuji_open_remote_port;
+void fuji_accept_remote_ports();
 int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
-	vcam_log("Opening remote ports\n");
-	fuji_open_remote_port++;
-
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
 		cam->internal_state = CAM_STATE_IDLE_REMOTE;
+		vcam_log("Opening remote ports\n");
+		fuji_accept_remote_ports();
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
 		cam->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("One time sending all remote props\n");

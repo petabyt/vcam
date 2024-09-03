@@ -7,7 +7,7 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <math.h>
 #include <vcam.h>
 #include <ops.h>
 
@@ -317,6 +317,24 @@ int vcam_close(vcamera *cam) {
 	return GP_OK;
 }
 
+static long get_ms() {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (long)(ts.tv_sec * 1000000L + ts.tv_nsec / 1000L);
+}
+
+static void hexdump(void *buffer, int size) {
+	unsigned char *buf = (unsigned char *)buffer;
+	for (int i = 0; i < size; i++) {
+		printf("%02x ", buf[i]);
+		if ((i + 1) % 16 == 0) {
+			printf("\n");
+		}
+	}
+	printf("\n");
+}
+
+
 void vcam_process_output(vcamera *cam) {
 	ptpcontainer ptp;
 	int i, j;
@@ -325,6 +343,10 @@ void vcam_process_output(vcamera *cam) {
 		gp_log_("Killing connection\n");
 		exit(0);
 	}
+
+	long now = get_ms();
+	int milis_since_last = (int)(now - cam->last_cmd_timestamp);
+	cam->last_cmd_timestamp = get_ms();
 
 	if (cam->nroutbulk < 4)
 		return; /* wait for more data */
@@ -336,6 +358,8 @@ void vcam_process_output(vcamera *cam) {
 	if (ptp.size < 12) { /* No ptp command can be less than 12 bytes */
 		/* not clear if normal cameras react like this */
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "input size was %d, minimum is 12", ptp.size);
+
+		hexdump(cam->outbulk, ptp.size);
 
 		// Does this work on PTP/IP?
 		ptp_response(cam, PTP_RC_GeneralError, 0);
@@ -394,6 +418,7 @@ void vcam_process_output(vcamera *cam) {
 		}
 
 		gp_log_("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
+		gp_log_("Time since last command: %dms\n", milis_since_last / 1000);
 	}
 
 	// We have read the first packet, discard it
