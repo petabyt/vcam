@@ -1,5 +1,5 @@
 # For Fuji only for now
-include ~/.config/secret.mak
+-include ~/.config/secret.mak
 # Can recognize TARGET=pi2
 ifeq ($(findstring pi,$(TARGET)),pi)
 
