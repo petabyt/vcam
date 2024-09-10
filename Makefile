@@ -24,8 +24,8 @@ CFLAGS += '-D PWD="$(shell pwd)"'
 $(SO_FILES): CFLAGS += $(SO_CFLAGS)
 
 # generic libusb.so Canon EOS Device
-libusb.so: $(SO_FILES)
-	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb.so
+libusb-vcam.so: $(SO_FILES)
+	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb-vcam.so
 
 vcam: $(VCAM_FILES)
 	$(CC) -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
@@ -33,8 +33,9 @@ vcam: $(VCAM_FILES)
 vcam-otg: $(VCAM_OTG_FILES)
 	$(CC) $(VCAM_OTG_FILES) $(CFLAGS) -o vcam-otg $(LDFLAGS) -lexif
 
-install: vcam
-	sudo cp vcam /usr/bin/vcam
+install: vcam libusb-vcam.so
+	sudo cp vcam /usr/bin/
+	sudo cp libusb-vcam.so /usr/lib/
 
 -include src/*.d
 %.o: %.c $(H)
