@@ -253,12 +253,6 @@ enum FujiStates {
 #define PTP_PC_FUJI_FocusAreas				0xD206
 #define PTP_PC_FUJI_PriorityMode			0xD207 /* from setprioritymode */
 
-#define PTP_PC_FUJI_CaptureRemaining			0xD229	/* Movie AF Mode? */
-#define PTP_PC_FUJI_MovieRemainingTime			0xD22A	/* Movie Focus Area? */
-#define PTP_PC_FUJI_DeviceError			0xD21B
-#define PTP_PC_FUJI_BatteryLevel			0xD242 /* Movie Sensitivity???? */
-#define PTP_PC_FUJI_ImageAspectRatio			0xD241
-
 #define PTP_PC_FUJI_AFStatus				0xD209
 #define PTP_PC_FUJI_DeviceName				0xD20B
 #define PTP_PC_FUJI_MediaRecord			0xD20C /* from capmediarecord */

@@ -461,6 +461,7 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 		.parent = NULL
 	};
 
+	// Fake opcode tests
 	if (ptp->params[0] == 0xdeadbeef) {
 		cur = &fake;
 	} else {
@@ -479,7 +480,6 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 
 	data = malloc(2000);
 	x += put_32bit_le(data + x, 0x10000001); /* StorageID */
-	//x += put_32bit_le(data + x, 0x00010001); /* StorageID */
 	/* ObjectFormatCode */
 	ofc = 0x3000;
 	if (S_ISDIR(cur->stbuf.st_mode)) {
@@ -658,7 +658,7 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 
 	//usleep(1000 * 500);
 
-	gp_log_("Processing thumb call for %d\n", ptp->params[0]);
+	gp_log_("Processing thumbnail call for %d\n", ptp->params[0]);
 
 	if (cam->conf->do_discovery) {
 		gp_log_("Returning nothing for discovery mode\n");
@@ -710,6 +710,9 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	gp_log(GP_LOG_ERROR, __FUNCTION__, "Cannot get thumbnail without libexif, lying about missing thumbnail");
 	ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
 #endif
+
+	gp_log_("Done processing thumbnail call\n");
+
 	free(data);
 	return 1;
 }

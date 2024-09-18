@@ -317,7 +317,7 @@ int vcam_close(vcamera *cam) {
 	return GP_OK;
 }
 
-static long get_ms() {
+static long get_ms(void) {
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (long)(ts.tv_sec * 1000000L + ts.tv_nsec / 1000L);
@@ -656,6 +656,8 @@ vcamera *vcamera_new(vcameratype type) {
 
 	cam->type = type;
 	cam->seqnr = 0;
+
+	cam->last_cmd_timestamp = 0;
 
 	return cam;
 }

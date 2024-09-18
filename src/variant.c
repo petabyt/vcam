@@ -84,6 +84,16 @@ int vcam_get_variant_info(char *arg, struct CamConfig *o) {
 		o->get_object_version = 4;
 		o->remote_version = 0x0002000a; // fuji sets to 2000b
 		o->remote_get_object_version = 4;
+	} else if (!strcmp(arg, "fuji_x_t4")) {
+		strcpy(o->model, "X-T4");
+		o->type = CAM_FUJI_WIFI;
+		o->variant = V_FUJI_X_S10;
+		o->image_get_version = 4;
+		o->get_object_version = 5;
+		o->remote_version = 0x0002000a; // fuji sets to 2000c
+		o->remote_get_object_version = 5;
+		// PTP_PC_FUJI_ImageGetLimitedVersion = 1
+		// PTP_PC_FUJI_Unknown_D52F = 1
 	} else if (!strcmp(arg, "fuji_x_h1")) {
 		strcpy(o->model, "X-H1");
 		o->type = CAM_FUJI_WIFI;

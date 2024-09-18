@@ -93,6 +93,7 @@ int vcam_fuji_setup(vcamera *cam) {
 		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount2, cam->obj_count);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
+		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
 	}
 
 	return 0;
@@ -139,7 +140,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
 
-	vcam_log("Fuji Set property %X -> %X (%d)\n", ptp->params[0], uint[0], len);
+	vcam_log("Fuji Set property %X -> %X (size %d)\n", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_ClientState:
@@ -161,7 +162,6 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 		assert(uint16[0] == 1 || uint16[0] == 0);
 		cam->no_compressed = uint16[0];
 		//usleep(1000 * 5000); // Fuji seems to take a while here
-		//if (cam->no_compressed == 0) while (1);
 		break;
 	case PTP_PC_FUJI_RemoteGetObjectVersion:
 		assert(len == 4);
@@ -191,6 +191,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 	struct PtpFujiEvents *ev = calloc(1, 4096);
 
+	// Pop all events and pack into fuji event structure
 	struct GenericEvent ev_info;
 	while (!ptp_pop_event(cam, &ev_info)) {
 		ev->events[ev->length].code = ev_info.code;
@@ -199,6 +200,9 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 	}
 
 	vcam_log("Sending %d events\n", ev->length);
+	for (int i = 0; i < ev->length; i++) {
+		vcam_log("%02x -> %x\n", ev->events[i].code, ev->events[i].value);
+	}
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)ev, 2 + (6 * ev->length));
 	free(ev);
@@ -241,7 +245,7 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		}
 		break;
-	case PTP_PC_FUJI_ImageGetLimitedVersion:
+//	case PTP_PC_FUJI_ImageGetLimitedVersion:
 	case PTP_PC_FUJI_CompressionCutOff:
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
@@ -266,11 +270,13 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;		
 	default:
-		vcam_log("Fuji Unknown %X\n", ptp->params[0]);
+		vcam_log("WARN: Fuji Unknown %X\n", ptp->params[0]);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
+
+	vcam_log("Sending prop %02x == %x\n", ptp->params[0], data);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 0;
@@ -280,7 +286,7 @@ void fuji_accept_remote_ports();
 int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
 		cam->internal_state = CAM_STATE_IDLE_REMOTE;
-		vcam_log("Opening remote ports\n");
+		vcam_log("Opening remote ports\n"); // BUG: It does this twice
 		fuji_accept_remote_ports();
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
 		cam->internal_state = CAM_STATE_IDLE_REMOTE;
@@ -327,6 +333,7 @@ int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp) {
 	int of = 0;
 	of += ptp_write_u32(data + of, 8);
 
+	// Send all valid values of each property
 	uint8_t payload_5012[] = {0x4, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0, 0x2, 0x0, 0x4, 0x0, };
 	of += devinfo_add_prop(data + of, 22, PTP_PC_CaptureDelay, payload_5012);
 	uint8_t payload_500c[] = {0x4, 0x0, 0x1, 0x2, 0x0, 0x9, 0x80, 0x2, 0x2, 0x0, 0x9, 0x80, 0xa, 0x80, };

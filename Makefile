@@ -28,7 +28,7 @@ libusb-vcam.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb-vcam.so
 
 vcam: $(VCAM_FILES)
-	$(CC) -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif
+	$(CC)  -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif 
 
 vcam-otg: $(VCAM_OTG_FILES)
 	$(CC) $(VCAM_OTG_FILES) $(CFLAGS) -o vcam-otg $(LDFLAGS) -lexif

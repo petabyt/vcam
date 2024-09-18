@@ -3,11 +3,11 @@
 # Can recognize TARGET=pi2
 ifeq ($(findstring pi,$(TARGET)),pi)
 
-CROSS_PI ?= $(HOME)/cross-pi-gcc-10.3.0-0
+CC := arm-linux-gnueabi-gcc
+CPP := arm-linux-gnueabi-g++
 
-CC := $(CROSS_PI)/bin/arm-linux-gnueabihf-gcc
-CFLAGS += -I$(CROSS_PI)/arm-linux-gnueabihf/libc/usr/include
-LDFLAGS += -L$(CROSS_PI)/arm-linux-gnueabihf/lib -L/home/daniel/cross-pi-gcc-10.3.0-0/arm-linux-gnueabihf/libc/usr/lib/ -lpthread -lm
+LDFLAGS := $(shell arm-linux-gnueabihf-pkg-config --libs libexif) -lpthread -lm
+LDFLAGS += -Wl,--dynamic-linker=/lib/ld-linux-armhf.so.3 # interpreter hack
 
 BINARY := vcam
 

@@ -56,10 +56,12 @@ endif
 
 AP_PASS := password for ap, don't define for no password
 ```
-### Compiling vcam for armhf
-I have a modified Linux x86_64 -> armhf GCC toolchain here: https://s1.danielc.dev/filedump/cross.tar.gz  
-I use this to target an armv7 raspberry pi zero.
+
+### Compiling vcam for armhf/Raspi Zero
 ```
+sudo dpkg --add-architecture armhf && sudo apt update
+sudo apt install gcc-arm-linux-gnueabi libexif-dev:armhf
+
 make TARGET=pi vcam # Send binary over scp
 make TARGET=pi run # run vcam over ssh
 ```

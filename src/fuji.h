@@ -4,8 +4,8 @@
 #define FUJI_ACK_PACKET_SIZE 0x44
 
 #define FUJI_DUMMY_THUMB "bin/fuji/dummy_thumb2.jpg"
-#define FUJI_DUMMY_OBJ_INFO "bin/fuji/fuji_generic_object_info2.bin"
-#define FUJI_DUMMY_OBJ_INFO_CUT "bin/fuji/fuji_generic_object_info1.bin"
+//#define FUJI_DUMMY_OBJ_INFO "bin/fuji/fuji_generic_object_info2.bin"
+//#define FUJI_DUMMY_OBJ_INFO_CUT "bin/fuji/fuji_generic_object_info1.bin"
 #define FUJI_DUMMY_JPEG_FULL "bin/fuji/jpeg-full.jpg"
 #define FUJI_DUMMY_JPEG_COMPRESSED "bin/fuji/jpeg-compressed.jpg"
 #define FUJI_DUMMY_LV_JPEG "bin/fuji/lv_stream"
