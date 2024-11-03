@@ -13,7 +13,7 @@
 
 struct _GPPortPrivateLibrary {
 	int isopen;
-	vcamera *vcamera;
+	vcam *vcamera;
 };
 
 struct libusb_device_handle {

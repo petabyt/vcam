@@ -73,7 +73,7 @@ static struct usb_endpoint_descriptor ep_descriptor_int;
 
 struct _GPPortPrivateLibrary {
 	int isopen;
-	vcamera *vcamera;
+	vcam *vcamera;
 };
 GPPort *priv_gpport;
 

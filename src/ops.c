@@ -9,11 +9,10 @@
 #include <string.h>
 
 #include "vcam.h"
-#include "canon.h"
 #include "fuji.h"
 #include "ops.h"
 
-int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
 	if ((ptp->params[0] != 0) && (ptp->params[0] != 1)) {
@@ -25,7 +24,7 @@ int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_opensession_write(vcam *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(1);
 
 	if (ptp->params[0] == 0) {
@@ -44,7 +43,7 @@ int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_closesession_write(vcam *cam, ptpcontainer *ptp) {
 	CHECK_PARAM_COUNT(0);
 	CHECK_SEQUENCE_NUMBER();
 
@@ -58,7 +57,7 @@ int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0, i, cnt;
 	uint16_t *opcodes, *devprops;
@@ -143,7 +142,7 @@ int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 	int cnt;
 	struct ptp_dirent *cur;
 	uint32_t mode = 0;
@@ -228,7 +227,7 @@ int ptp_get_object_count() {
 	return cnt;
 }
 
-int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0, cnt;
 	struct ptp_dirent *cur;
@@ -324,7 +323,7 @@ int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getstorageids_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0;
 	uint32_t sids[1];
@@ -344,7 +343,7 @@ int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0;
 
@@ -374,7 +373,7 @@ int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(3);
@@ -429,7 +428,7 @@ int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur;
 	unsigned char *data;
 	int x = 0;
@@ -609,7 +608,7 @@ int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	struct ptp_dirent *cur;
 
@@ -645,7 +644,7 @@ int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	struct ptp_dirent *cur;
 #ifdef HAVE_LIBEXIF
@@ -715,7 +714,7 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur, *newcur, *dir, *dcim = NULL;
 	int capcnt = 98;
 	char buf[10];
@@ -803,7 +802,7 @@ int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur, *xcur;
 
 	CHECK_SEQUENCE_NUMBER();
@@ -931,7 +930,7 @@ int get_propval(unsigned char *data, unsigned int len, uint16_t type, PTPPropert
 #undef CHECK_SIZE
 }
 
-int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	int i, x = 0;
 	unsigned char *data;
 	PTPDevicePropDesc desc;
@@ -981,7 +980,7 @@ int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int i, x = 0;
 	PTPPropertyValue val;
@@ -1016,7 +1015,7 @@ int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int i;
 
 	CHECK_SEQUENCE_NUMBER();
@@ -1045,7 +1044,7 @@ int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
+int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 	CHECK_SEQUENCE_NUMBER();
 	CHECK_SESSION();
 
@@ -1068,7 +1067,7 @@ int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	vcam_log("Recieved data phase for 0xBEEF: %d\n", len);
 
 	if (ptp->nparams != 1) {
@@ -1093,7 +1092,7 @@ int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, un
 	return 1;
 }
 
-int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	int i;
 	PTPPropertyValue val;
 	PTPDevicePropDesc desc;

@@ -11,19 +11,19 @@
 #define FUJI_DUMMY_LV_JPEG "bin/fuji/lv_stream"
 
 // Ran when getpartialobject or getobject is completed
-void fuji_downloaded_object(vcamera *cam);
+void fuji_downloaded_object(vcam *cam);
 
-int fuji_set_prop_supported(vcamera *cam, int code);
-int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
-int fuji_send_events(vcamera *cam, ptpcontainer *ptp);
-int fuji_get_property(vcamera *cam, ptpcontainer *ptp);
-int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp);
-int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp);
+int fuji_set_prop_supported(vcam *cam, int code);
+int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
+int fuji_send_events(vcam *cam, ptpcontainer *ptp);
+int fuji_get_property(vcam *cam, ptpcontainer *ptp);
+int ptp_fuji_get_device_info(vcam *cam, ptpcontainer *ptp);
+int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp);
 
 // Check whether to send compressed or regular object on GetPartialObject
-int fuji_is_compressed_mode(vcamera *cam);
+int fuji_is_compressed_mode(vcam *cam);
 
-uint8_t *fuji_get_ack_packet(vcamera *cam);
+uint8_t *fuji_get_ack_packet(vcam *cam);
 
 int fuji_ssdp_register(const char *ip, char *name, char *model);
 int fuji_ssdp_import(const char *ip, char *name);

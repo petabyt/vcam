@@ -45,10 +45,6 @@ struct CamConfig {
 	int digic;
 };
 
-int get_local_ip(char buffer[64]);
-int fuji_wifi_main(struct CamConfig *options);
-int canon_wifi_main(struct CamConfig *options);
-
 typedef enum vcameratype {
 	GENERIC_PTP = 1,
 	CAM_NIKON,
@@ -94,7 +90,7 @@ struct PtpPropList {
 };
 
 // All members are garunteed to be zero by calloc()
-typedef struct vcamera {
+typedef struct vcam {
 #ifdef FUZZING
 	int	fuzzmode;
 	FILE *fuzzf;
@@ -146,59 +142,63 @@ typedef struct vcamera {
 
 	// === Canon PTP/IP server related things ===
 	int is_lv_ready;
-}vcamera;
+}vcam;
 
-vcamera *vcamera_new(vcameratype);
+vcam *vcamera_new(vcameratype);
 struct CamConfig *vcam_new_config(int argc, char **argv);
-int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes);
-int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes);
-int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout);
-int vcam_open(vcamera *cam, const char *port);
+int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
+int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes);
+int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
+int vcam_open(vcam *cam, const char *port);
 int vcam_get_variant_info(char *arg, struct CamConfig *o);
 
-// Called early before connection is established
-int vcam_fuji_setup(vcamera *cam);
-int vcam_canon_setup(vcamera *cam);
+int get_local_ip(char buffer[64]);
+int fuji_wifi_main(struct CamConfig *options);
+int canon_wifi_main(struct CamConfig *options);
 
-int ptp_get_object_count();
+// Called early before connection is established
+int vcam_fuji_setup(vcam *cam);
+int vcam_canon_setup(vcam *cam);
+
+int ptp_get_object_count(void);
 
 // Temporary function to help with unimplemented data structures
-int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp);
+int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp);
 
-void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes);
-void ptp_response(vcamera *cam, uint16_t code, int nparams, ...);
+void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes);
+void ptp_response(vcam *cam, uint16_t code, int nparams, ...);
 
-void vcam_set_prop(vcamera *cam, int code, uint32_t value);
-void vcam_set_prop_data(vcamera *cam, int code, void *data, int length);
-void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data);
+void vcam_set_prop(vcam *cam, int code, uint32_t value);
+void vcam_set_prop_data(vcam *cam, int code, void *data, int length);
+void vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data);
 
 struct ptp_function {
 	int	code;
-	int	(*write)(vcamera *cam, ptpcontainer *ptp);
-	int	(*write_data)(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
+	int	(*write)(vcam *cam, ptpcontainer *ptp);
+	int	(*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
 };
 
 // Standard PTP opcode implementations
-int ptp_opensession_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_closesession_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_deviceinfo_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getnumobjects_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getobjecthandles_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getstorageids_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getstorageinfo_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getobjectinfo_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getobject_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_deleteobject_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getdevicepropdesc_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_setdevicepropvalue_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_setdevicepropvalue_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
-int ptp_initiatecapture_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_vusb_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_vusb_write_data(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
-int ptp_nikon_setcontrolmode_write(vcamera *cam, ptpcontainer *ptp);
-int ptp_getpartialobject_write(vcamera *cam, ptpcontainer *ptp);
+int ptp_opensession_write(vcam *cam, ptpcontainer *ptp);
+int ptp_closesession_write(vcam *cam, ptpcontainer *ptp);
+int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getstorageids_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getobject_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp);
+int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp);
+int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp);
+int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
+int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp);
+int ptp_vusb_write(vcam *cam, ptpcontainer *ptp);
+int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
+int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp);
+int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp);
 
 typedef union _PTPPropertyValue {
 	char *str; /* common string, malloced */
@@ -250,9 +250,9 @@ typedef struct _PTPDevicePropDesc PTPDevicePropDesc;
 
 struct ptp_property {
 	int code;
-	int (*getdesc)(vcamera *cam, PTPDevicePropDesc *);
-	int (*getvalue)(vcamera *cam, PTPPropertyValue *);
-	int (*setvalue)(vcamera *cam, PTPPropertyValue *);
+	int (*getdesc)(vcam *cam, PTPDevicePropDesc *);
+	int (*getvalue)(vcam *cam, PTPPropertyValue *);
+	int (*setvalue)(vcam *cam, PTPPropertyValue *);
 };
 
 int ptp_get_properties_length();
@@ -334,7 +334,7 @@ void free_dirent(struct ptp_dirent *ent);
 // Deletes the first object from the list
 void vcam_virtual_pop_object(int id);
 
-int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
+int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
 #pragma pack(push, 1)
 struct GenericEvent {
@@ -346,12 +346,9 @@ struct GenericEvent {
 };
 #pragma pack(pop)
 
-int ptp_notify_event(vcamera *cam, uint16_t code, uint32_t value);
+int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 
-int ptp_pop_event(vcamera *cam, struct GenericEvent *ev);
-
-#include "canon.h"
-#include "fuji.h"
+int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
 int ptp_write_unicode_string(char *dat, char *string);
 int ptp_read_unicode_string(char *buffer, char *dat, int max);

@@ -1,6 +1,6 @@
 #include <vcam.h>
 
-int vcam_canon_setup(vcamera *cam) {
+int vcam_canon_setup(vcam *cam) {
 	vcam_set_prop(cam, PTP_PC_EOS_AutoExposureMode, 0x3);
 	vcam_set_prop(cam, PTP_PC_EOS_FocusMode, 0x3);
 	vcam_set_prop(cam, PTP_PC_EOS_DriveMode, 0x11);

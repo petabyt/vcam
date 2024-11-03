@@ -15,14 +15,15 @@
 #include <signal.h>
 #include <vcam.h>
 #include <fujiptp.h>
+#include "fuji.h"
 
 static const char *server_ip_address = "192.168.0.1";
 
-//int fuji_open_remote_port = 0; // TODO: Move to int in vcamera
+//int fuji_open_remote_port = 0; // TODO: Move to int in vcam
 
 struct _GPPortPrivateLibrary {
 	int isopen;
-	vcamera *vcamera;
+	vcam *vcamera;
 };
 
 static GPPort *port = NULL;
@@ -108,7 +109,7 @@ static int tcp_recieve_all(int client_socket) {
 		return -1;
 	}
 
-	// Route the read data into the vcamera. The camera is the responder,
+	// Route the read data into the vcam. The camera is the responder,
 	// and will be the first to write data to the app.
 	int rc = ptpip_cmd_client_write(buffer, size);
 	if (rc != size) {

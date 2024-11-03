@@ -20,7 +20,7 @@ void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outleng
 
 struct _GPPortPrivateLibrary {
 	int isopen;
-	vcamera *vcamera;
+	vcam *vcamera;
 };
 
 static GPPort *port = NULL;
@@ -153,7 +153,7 @@ static int tcp_recieve_all(int client_socket) {
 	if (bc->type == PTPIP_COMMAND_REQUEST) {
 		void *new_buffer = conv_ip_cmd_packet_to_usb(buffer, packet_length, &packet_length);
 
-		// Route the read data into the vcamera. The camera is the responder,
+		// Route the read data into the vcam. The camera is the responder,
 		// and will next be writing data to the app.
 		int rc = ptpip_cmd_write(new_buffer, packet_length);
 		if (rc != packet_length) {

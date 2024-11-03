@@ -26,7 +26,7 @@ void vcam_dump(void *ptr, size_t len) {
 	fclose(f);
 }
 
-int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
+int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 	char new[64];
 	sprintf(new, "%s/%s", PWD, path);
 	FILE *file = fopen(new, "rb");
@@ -50,7 +50,7 @@ int vcam_generic_send_file(char *path, vcamera *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data) {
+void vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
 	struct PtpPropList *list = NULL;
 	for (list = cam->list; list->next != NULL; list = list->next) {
 		if (list->code == code) break;
@@ -75,7 +75,7 @@ void vcam_set_prop_avail(vcamera *cam, int code, int size, int cnt, void *data) 
 	list->avail_cnt = cnt;
 }
 
-void vcam_set_prop(vcamera *cam, int code, uint32_t value) {
+void vcam_set_prop(vcam *cam, int code, uint32_t value) {
 	cam->list_tail->code = code;
 	cam->list_tail->data = malloc(sizeof(uint32_t));
 	cam->list_tail->length = sizeof(uint32_t);
@@ -85,7 +85,7 @@ void vcam_set_prop(vcamera *cam, int code, uint32_t value) {
 	cam->list_tail = cam->list_tail->next;
 }
 
-void vcam_set_prop_data(vcamera *cam, int code, void *data, int length) {
+void vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
 	cam->list_tail->code = code;
 	cam->list_tail->data = malloc(length);
 	cam->list_tail->length = length;
@@ -95,7 +95,7 @@ void vcam_set_prop_data(vcamera *cam, int code, void *data, int length) {
 	cam->list_tail = cam->list_tail->next;
 }
 
-void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes) {
+void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes) {
 	unsigned char *offset;
 	int size = bytes + 12;
 
@@ -114,7 +114,7 @@ void ptp_senddata(vcamera *cam, uint16_t code, unsigned char *data, int bytes) {
 	memcpy(offset + 12, data, bytes);
 }
 
-void ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
+void ptp_response(vcam *cam, uint16_t code, int nparams, ...) {
 	unsigned char *offset;
 	int i, x = 0;
 	va_list args;
@@ -140,7 +140,7 @@ void ptp_response(vcamera *cam, uint16_t code, int nparams, ...) {
 }
 
 // We need these (modified) helpers from ptp.c.
-// Perhaps vcamera.c should be moved to camlibs/ptp2 for easier sharing
+// Perhaps vcam.c should be moved to camlibs/ptp2 for easier sharing
 // in the future.
 void ptp_free_devicepropvalue(uint16_t dt, PTPPropertyValue *dpd) {
 	if (dt == /* PTP_DTC_STR */ 0xFFFF) {
@@ -265,15 +265,15 @@ void read_tree(const char *path) {
 	}
 }
 
-int vcam_init(vcamera *cam) {
+int vcam_init(vcam *cam) {
 	return GP_OK;
 }
 
-int vcam_exit(vcamera *cam) {
+int vcam_exit(vcam *cam) {
 	return GP_OK;
 }
 
-int vcam_open(vcamera *cam, const char *port) {
+int vcam_open(vcam *cam, const char *port) {
 #ifdef FUZZING
 	char *s = strchr(port, ':');
 
@@ -304,7 +304,7 @@ int vcam_open(vcamera *cam, const char *port) {
 	return GP_OK;
 }
 
-int vcam_close(vcamera *cam) {
+int vcam_close(vcam *cam) {
 #ifdef FUZZING
 	if (cam->fuzzf) {
 		fclose(cam->fuzzf);
@@ -335,7 +335,7 @@ static void hexdump(void *buffer, int size) {
 }
 
 
-void vcam_process_output(vcamera *cam) {
+void vcam_process_output(vcam *cam) {
 	ptpcontainer ptp;
 	int i, j;
 
@@ -449,7 +449,7 @@ void vcam_process_output(vcamera *cam) {
 	ptp_response(cam, PTP_RC_OperationNotSupported, 0);
 }
 
-int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes) {
+int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes) {
 	unsigned int toread = bytes;
 
 #ifdef FUZZING
@@ -514,7 +514,7 @@ int vcam_read(vcamera *cam, int ep, unsigned char *data, int bytes) {
 	return toread;
 }
 
-int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes) {
+int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes) {
 	if (!cam->outbulk) {
 		cam->outbulk = malloc(bytes);
 	} else {
@@ -528,11 +528,11 @@ int vcam_write(vcamera *cam, int ep, const unsigned char *data, int bytes) {
 	return bytes;
 }
 
-int ptp_notify_event(vcamera *cam, uint16_t code, uint32_t value) {
+int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value) {
 	return ptp_inject_interrupt(cam, 1000, code, 1, value, 0);
 }
 
-int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
+int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
 	struct ptp_interrupt *interrupt, **pint;
 	struct timeval now;
 	unsigned char *data;
@@ -582,7 +582,7 @@ int ptp_inject_interrupt(vcamera *cam, int when, uint16_t code, int nparams, uin
 	return 1;
 }
 
-int ptp_pop_event(vcamera *cam, struct GenericEvent *ev) {
+int ptp_pop_event(vcam *cam, struct GenericEvent *ev) {
 	// first_interrupt is allowed to be NULL, will produce timeout (no events)
 	if (first_interrupt == NULL) return 1;
 
@@ -597,7 +597,7 @@ int ptp_pop_event(vcamera *cam, struct GenericEvent *ev) {
 }
 
 // Reads ints into 'data' with max 'bytes'
-int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
+int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	struct timeval now, end;
 	int newtimeout, tocopy;
 	struct ptp_interrupt *pint;
@@ -639,10 +639,10 @@ int vcam_readint(vcamera *cam, unsigned char *data, int bytes, int timeout) {
 	return tocopy;
 }
 
-vcamera *vcamera_new(vcameratype type) {
-	vcamera *cam;
+vcam *vcamera_new(vcameratype type) {
+	vcam *cam;
 
-	cam = calloc(1, sizeof(vcamera));
+	cam = calloc(1, sizeof(vcam));
 	if (!cam)
 		return NULL;
 

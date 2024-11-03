@@ -25,7 +25,7 @@ enum CameraStates {
 	CAM_STATE_IDLE_REMOTE,
 };
 
-uint8_t *fuji_get_ack_packet(vcamera *cam) {
+uint8_t *fuji_get_ack_packet(vcam *cam) {
 	static struct FujiInitPacket p = {
 		.length = 0x44,
 		.type = PTPIP_INIT_COMMAND_ACK,
@@ -48,7 +48,7 @@ uint8_t *fuji_get_ack_packet(vcamera *cam) {
 	return (uint8_t *)(&p);
 }
 
-int vcam_fuji_setup(vcamera *cam) {
+int vcam_fuji_setup(vcam *cam) {
 	cam->client_state = 2;
 	cam->camera_state = 0;
 	cam->remote_version = 0;
@@ -99,11 +99,11 @@ int vcam_fuji_setup(vcamera *cam) {
 	return 0;
 }
 
-int fuji_is_compressed_mode(vcamera *cam) {
+int fuji_is_compressed_mode(vcam *cam) {
 	return (int)(cam->compress_small);
 }
 
-int fuji_set_prop_supported(vcamera *cam, int code) {
+int fuji_set_prop_supported(vcam *cam, int code) {
 	int codes[] = {
 		PTP_PC_FUJI_CameraState,
 		PTP_PC_FUJI_ClientState,
@@ -136,7 +136,7 @@ int fuji_set_prop_supported(vcamera *cam, int code) {
 	return 1;
 }
 
-int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
 
@@ -188,7 +188,7 @@ int fuji_set_property(vcamera *cam, ptpcontainer *ptp, unsigned char *data, unsi
 	return 1;
 }
 
-int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
+int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 	struct PtpFujiEvents *ev = calloc(1, 4096);
 
 	// Pop all events and pack into fuji event structure
@@ -212,7 +212,7 @@ int fuji_send_events(vcamera *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
+int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
 	vcam_log("Get property %X\n", ptp->params[0]);
 	int data = -1;
 	switch (ptp->params[0]) {
@@ -283,7 +283,7 @@ int fuji_get_property(vcamera *cam, ptpcontainer *ptp) {
 }
 
 void fuji_accept_remote_ports();
-int ptp_fuji_capture(vcamera *cam, ptpcontainer *ptp) {
+int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
 		cam->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("Opening remote ports\n"); // BUG: It does this twice
@@ -328,7 +328,7 @@ static int devinfo_add_prop(char *data, int length, int code, uint8_t *payload) 
 	return of;
 }
 
-int ptp_fuji_get_device_info(vcamera *cam, ptpcontainer *ptp) {
+int ptp_fuji_get_device_info(vcam *cam, ptpcontainer *ptp) {
 	char *data = malloc(2048);
 	int of = 0;
 	of += ptp_write_u32(data + of, 8);
@@ -382,7 +382,7 @@ int ptp_fuji_liveview(int socket) {
 	return 0;
 }
 
-void fuji_downloaded_object(vcamera *cam) {
+void fuji_downloaded_object(vcam *cam) {
 	// In MULTIPLE_TRANSFER mode, the camera 'deletes' the first object and replaces it with
 	// the second object, once a partialtransfer or object is completely downloaded.
 	// It seems we get this notification once GetPartialObject calls reach the end of an object.
