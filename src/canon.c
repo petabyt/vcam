@@ -41,7 +41,8 @@ static int ptp_eos_generic(vcam *cam, ptpcontainer *ptp) {
 	switch (ptp->code) {
 	case PTP_OC_EOS_SetRemoteMode:
 	case PTP_OC_EOS_SetEventMode:
-		{ CHECK_PARAM_COUNT(1); }
+		{
+			if (vcam_check_param_count(cam, ptp, 1))return 1; }
 		eos_info.first_events = 1;
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
@@ -185,7 +186,7 @@ static int eos_pack_all_props(vcam *cam, void *buf, int *size) {
 };
 
 static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
-	CHECK_PARAM_COUNT(0);
+	if (vcam_check_param_count(cam, ptp, 0))return 1;
 
 	if (eos_info.first_events) {
 		int size = 0;

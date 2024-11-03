@@ -26,6 +26,33 @@ void vcam_dump(void *ptr, size_t len) {
 	fclose(f);
 }
 
+int vcam_check_session(vcam *cam) {
+	if (!cam->session) {
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open");
+		ptp_response(cam, PTP_RC_SessionNotOpen, 0);
+		return 1;
+	}
+	return 0;
+}
+
+int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp) {
+//	if (ptp->seqnr != cam->seqnr) {
+//		gp_log(GP_LOG_ERROR, __FUNCTION__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr);
+//		ptp_response(cam, PTP_RC_GeneralError, 0);
+//		return 1;
+//	}
+	return 0;
+}
+
+int vcam_check_param_count(vcam *cam, ptpcontainer *ptp, int n) {
+	if (ptp->nparams != n) {
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "%X: params should be %d, but is %d", ptp->code, n, ptp->nparams);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+	return 0;
+}
+
 int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 	char new[64];
 	sprintf(new, "%s/%s", PWD, path);

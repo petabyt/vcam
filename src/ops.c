@@ -13,7 +13,7 @@
 #include "ops.h"
 
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if ((ptp->params[0] != 0) && (ptp->params[0] != 1)) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "controlmode must not be 0 or 1, is %d", ptp->params[0]);
@@ -25,7 +25,7 @@ int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_opensession_write(vcam *cam, ptpcontainer *ptp) {
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (ptp->params[0] == 0) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "session must not be 0, is %d", ptp->params[0]);
@@ -44,8 +44,8 @@ int ptp_opensession_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_closesession_write(vcam *cam, ptpcontainer *ptp) {
-	CHECK_PARAM_COUNT(0);
-	CHECK_SEQUENCE_NUMBER();
+	if (vcam_check_param_count(cam, ptp, 0))return 1;
+	if (vcam_check_trans_id(cam, ptp))return 1;
 
 	if (!cam->session) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open");
@@ -64,7 +64,7 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	uint16_t imageformats[1];
 	uint16_t events[5];
 
-	CHECK_PARAM_COUNT(0);
+	if (vcam_check_param_count(cam, ptp, 0))return 1;
 
 	/* Session does not need to be open for GetDeviceInfo */
 
@@ -147,8 +147,8 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur;
 	uint32_t mode = 0;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
 
 	if (ptp->nparams < 1) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
@@ -233,8 +233,8 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur;
 	uint32_t mode = 0;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
 
 	if (ptp->nparams < 1) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
@@ -328,9 +328,9 @@ int ptp_getstorageids_write(vcam *cam, ptpcontainer *ptp) {
 	int x = 0;
 	uint32_t sids[1];
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(0);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 0))return 1;
 
 	data = malloc(200);
 
@@ -347,9 +347,9 @@ int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (ptp->params[0] != 0x00010001) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid storage id 0x%08x", ptp->params[0]);
@@ -374,9 +374,9 @@ int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(3);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 3))return 1;
 
 	vcam_log("GetPartialObject %d (%X %X)\n", ptp->params[0], ptp->params[1], ptp->params[2]);
 
@@ -439,9 +439,9 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 	time_t xtime;
 	char xdate[40];
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	time_t time1;
 	time(&time1);
@@ -612,9 +612,9 @@ int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	struct ptp_dirent *cur;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	cur = first_dirent;
 	while (cur) {
@@ -651,9 +651,9 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	ExifData *ed;
 #endif
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	gp_log_("Processing thumbnail call for %d\n", ptp->params[0]);
 
@@ -719,9 +719,9 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	int capcnt = 98;
 	char buf[10];
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(2);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 2))return 1;
 
 	if ((ptp->params[0] != 0) && (ptp->params[0] != 0x00010001)) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid storage id 0x%08x", ptp->params[0]);
@@ -805,8 +805,8 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur, *xcur;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
 
 	if (ptp->nparams < 1) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
@@ -935,9 +935,9 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	PTPDevicePropDesc desc;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	for (i = 0; i < ptp_get_properties_length(); i++) {
 		if (ptp_properties[i].code == ptp->params[0])
@@ -986,9 +986,9 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	PTPPropertyValue val;
 	PTPDevicePropDesc desc;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (cam->type == CAM_FUJI_WIFI) {
 		return fuji_get_property(cam, ptp);
@@ -1018,9 +1018,9 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int i;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (cam->type == CAM_FUJI_WIFI) {
 		if (fuji_set_prop_supported(cam, ptp->params[0])) {
@@ -1045,8 +1045,8 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
 
 	vcam_log(
 		"\tRecieved 0xBEEF\n"
@@ -1097,9 +1097,9 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 	PTPPropertyValue val;
 	PTPDevicePropDesc desc;
 
-	CHECK_SEQUENCE_NUMBER();
-	CHECK_SESSION();
-	CHECK_PARAM_COUNT(1);
+	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_session(cam))return 1;
+	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (cam->type == CAM_FUJI_WIFI) {
 		return fuji_set_property(cam, ptp, data, len);

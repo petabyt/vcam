@@ -255,41 +255,11 @@ struct ptp_property {
 	int (*setvalue)(vcam *cam, PTPPropertyValue *);
 };
 
-int ptp_get_properties_length();
+int ptp_get_properties_length(void);
 
-#define CHECK(result)               \
-	{                           \
-		int r = (result);   \
-		if (r < 0)          \
-			return (r); \
-	}
-
-#define CHECK_PARAM_COUNT(x)                                                                                          \
-	if (ptp->nparams != x) {                                                                                      \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "%X: params should be %d, but is %d", ptp->code, x, ptp->nparams); \
-		ptp_response(cam, PTP_RC_GeneralError, 0);                                                            \
-		return 1;                                                                                             \
-	}
-
-// Check the transaction ID
-#if 0
-#define CHECK_SEQUENCE_NUMBER()                                                                                   \
-	if (ptp->seqnr != cam->seqnr) {                                                                           \
-		/* not clear if normal cameras react like this */                                                 \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr); \
-		ptp_response(cam, PTP_RC_GeneralError, 0);                                                        \
-		return 1;                                                                                         \
-	}
-#else
-#define CHECK_SEQUENCE_NUMBER() ;
-#endif
-
-#define CHECK_SESSION()                                                    \
-	if (!cam->session) {                                               \
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open"); \
-		ptp_response(cam, PTP_RC_SessionNotOpen, 0);               \
-		return 1;                                                  \
-	}
+int vcam_check_session(vcam *cam);
+int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp);
+int vcam_check_param_count(vcam *cam, ptpcontainer *ptp, int n);
 
 struct ptp_dirent {
 	uint32_t id;

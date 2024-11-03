@@ -11,14 +11,14 @@
 void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength) {
 	struct PtpIpBulkContainer *bc = (struct PtpIpBulkContainer *)buffer;
 
-	int param_length = (bc->length - 18) / 4;
+	int param_length = ((int)bc->length - 18) / 4;
 
 	vcam_log("Param length: %d\n", param_length);
 
 	if (bc->type == PTPIP_COMMAND_REQUEST) {
 		struct PtpBulkContainer *c = (struct PtpBulkContainer *)malloc(12 + (param_length * 4));
 		c->length = 12 + (param_length * 4);
-		(*outlength) = c->length;
+		(*outlength) = (int)c->length;
 		c->type = PTP_PACKET_TYPE_COMMAND;
 		c->transaction = bc->transaction;
 		c->code = bc->code;
@@ -53,14 +53,14 @@ void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outleng
 // TODO: wrongly named nisnomer
 void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength) {
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
-	int param_length = (c->length - 12) / 4;
+	int param_length = ((int)c->length - 12) / 4;
 
 	vcam_log("conv_usb_packet_to_ip: Packet type: %d\n", c->type);
 
 	if (c->type == PTP_PACKET_TYPE_DATA) {
 		// Send both payload start (16 bytes) and end packet (12 + payload)
-		int payload_length = c->length - 12;
-		(*outlength) = sizeof(struct PtpIpStartDataPacket) + sizeof(struct PtpIpEndDataPacket) + payload_length;
+		int payload_length = (int)c->length - 12;
+		(*outlength) = (int)(sizeof(struct PtpIpStartDataPacket) + sizeof(struct PtpIpEndDataPacket) + payload_length);
 		uint8_t *newpkt = malloc((*outlength));
 
 		struct PtpIpStartDataPacket *sd = (struct PtpIpStartDataPacket *)newpkt;
@@ -82,7 +82,7 @@ void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength) {
 		struct PtpIpResponseContainer *resp = (struct PtpIpResponseContainer *)malloc(14);
 
 		resp->length = 14;
-		(*outlength) = resp->length;
+		(*outlength) = (int)resp->length;
 		resp->type = PTPIP_COMMAND_RESPONSE;
 		resp->code = c->code;
 		resp->transaction = c->transaction;
@@ -91,7 +91,7 @@ void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength) {
 	} else if (c->type == PTP_PACKET_TYPE_COMMAND) {
 		struct PtpIpBulkContainer *req = (struct PtpIpBulkContainer *)malloc(18 + (param_length * 4));
 		req->length = 18 + (param_length * 4);
-		(*outlength) = req->length;
+		(*outlength) = (int)req->length;
 		req->type = PTPIP_COMMAND_REQUEST;
 		req->code = c->code;
 		req->transaction = c->transaction;
