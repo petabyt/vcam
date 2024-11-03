@@ -29,6 +29,7 @@ struct CamConfig {
 	int is_mirrorless;
 	int use_custom_ip;
 	char ip_address[64]; 
+	int sig;
 
 	// Fuji stuff
 	int do_discovery;

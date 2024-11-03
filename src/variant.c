@@ -35,6 +35,9 @@ struct CamConfig *vcam_new_config(int argc, char **argv) {
 			extern char *vcamera_filesystem;
 			vcamera_filesystem = argv[i + 1];
 			i++;
+		} else if (!strcmp(argv[i], "--sig")) {
+			i++;
+			options->sig = atoi(argv[i]);
 		} else if (!strcmp(argv[i], "--discovery")) {
 			options->do_discovery = 1;
 		} else if (!strcmp(argv[i], "--register")) {

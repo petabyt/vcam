@@ -11,7 +11,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-
+#include <unistd.h>
+#include <signal.h>
 #include <vcam.h>
 #include <fujiptp.h>
 
@@ -360,6 +361,11 @@ int fuji_wifi_main(struct CamConfig *options) {
 	if (server_socket == -1) {
 		vcam_log("Error, make sure to add virtual network device\n");
 		return 1;
+	}
+
+	if (options->sig) {
+		vcam_log("Sending signal to parent %d\n", options->sig);
+		kill(options->sig, SIGUSR1);
 	}
 
 	struct sockaddr_in client_address;
