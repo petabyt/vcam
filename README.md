@@ -1,7 +1,7 @@
 # vcam
 This is a virtual camera that can spoof and communicate with official vendor software. It currently implements the
-responder (server) side of PTP/USB, PTP/IP, and UPnP. It also perfectly emulates the networking
-too (requires a recent WiFi card) so that means it can spoof official vendor apps:
+responder (server) side of PTP/USB, PTP/IP, and UPnP. It also perfectly emulates the device's WiFi AP and networking
+(requires a recent WiFi card) That means it can spoof official vendor apps:
 
 <img title="Fujifilm Camera Connect connected to spoofed X-H1-ABCD" src="bin/Screenshot_20240402-140041.png" width="300"><img src="bin/Screenshot_20240402-140506.png" width="300">
 

@@ -1,6 +1,7 @@
 # For Fuji only for now
 -include ~/.config/secret.mak
-# Can recognize TARGET=pi2
+VARIANT ?= fuji_x_dev
+ARG ?= $(VARIANT)
 ifeq ($(findstring pi,$(TARGET)),pi)
 
 CC := arm-linux-gnueabi-gcc
@@ -12,8 +13,6 @@ LDFLAGS += -Wl,--dynamic-linker=/lib/ld-linux-armhf.so.3 # interpreter hack
 BINARY := vcam
 
 all: $(BINARY)
-
-ARG ?= fuji_x_h1
 
 AP_PASS ?= 
 SSID ?= FUJIFILM-X-H1-ABCD
@@ -38,9 +37,11 @@ ssh:
 endif
 
 pidiscovery:
-	make TARGET=pi ARG="fuji_x_h1 --discovery" run
+	make TARGET=pi ARG="$(VARIANT) --discovery" run
+piregister:
+	make TARGET=pi ARG="$(VARIANT) --register" run
 pilocal:
-	make TARGET=pi ARG="fuji_x_h1 --local-ip" run
+	make TARGET=pi ARG="$(VARIANT) --local-ip" run
 piap:
 	make TARGET=pi ap
 pirun:

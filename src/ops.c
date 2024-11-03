@@ -656,8 +656,6 @@ int ptp_getthumb_write(vcamera *cam, ptpcontainer *ptp) {
 	CHECK_SESSION();
 	CHECK_PARAM_COUNT(1);
 
-	//usleep(1000 * 500);
-
 	gp_log_("Processing thumbnail call for %d\n", ptp->params[0]);
 
 	if (cam->conf->do_discovery) {

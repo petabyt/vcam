@@ -64,6 +64,7 @@ typedef enum vcameravariant {
 	V_FUJI_X_F10,
 	V_FUJI_X_S10,
 	V_FUJI_X_H1,
+	V_FUJI_X_DEV,
 
 	V_CANON_1300D,
 	CAM_NIKON_D750,

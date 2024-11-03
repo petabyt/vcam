@@ -63,6 +63,7 @@ static int tcp_recieve_all(int client_socket) {
 	uint32_t packet_length;
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
+		vcam_log("Receiving data from the client...\n");
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 
 		if (size == 0) {
@@ -224,13 +225,13 @@ static int new_ptp_tcp_socket(int port) {
 		perror("Failed to set sockopt");
 	}
 
-	// if (setsockopt(server_socket, SOL_SOCKET, TCP_QUICKACK, &no, sizeof(int)) < 0) {
-	// 	perror("Failed to set sockopt");
-	// }
+	if (setsockopt(server_socket, SOL_SOCKET, TCP_QUICKACK, &yes, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
+	}
 
-	// if (setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int)) < 0) {
-	// 	perror("Failed to set sockopt");
-	// }
+	if (setsockopt(server_socket, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(int)) < 0) {
+		perror("Failed to set sockopt");
+	}
 
 	struct sockaddr_in serverAddress;
 	memset(&serverAddress, 0, sizeof(serverAddress));
@@ -242,7 +243,7 @@ static int new_ptp_tcp_socket(int port) {
 	vcam_log("Binding to %s:%d\n", server_ip_address, port);
 
 	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
-		perror("Binding failed");
+		perror("Bind failed");
 		close(server_socket);
 		return -1;
 	}
