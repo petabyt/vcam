@@ -130,6 +130,7 @@ libusb_device_handle *libusb_open_quick() {
 
 int libusb_get_string_descriptor_ascii(libusb_device_handle *devh, uint8_t desc_idx, unsigned char *data, int length) {
 	strncpy((char *)data, "vcam", length);
+	return 0;
 }
 
 void libusb_free_device_list(libusb_device **list, int unref_devices) {
