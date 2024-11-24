@@ -170,3 +170,6 @@ int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoin
 	return 0;
 }
 
+int libusb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned char *data, uint16_t wLength, unsigned int timeout) {
+	return 0;
+}
