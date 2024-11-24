@@ -156,7 +156,7 @@ int vcam_fuji_setup(vcam *cam) {
 		vcam_log("Configuring fuji to select multiple images\n");
 		f->camera_state = FUJI_MULTIPLE_TRANSFER;
 		// ID 0 is DCIM, set to 1, which is first jpeg
-		first_dirent->next->id = 1;
+		cam->first_dirent->next->id = 1;
 	}
 
 	// Common startup events for all cameras
@@ -472,10 +472,10 @@ void fuji_downloaded_object(vcam *cam) {
 	// the second object, once a partialtransfer or object is completely downloaded.
 	// It seems we get this notification once GetPartialObject calls reach the end of an object.
 	if (f->camera_state == FUJI_MULTIPLE_TRANSFER) {
-		printf("Dirent %s\n", first_dirent->next->fsname);
-		struct ptp_dirent *next = first_dirent->next;
+		printf("Dirent %s\n", cam->first_dirent->next->fsname);
+		struct ptp_dirent *next = cam->first_dirent->next;
 		next->id = 1;
-		first_dirent = next;
+		cam->first_dirent = next;
 
 		if (f->sent_images == 3) {
 			vcam_log("Enough images send %d, killing connection\n", f->sent_images);

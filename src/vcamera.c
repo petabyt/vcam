@@ -9,16 +9,6 @@
 #include <string.h>
 #include <math.h>
 #include <vcam.h>
-#include <ops.h>
-
-// Event handler
-struct ptp_interrupt *first_interrupt = NULL;
-
-// Filesystem index
-struct ptp_dirent *first_dirent = NULL;
-uint32_t ptp_objectid = 0;
-
-char *vcamera_filesystem = "fuji_sd";
 
 void vcam_dump(void *ptr, size_t len) {
 	FILE *f = fopen("DUMP", "wb");
@@ -258,7 +248,7 @@ void *read_file(struct ptp_dirent *cur) {
 	return data;
 }
 
-void read_directories(const char *path, struct ptp_dirent *parent) {
+void read_directories(vcam *cam, const char *path, struct ptp_dirent *parent) {
 	struct ptp_dirent *cur;
 	gp_system_dir dir;
 	gp_system_dirent de;
@@ -281,16 +271,29 @@ void read_directories(const char *path, struct ptp_dirent *parent) {
 		strcat(cur->fsname, "/");
 		strcat(cur->fsname, gp_system_filename(de));
 		//gp_log_("Found filename: %s\n", cur->fsname);
-		cur->id = ptp_objectid++;
-		cur->next = first_dirent;
+		cur->id = cam->ptp_objectid++;
+		cur->next = cam->first_dirent;
 		cur->parent = parent;
-		first_dirent = cur;
+		cam->first_dirent = cur;
 		if (-1 == stat(cur->fsname, &cur->stbuf))
 			continue;
 		if (S_ISDIR(cur->stbuf.st_mode))
-			read_directories(cur->fsname, cur); /* recurse! */
+			read_directories(cam, cur->fsname, cur); /* recurse! */
 	}
 	gp_system_closedir(dir);
+}
+
+int vcam_get_object_count(vcam *cam) {
+	int cnt = 0;
+	struct ptp_dirent *cur = cam->first_dirent;
+	while (cur) {
+		if (cur->id) { /* do not include 0 entry */
+			cnt++;
+		}
+		cur = cur->next;
+	}
+
+	return cnt;
 }
 
 void free_dirent(struct ptp_dirent *ent) {
@@ -299,23 +302,23 @@ void free_dirent(struct ptp_dirent *ent) {
 	free(ent);
 }
 
-void read_tree(const char *path) {
+void read_tree(vcam *cam, const char *path) {
 	struct ptp_dirent *root = NULL, *dir, *dcim = NULL;
 
-	if (first_dirent)
+	if (cam->first_dirent)
 		return;
 
-	first_dirent = malloc(sizeof(struct ptp_dirent));
-	first_dirent->name = strdup("");
-	first_dirent->fsname = strdup(path);
-	first_dirent->id = ptp_objectid++;
-	first_dirent->next = NULL;
-	stat(first_dirent->fsname, &first_dirent->stbuf); /* assuming it works */
-	root = first_dirent;
-	read_directories(path, first_dirent);
+	cam->first_dirent = malloc(sizeof(struct ptp_dirent));
+	cam->first_dirent->name = strdup("");
+	cam->first_dirent->fsname = strdup(path);
+	cam->first_dirent->id = cam->ptp_objectid++;
+	cam->first_dirent->next = NULL;
+	stat(cam->first_dirent->fsname, &cam->first_dirent->stbuf); /* assuming it works */
+	root = cam->first_dirent;
+	read_directories(cam, path, cam->first_dirent);
 
 	/* See if we have a DCIM directory, if not, create one. */
-	dir = first_dirent;
+	dir = cam->first_dirent;
 	while (dir) {
 		if (!strcmp(dir->name, "DCIM") && dir->parent && !dir->parent->id)
 			dcim = dir;
@@ -325,11 +328,11 @@ void read_tree(const char *path) {
 		dcim = malloc(sizeof(struct ptp_dirent));
 		dcim->name = strdup("DCIM");
 		dcim->fsname = strdup(path);
-		dcim->id = ptp_objectid++;
-		dcim->next = first_dirent;
+		dcim->id = cam->ptp_objectid++;
+		dcim->next = cam->first_dirent;
 		dcim->parent = root;
 		stat(dcim->fsname, &dcim->stbuf); /* assuming it works */
-		first_dirent = dcim;
+		cam->first_dirent = dcim;
 	}
 }
 
@@ -537,7 +540,7 @@ int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32
 	interrupt->next = NULL;
 
 	/* Insert into list, sorted by trigger time, next triggering one first */
-	pint = &first_interrupt;
+	pint = &cam->first_interrupt;
 	while (*pint) {
 		if (now.tv_sec > (*pint)->triggertime.tv_sec) {
 			pint = &((*pint)->next);
@@ -559,12 +562,12 @@ int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32
 
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev) {
 	// first_interrupt is allowed to be NULL, will produce timeout (no events)
-	if (first_interrupt == NULL) return 1;
+	if (cam->first_interrupt == NULL) return 1;
 
-	memcpy(ev, first_interrupt->data, sizeof(struct GenericEvent));
+	memcpy(ev, cam->first_interrupt->data, sizeof(struct GenericEvent));
 
-	struct ptp_interrupt *prev = first_interrupt;
-	first_interrupt = first_interrupt->next;
+	struct ptp_interrupt *prev = cam->first_interrupt;
+	cam->first_interrupt = cam->first_interrupt->next;
 	free(prev->data);
 	free(prev);
 
@@ -577,7 +580,7 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	int newtimeout, tocopy;
 	struct ptp_interrupt *pint;
 
-	if (!first_interrupt) {
+	if (!cam->first_interrupt) {
 		return GP_ERROR_TIMEOUT;
 	}
 	gettimeofday(&now, NULL);
@@ -588,22 +591,22 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 		end.tv_usec -= 1000000;
 		end.tv_sec++;
 	}
-	if (first_interrupt->triggertime.tv_sec > end.tv_sec) {
+	if (cam->first_interrupt->triggertime.tv_sec > end.tv_sec) {
 		return GP_ERROR_TIMEOUT;
 	}
-	if ((first_interrupt->triggertime.tv_sec == end.tv_sec) &&
-	    (first_interrupt->triggertime.tv_usec > end.tv_usec)) {
+	if ((cam->first_interrupt->triggertime.tv_sec == end.tv_sec) &&
+	    (cam->first_interrupt->triggertime.tv_usec > end.tv_usec)) {
 		return GP_ERROR_TIMEOUT;
 	}
-	newtimeout = (first_interrupt->triggertime.tv_sec - now.tv_sec) * 1000 + (first_interrupt->triggertime.tv_usec - now.tv_usec) / 1000;
+	newtimeout = (cam->first_interrupt->triggertime.tv_sec - now.tv_sec) * 1000 + (cam->first_interrupt->triggertime.tv_usec - now.tv_usec) / 1000;
 	if (newtimeout > timeout)
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "miscalculated? %d vs %d", timeout, newtimeout);
-	tocopy = first_interrupt->size;
+	tocopy = cam->first_interrupt->size;
 	if (tocopy > bytes)
 		tocopy = bytes;
-	memcpy(data, first_interrupt->data, tocopy);
-	pint = first_interrupt;
-	first_interrupt = first_interrupt->next;
+	memcpy(data, cam->first_interrupt->data, tocopy);
+	pint = cam->first_interrupt;
+	cam->first_interrupt = cam->first_interrupt->next;
 	free(pint->data);
 	free(pint);
 	return tocopy;
@@ -617,8 +620,7 @@ int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
 		cam->custom_ip_addr = malloc(64);
 		get_local_ip(cam->custom_ip_addr);
 	} else if (!strcmp(argv[(*i)], "--fs")) {
-		extern char *vcamera_filesystem;
-		vcamera_filesystem = argv[(*i) + 1];
+		cam->vcamera_filesystem = argv[(*i) + 1];
 		(*i)++;
 	} else if (!strcmp(argv[(*i)], "--sig")) {
 		(*i)++;
@@ -634,7 +636,7 @@ vcam *vcamera_new(const char *name, int argc, char **argv) {
 	if (!cam)
 		return NULL;
 
-	read_tree(vcamera_filesystem);
+	read_tree(cam, cam->vcamera_filesystem);
 
 	cam->props = calloc(1, sizeof(struct PtpPropList));
 	cam->opcodes = calloc(1, sizeof(struct PtpOpcodeList));

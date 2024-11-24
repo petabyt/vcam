@@ -10,7 +10,6 @@
 
 #include "vcam.h"
 #include "fuji.h"
-#include "ops.h"
 
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
@@ -153,7 +152,7 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 	if (ptp->nparams >= 3) {
 		mode = ptp->params[2];
 		if ((mode != 0) && (mode != 0xffffffff)) {
-			cur = first_dirent;
+			cur = cam->first_dirent;
 			while (cur) {
 				if (cur->id == mode)
 					break;
@@ -173,7 +172,7 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	cnt = 0;
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id) { /* do not include 0 entry */
 			switch (mode) {
@@ -195,19 +194,6 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 
 	ptp_response(cam, PTP_RC_OK, 1, cnt);
 	return 1;
-}
-
-int ptp_get_object_count(void) {
-	int cnt = 0;
-	struct ptp_dirent *cur = first_dirent;
-	while (cur) {
-		if (cur->id) { /* do not include 0 entry */
-			cnt++;
-		}
-		cur = cur->next;
-	}
-
-	return cnt;
 }
 
 int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
@@ -239,7 +225,7 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 	if (ptp->nparams >= 3) {
 		mode = ptp->params[2];
 		if ((mode != 0) && (mode != 0xffffffff)) {
-			cur = first_dirent;
+			cur = cam->first_dirent;
 			while (cur) {
 				if (cur->id == mode)
 					break;
@@ -259,7 +245,7 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	cnt = 0;
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id) { /* do not include 0 entry */
 			switch (mode) {
@@ -281,7 +267,7 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 
 	data = malloc(4 + 4 * cnt);
 	x = put_32bit_le(data + x, cnt);
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id) { /* do not include 0 entry */
 			switch (mode) {
@@ -363,7 +349,7 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 
 	vcam_log("GetPartialObject %d (%X %X)\n", ptp->params[0], ptp->params[1], ptp->params[2]);
 
-	struct ptp_dirent *cur = first_dirent;
+	struct ptp_dirent *cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
 			break;
@@ -450,7 +436,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 	if (ptp->params[0] == 0xdeadbeef) {
 		cur = &fake;
 	} else {
-		cur = first_dirent;
+		cur = cam->first_dirent;
 		while (cur) {
 			if (cur->id == ptp->params[0])
 				break;
@@ -602,7 +588,7 @@ int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
 			break;
@@ -652,7 +638,7 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	}
 #endif
 
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
 			break;
@@ -729,7 +715,7 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	/* just search for first jpeg we find in the tree, we will use this to send back as the captured image */
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (strstr(cur->name, ".jpg") || strstr(cur->name, ".JPG"))
 			break;
@@ -741,7 +727,7 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 	/* identify the DCIM dir, so we can attach a virtual xxxGPHOT directory to virtually store the new picture in */
-	dir = first_dirent;
+	dir = cam->first_dirent;
 	while (dir) {
 		if (!strcmp(dir->name, "DCIM") && dir->parent && !dir->parent->id)
 			dcim = dir;
@@ -749,7 +735,7 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	/* find the nnnGPHOT directories, where nnn is 100-999. (See DCIM standard.) */
 	sprintf(buf, "%03dGPHOT", 100 + ((capcnt / 100) % 900));
-	dir = first_dirent;
+	dir = cam->first_dirent;
 	while (dir) {
 		if (!strcmp(dir->name, buf) && (dir->parent == dcim))
 			break;
@@ -758,34 +744,34 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	/* if not yet found, create the virtual /DCIM/xxxGPHOT/ directory. */
 	if (!dir) {
 		dir = malloc(sizeof(struct ptp_dirent));
-		dir->id = ++ptp_objectid;
+		dir->id = ++cam->ptp_objectid;
 		dir->fsname = "virtual";
 		dir->stbuf = dcim->stbuf; /* only the S_ISDIR flag is used */
 		dir->parent = dcim;
-		dir->next = first_dirent;
+		dir->next = cam->first_dirent;
 		dir->name = strdup(buf);
-		first_dirent = dir;
+		cam->first_dirent = dir;
 		/* Emit ObjectAdded event for the created folder */
-		ptp_inject_interrupt(cam, 80, 0x4002, 1, ptp_objectid, cam->seqnr); /* objectadded */
+		ptp_inject_interrupt(cam, 80, 0x4002, 1, cam->ptp_objectid, cam->seqnr); /* objectadded */
 	}
 	if (capcnt++ == 150) {
 		/* The start of the operation succeeds, but the memory runs full during it. */
-		ptp_inject_interrupt(cam, 100, 0x400A, 1, ptp_objectid, cam->seqnr); /* storefull */
+		ptp_inject_interrupt(cam, 100, 0x400A, 1, cam->ptp_objectid, cam->seqnr); /* storefull */
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
 
 	newcur = malloc(sizeof(struct ptp_dirent));
-	newcur->id = ++ptp_objectid;
+	newcur->id = ++cam->ptp_objectid;
 	newcur->fsname = strdup(cur->fsname);
 	newcur->stbuf = cur->stbuf;
 	newcur->parent = dir;
-	newcur->next = first_dirent;
+	newcur->next = cam->first_dirent;
 	newcur->name = malloc(8 + 3 + 1 + 1);
 	sprintf(newcur->name, "GPH_%04d.JPG", capcnt++);
-	first_dirent = newcur;
+	cam->first_dirent = newcur;
 
-	ptp_inject_interrupt(cam, 100, 0x4002, 1, ptp_objectid, cam->seqnr); /* objectadded */
+	ptp_inject_interrupt(cam, 100, 0x4002, 1, cam->ptp_objectid, cam->seqnr); /* objectadded */
 	ptp_inject_interrupt(cam, 120, 0x400d, 0, 0, cam->seqnr);	     /* capturecomplete */
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -804,14 +790,14 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	if (ptp->params[0] == 0xffffffff) { /* delete all mode */
 		gp_log(GP_LOG_DEBUG, __FUNCTION__, "delete all");
-		cur = first_dirent;
+		cur = cam->first_dirent;
 
 		while (cur) {
 			xcur = cur->next;
 			free_dirent(cur);
 			cur = xcur;
 		}
-		first_dirent = NULL;
+		cam->first_dirent = NULL;
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
@@ -823,7 +809,7 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	/* for associations this even means recursive deletion */
 
-	cur = first_dirent;
+	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
 			break;
@@ -839,11 +825,11 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 		ptp_response(cam, PTP_RC_ObjectWriteProtected, 0);
 		return 1;
 	}
-	if (cur == first_dirent) {
-		first_dirent = cur->next;
+	if (cur == cam->first_dirent) {
+		cam->first_dirent = cur->next;
 		free_dirent(cur);
 	} else {
-		xcur = first_dirent;
+		xcur = cam->first_dirent;
 		while (xcur) {
 			if (xcur->next == cur) {
 				xcur->next = xcur->next->next;

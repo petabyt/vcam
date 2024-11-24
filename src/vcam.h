@@ -39,6 +39,12 @@ typedef struct vcam {
 	char *custom_ip_addr;
 	pid_t sig;
 
+	struct ptp_interrupt *first_interrupt;
+	struct ptp_dirent *first_dirent;
+	uint32_t ptp_objectid;
+
+	char *vcamera_filesystem;
+
 	unsigned char *inbulk;
 	int	nrinbulk;
 	unsigned char *outbulk;
@@ -187,9 +193,6 @@ struct ptp_interrupt {
 	struct timeval triggertime;
 	struct ptp_interrupt *next;
 };
-
-extern struct ptp_dirent *first_dirent;
-extern uint32_t ptp_objectid;
 
 void vcam_dump(void *ptr, size_t len);
 
