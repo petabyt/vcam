@@ -16,59 +16,6 @@
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
 
-#if 0
-// Generic options setup by CLI, put in cam->conf
-// This structure is zeroed
-struct CamConfig {
-	int type;
-	int variant;
-	char model[32];
-	char version[16];
-	char serial[16];
-
-	int run_slow;
-	int is_mirrorless;
-	int use_custom_ip;
-	char ip_address[64]; 
-	int sig;
-
-	// Fuji stuff
-	int do_discovery;
-	int do_register;
-	int do_tether;
-	int is_select_multiple_images;
-	int image_get_version;
-	int get_object_version;
-	int remote_version;
-	int remote_get_object_version;
-
-	// Canon stuff
-	int digic;
-};
-#endif
-
-typedef enum vcameratype {
-	GENERIC_PTP = 1,
-	CAM_NIKON,
-	CAM_CANON,
-	CAM_FUJI_WIFI,
-	CAM_FUJI_USB,
-}vcameratype;
-
-typedef enum vcameravariant {
-	V_FUJI_X_A2 = 1,
-	V_FUJI_X30,
-	V_FUJI_X_T20,
-	V_FUJI_X_T2,
-	V_FUJI_X_F10,
-	V_FUJI_X_S10,
-	V_FUJI_X_H1,
-	V_FUJI_X_DEV,
-
-	V_CANON_1300D,
-	CAM_NIKON_D750,
-}vcameravariant;
-
 typedef struct ptpcontainer {
 	unsigned int size;
 	unsigned int type;
@@ -81,13 +28,16 @@ typedef struct ptpcontainer {
 
 // All members are guaranteed to be zero by calloc()
 typedef struct vcam {
+	void *priv;
 	uint16_t vendor;
 	uint16_t product;
-	vcameratype	type;
-	vcameravariant variant;
 	char model[32];
 	char version[16];
 	char serial[16];
+	char manufac[32];
+
+	char *custom_ip_addr;
+	pid_t sig;
 
 	unsigned char *inbulk;
 	int	nrinbulk;
@@ -101,10 +51,8 @@ typedef struct vcam {
 	struct PtpOpcodeList *opcodes;
 	struct PtpPropList *props;
 
+	// Runtime data vars
 	int next_cmd_kills_connection;
-
-	void *priv;
-
 	int exposurebias;
 	unsigned int shutterspeed;
 	unsigned int fnumber;
@@ -113,7 +61,8 @@ typedef struct vcam {
 	uint8_t battery;
 }vcam;
 
-vcam *vcamera_new(vcameratype);
+vcam *vcamera_new(const char *name, int argc, char **argv);
+int vcam_parse_args(vcam *cam, int argc, char **argv, int *i);
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
 int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes);
 int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
@@ -271,6 +220,8 @@ int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 void ptp_register_standard_opcodes(vcam *cam);
 void canon_register_base_eos(vcam *cam);
 void fuji_register_opcodes(vcam *cam);
+int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv);
+int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);
 
 #include "data.h"
 #include "socket.h"

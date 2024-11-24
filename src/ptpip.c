@@ -18,13 +18,6 @@ void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength);
 void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength);
 void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outlength, int opcode);
 
-struct _GPPortPrivateLibrary {
-	int isopen;
-	vcam *vcamera;
-};
-
-static GPPort *port = NULL;
-
 // TODO: Convert to structure
 static uint8_t socket_init_resp[] = {
 0x2e, 0x0, 0x0, 0x0,
@@ -38,22 +31,7 @@ static uint8_t socket_init_resp[] = {
 0x0, 0x0,
 0x1, 0x0,};
 
-static int ptpip_connection_init(struct CamConfig *options) {
-	vcam_log("Allocated vusb connection\n");
-	port = malloc(sizeof(GPPort));
-	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
-	port->pl->vcamera = vcamera_new(CAM_CANON);
-	port->pl->vcamera->conf = options;
-
-	if (port->pl->isopen)
-		return -1;
-
-	vcam_open(port->pl->vcamera, port->settings.usb.port);
-	port->pl->isopen = 1;
-	return 0;
-}
-
-static int ptpip_cmd_write(void *to, int length) {
+static int ptpip_cmd_write(vcam *cam, void *to, int length) {
 	static int first_write = 1;
 
 	// First packet from the app, info about device
@@ -67,8 +45,7 @@ static int ptpip_cmd_write(void *to, int length) {
 		return length;
 	}
 
-	C_PARAMS(port && port->pl && port->pl->vcamera);
-	int rc = vcam_write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
+	int rc = vcam_write(cam, 0x02, (unsigned char *)to, length);
 
 	#ifdef TCP_NOISY
 	vcam_log("<- read %d (%X)\n", rc, ((uint16_t *)to)[3]);
@@ -77,9 +54,8 @@ static int ptpip_cmd_write(void *to, int length) {
 	return rc;
 }
 
-static int ptpip_cmd_read(void *to, int length) {
-	C_PARAMS(port && port->pl && port->pl->vcamera);
-	int rc = vcam_read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
+static int ptpip_cmd_read(vcam *cam, void *to, int length) {
+	int rc = vcam_read(cam, 0x81, (unsigned char *)to, length);
 
 	#ifdef TCP_NOISY
 	vcam_log("-> write %d (%X)\n", rc, ((uint16_t *)to)[3]);
@@ -142,7 +118,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 }
 
 // Recieve data from app TCP, and route into vcam
-static int tcp_recieve_all(int client_socket) {
+static int tcp_recieve_all(vcam *cam, int client_socket) {
 	int packet_length = 0;
 	void *buffer = tcp_recieve_single_packet(client_socket, &packet_length);
 	if (buffer == NULL) {
@@ -155,7 +131,7 @@ static int tcp_recieve_all(int client_socket) {
 
 		// Route the read data into the vcam. The camera is the responder,
 		// and will next be writing data to the app.
-		int rc = ptpip_cmd_write(new_buffer, packet_length);
+		int rc = ptpip_cmd_write(cam, new_buffer, packet_length);
 		if (rc != packet_length) {
 			return -1;
 		}
@@ -164,7 +140,7 @@ static int tcp_recieve_all(int client_socket) {
 	} else if (bc->type == PTPIP_INIT_COMMAND_REQ) {
 		// Recieved init packet, send it into vcam to init vcam structs
 		vcam_log("Recieved init packet\n");
-		ptpip_cmd_write(buffer, packet_length);
+		ptpip_cmd_write(cam, buffer, packet_length);
 		return 0;
 	}
 
@@ -200,7 +176,7 @@ static int tcp_recieve_all(int client_socket) {
 		free(buffer_de);
 
 		// Finally, send the single packet into vcam
-		int rc = ptpip_cmd_write(new_buffer, packet_length);
+		int rc = ptpip_cmd_write(cam, new_buffer, packet_length);
 		if (rc != packet_length) {
 			return -1;
 		}
@@ -213,9 +189,9 @@ static int tcp_recieve_all(int client_socket) {
 	return 0;
 }
 
-static void *ptpip_cmd_read_single_packet(int *length) {
+static void *ptpip_cmd_read_single_packet(vcam *cam, int *length) {
 	uint32_t packet_length = 0;
-	int size = ptpip_cmd_read(&packet_length, 4);
+	int size = ptpip_cmd_read(cam, &packet_length, 4);
 	if (size != 4) {
 		vcam_log("send_all: vcam failed to provide 4 bytes: %d\n", size);
 		return NULL;
@@ -224,7 +200,7 @@ static void *ptpip_cmd_read_single_packet(int *length) {
 	// Yes, this allocates 4 bytes too much, can't be bothered to fix it
 	char *buffer = malloc(size + packet_length);
 	((uint32_t *)buffer)[0] = packet_length;
-	int rc = ptpip_cmd_read(buffer + size, packet_length - size);	
+	int rc = ptpip_cmd_read(cam, buffer + size, packet_length - size);
 
 	if (rc != packet_length - size) {
 		vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
@@ -238,7 +214,7 @@ static void *ptpip_cmd_read_single_packet(int *length) {
 	return buffer;
 }
 
-static int tcp_send_all(int client_socket) {
+static int tcp_send_all(vcam *cam, int client_socket) {
 	static int left_of_init_packet = sizeof(socket_init_resp);
 
 	// Wait until 'hello' packet is sent
@@ -254,7 +230,7 @@ static int tcp_send_all(int client_socket) {
 	}
 
 	int packet_length = 0;
-	void *buffer = ptpip_cmd_read_single_packet(&packet_length);
+	void *buffer = ptpip_cmd_read_single_packet(cam, &packet_length);
 	if (buffer == NULL) {
 		return -1;
 	}
@@ -278,7 +254,7 @@ static int tcp_send_all(int client_socket) {
 		// TODO: Create these artifically
 
 		free(buffer);
-		buffer = ptpip_cmd_read_single_packet(&packet_length);
+		buffer = ptpip_cmd_read_single_packet(cam, &packet_length);
 		if (buffer == NULL) {
 			return -1;
 		}
@@ -383,10 +359,9 @@ static void *bind_event_socket_thread(void *arg) {
 	return NULL;
 }
 
-int canon_wifi_main(struct CamConfig *options) {
-	printf("Canon vcam - running %s\n", options->model);
-
-	ptpip_connection_init(options);
+int ptpip_generic_main(const char *name, int argc, char **argv) {
+	vcam *cam = vcamera_new(name, argc, argv);
+	printf("vcam - running %s\n", cam->model);
 
 	int server_socket = new_ptp_tcp_socket(PTP_IP_PORT);
 
@@ -405,7 +380,7 @@ int canon_wifi_main(struct CamConfig *options) {
 	static int have_setup_events_socket = 0;
 	pthread_t thread;
 	while (1) {
-		if (tcp_recieve_all(client_socket)) {
+		if (tcp_recieve_all(cam, client_socket)) {
 			vcam_log("tcp_recieve_all failed\n");
 			goto err;
 		}
@@ -413,7 +388,7 @@ int canon_wifi_main(struct CamConfig *options) {
 		// Now the app has sent the data, and is waiting for a response.
 
 		// Read packet length
-		if (tcp_send_all(client_socket)) {
+		if (tcp_send_all(cam, client_socket)) {
 			vcam_log("tcp_send_all failed\n");
 			goto err;
 		}

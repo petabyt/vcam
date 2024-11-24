@@ -9,43 +9,50 @@
 #include <cl_data.h>
 #include "fuji.h"
 
-int fuji_init_cam(vcam *cam, const char *name) {
+int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	struct Fuji *f = fuji(cam);
+	for (int i = 0; i < argc; i++) {
+		if (vcam_parse_args(cam, argc, argv, &i)) continue;
+		if (!strcmp(argv[i], "--select-img")) {
+			f->is_select_multiple_images = 1;
+		} else if (!strcmp(argv[i], "--discovery")) {
+			f->do_discovery = 1;
+		} else if (!strcmp(argv[i], "--register")) {
+			f->do_register = 1;
+		} else if (!strcmp(argv[i], "--tether")) {
+			f->do_tether = 1;
+		} else {
+			printf("Unknown option %s\n", argv[i]);
+			return -1;
+		}
+	}
+
+	strcpy(cam->manufac, "Fujifilm Corp");
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_A2;
 		f->image_get_version = 1;
 		f->get_object_version = 2;
 		f->remote_version = 0;
 	} else if (!strcmp(name, "fuji_x_t20")) {
 		strcpy(cam->model, "X-T20");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_T20;
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x00020004;
 		f->remote_get_object_version = 2;
 	} else if (!strcmp(name, "fuji_x_t2")) {
 		strcpy(cam->model, "X-T2");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_T2;
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x0002000a;
 		f->remote_get_object_version = 2;
 	} else if (!strcmp(name, "fuji_x_s10")) {
 		strcpy(cam->model, "X-S10");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_S10;
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x0002000a; // fuji sets to 2000b
 		f->remote_get_object_version = 4;
 	} else if (!strcmp(name, "fuji_x_t4")) {
 		strcpy(cam->model, "X-T4");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_S10;
 		f->image_get_version = 4;
 		f->get_object_version = 5;
 		f->remote_version = 0x0002000a; // fuji sets to 2000c
@@ -54,32 +61,24 @@ int fuji_init_cam(vcam *cam, const char *name) {
 		// PTP_PC_FUJI_Unknown_D52F = 1
 	} else if (!strcmp(name, "fuji_x_h1")) {
 		strcpy(cam->model, "X-H1");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_H1;
 		f->image_get_version = 3; // fuji sets to 4
 		f->get_object_version = 4;
 		f->remote_version = 0x00020006; // fuji sets to 2000C
 		f->remote_get_object_version = 4;
 	} else if (!strcmp(name, "fuji_x_dev")) {
 		strcpy(cam->model, "X-DEV");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_DEV;
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x00020006;
 		f->remote_get_object_version = 4;
 	} else if (!strcmp(name, "fuji_x_f10")) {
 		strcpy(cam->model, "X-F10");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X_F10;
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x00020004; // fuji sets to 2000C
 		f->remote_get_object_version = 2;
 	} else if (!strcmp(name, "fuji_x30")) {
 		strcpy(cam->model, "X30");
-		cam->type = CAM_FUJI_WIFI;
-		cam->variant = V_FUJI_X30;
 		f->image_get_version = 3;
 		f->get_object_version = 3; // 2016 fuji sets to 4
 		f->remote_version = 0x00020002; // 2024 fuji sets to 2000C
@@ -87,6 +86,9 @@ int fuji_init_cam(vcam *cam, const char *name) {
 	} else {
 		return -1;
 	}
+
+	fuji_register_opcodes(cam);
+
 	return vcam_fuji_setup(cam);
 }
 
@@ -140,17 +142,17 @@ int vcam_fuji_setup(vcam *cam) {
 	vcam_log("Fuji: Found %d objects\n", f->obj_count);
 
 	// Check if remote mode is supported
-	if (cam->conf->remote_version) {
+	if (f->remote_version) {
 		f->camera_state = FUJI_REMOTE_ACCESS;
 	} else {
 		f->camera_state = FUJI_FULL_ACCESS;
 	}
 
-	if (cam->conf->do_discovery) {
+	if (f->do_discovery) {
 		f->camera_state = FUJI_PC_AUTO_SAVE;
 	}
 
-	if (cam->conf->is_select_multiple_images) {
+	if (f->is_select_multiple_images) {
 		vcam_log("Configuring fuji to select multiple images\n");
 		f->camera_state = FUJI_MULTIPLE_TRANSFER;
 		// ID 0 is DCIM, set to 1, which is first jpeg
@@ -166,7 +168,7 @@ int vcam_fuji_setup(vcam *cam) {
 
 	ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
 
-	if (cam->conf->remote_version) {
+	if (f->remote_version) {
 		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount2, f->obj_count);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
@@ -182,6 +184,7 @@ int fuji_is_compressed_mode(vcam *cam) {
 }
 
 int fuji_set_prop_supported(vcam *cam, int code) {
+	struct Fuji *f = fuji(cam);
 	int codes[] = {
 		PTP_PC_FUJI_CameraState,
 		PTP_PC_FUJI_ClientState,
@@ -203,7 +206,7 @@ int fuji_set_prop_supported(vcam *cam, int code) {
 		if (codes[i] == code) return 0;
 	}
 
-	if (cam->conf->remote_version) {
+	if (f->remote_version) {
 		for (size_t i = 0; i < (sizeof(codes_remote_only) / sizeof(codes_remote_only[0])); i++) {
 			if (codes_remote_only[i] == code) return 0;
 		}
@@ -312,16 +315,16 @@ int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_ImageGetVersion:
-		data = cam->conf->image_get_version;
+		data = f->image_get_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_GetObjectVersion: {
-		data = cam->conf->get_object_version;
+		data = f->get_object_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		} break;
 	case PTP_PC_FUJI_RemoteGetObjectVersion:
-		if (cam->conf->remote_get_object_version) {
-			data = cam->conf->remote_get_object_version;
+		if (f->remote_get_object_version) {
+			data = f->remote_get_object_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		}
 		break;
@@ -330,8 +333,8 @@ int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
-		if (cam->conf->remote_version) {
-			data = cam->conf->remote_version;
+		if (f->remote_version) {
+			data = f->remote_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		} else {
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);

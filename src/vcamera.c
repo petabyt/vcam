@@ -161,7 +161,7 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length) {
 	if (prop == NULL) return NULL;
 
 	if (prop->getvalue) {
-		return prop->getvalue(cam, &length);
+		return prop->getvalue(cam, length);
 	}
 
 	(*length) = prop->desc.value_length;
@@ -236,37 +236,6 @@ void ptp_response(vcam *cam, uint16_t code, int nparams, ...) {
 	va_end(args);
 
 	cam->seqnr++;
-}
-
-// We need these (modified) helpers from ptp.c.
-// Perhaps vcam.c should be moved to camlibs/ptp2 for easier sharing
-// in the future.
-void ptp_free_devicepropvalue(uint16_t dt, PTPPropertyValue *dpd) {
-	if (dt == /* PTP_DTC_STR */ 0xFFFF) {
-		free(dpd->str);
-	} else if (dt & /* PTP_DTC_ARRAY_MASK */ 0x4000) {
-		free(dpd->a.v);
-	}
-}
-
-void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd) {
-	uint16_t i;
-
-	ptp_free_devicepropvalue(dpd->DataType, &dpd->FactoryDefaultValue);
-	ptp_free_devicepropvalue(dpd->DataType, &dpd->CurrentValue);
-	switch (dpd->FormFlag) {
-	case /* PTP_DPFF_Range */ 0x01:
-		ptp_free_devicepropvalue(dpd->DataType, &dpd->FORM.Range.MinimumValue);
-		ptp_free_devicepropvalue(dpd->DataType, &dpd->FORM.Range.MaximumValue);
-		ptp_free_devicepropvalue(dpd->DataType, &dpd->FORM.Range.StepSize);
-		break;
-	case /* PTP_DPFF_Enumeration */ 0x02:
-		if (dpd->FORM.Enum.SupportedValue) {
-			for (i = 0; i < dpd->FORM.Enum.NumberOfValues; i++)
-				ptp_free_devicepropvalue(dpd->DataType, dpd->FORM.Enum.SupportedValue + i);
-			free(dpd->FORM.Enum.SupportedValue);
-		}
-	}
 }
 
 void *read_file(struct ptp_dirent *cur) {
@@ -369,18 +338,6 @@ int vcam_init(vcam *cam) {
 }
 
 int vcam_exit(vcam *cam) {
-	return GP_OK;
-}
-
-// TODO: delete
-int vcam_open(vcam *cam, const char *port) {
-	if (cam->type == CAM_FUJI_WIFI) {
-		vcam_fuji_setup(cam);
-	} else if (cam->type == CAM_CANON) {
-		vcam_canon_setup(cam);
-	}
-	// TODO: setup generic props like shutterspeed
-
 	return GP_OK;
 }
 
@@ -498,23 +455,21 @@ void vcam_process_output(vcam *cam) {
 	cam->nroutbulk -= ptp.size;
 
 	/* call the opcode handler */
-	for (j = 0; j < sizeof(ptp_functions) / sizeof(ptp_functions[0]); j++) {
-		struct ptp_function *funcs = ptp_functions[j].functions;
-		for (i = 0; funcs[i].code != 0; i++) {
-			if (funcs[i].code == ptp.code) {
-				if (ptp.type == 1) {
-					funcs[i].write(cam, &ptp);
-					memcpy(&cam->ptpcmd, &ptp, sizeof(ptp));
+	for (i = 0; i < cam->opcodes->length; i++) {
+		struct PtpOpcode *h = &cam->opcodes->handlers[i];
+		if (h->code == ptp.code) {
+			if (ptp.type == 1) {
+				h->write(cam, &ptp);
+				memcpy(&cam->ptpcmd, &ptp, sizeof(ptp));
+			} else {
+				if (h->write_data == NULL) {
+					gp_log(GP_LOG_ERROR, __FUNCTION__, "opcode 0x%04x received with dataphase, but no dataphase expected", ptp.code);
+					ptp_response(cam, PTP_RC_GeneralError, 0);
 				} else {
-					if (funcs[i].write_data == NULL) {
-						gp_log(GP_LOG_ERROR, __FUNCTION__, "opcode 0x%04x received with dataphase, but no dataphase expected", ptp.code);
-						ptp_response(cam, PTP_RC_GeneralError, 0);
-					} else {
-						funcs[i].write_data(cam, &cam->ptpcmd, cam->outbulk + 12, ptp.size - 12);
-					}
+					h->write_data(cam, &cam->ptpcmd, cam->outbulk + 12, ptp.size - 12);
 				}
-				return;
 			}
+			return;
 		}
 	}
 
@@ -523,7 +478,7 @@ void vcam_process_output(vcam *cam) {
 }
 
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes) {
-	unsigned int toread = bytes;
+	int toread = bytes;
 
 	if (toread > cam->nrinbulk)
 		toread = cam->nrinbulk;
@@ -654,23 +609,46 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	return tocopy;
 }
 
-vcam *vcamera_new(vcameratype type) {
-	vcam *cam;
+int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
+	if (!strcmp(argv[(*i)], "--ip")) {
+		(*i)++;
+		cam->custom_ip_addr = strdup(argv[(*i)]);
+	} else if (!strcmp(argv[(*i)], "--local-ip")) {
+		cam->custom_ip_addr = malloc(64);
+		get_local_ip(cam->custom_ip_addr);
+	} else if (!strcmp(argv[(*i)], "--fs")) {
+		extern char *vcamera_filesystem;
+		vcamera_filesystem = argv[(*i) + 1];
+		(*i)++;
+	} else if (!strcmp(argv[(*i)], "--sig")) {
+		(*i)++;
+		cam->sig = atoi(argv[(*i)]);
+	} else {
+		return 0;
+	}
+	return 1;
+}
 
-	cam = calloc(1, sizeof(vcam));
+vcam *vcamera_new(const char *name, int argc, char **argv) {
+	vcam *cam = calloc(1, sizeof(vcam));
 	if (!cam)
 		return NULL;
-
 
 	read_tree(vcamera_filesystem);
 
 	cam->props = calloc(1, sizeof(struct PtpPropList));
 	cam->opcodes = calloc(1, sizeof(struct PtpOpcodeList));
-
-	cam->type = type;
 	cam->seqnr = 0;
 
 	cam->last_cmd_timestamp = 0;
 
-	return cam;
+	ptp_register_standard_opcodes(cam);
+
+	if (fuji_init_cam(cam, name, argc, argv) == 0) return cam;
+	if (canon_init_cam(cam, name, argc, argv) == 0) return cam;
+
+	vcam_log("Cam '%s' does not exist\n", name);
+	abort();
+
+	return NULL;
 }

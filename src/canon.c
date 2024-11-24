@@ -9,6 +9,21 @@
 #define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos_events.bin"
 
+int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
+	strcpy(cam->manufac, "Canon Inc.");
+	if (!strcmp(name, "canon_1300d")) {
+		strcpy(cam->model, "Canon EOS Rebel T6");
+		strcpy(cam->version, "3-1.2.0");
+		strcpy(cam->serial, "828af56");
+	} else {
+		return -1;
+	}
+
+	canon_register_base_eos(cam);
+
+	return 0;
+}
+
 static struct EosInfo {
 	int first_events;
 	int lv_ready;
@@ -154,8 +169,8 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 		cnt += ptp_write_u32(buf + cnt, 16);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_PropValueChanged);
 		cnt += ptp_write_u32(buf + cnt, p->code);
-		memcpy(buf + cnt, p->data, p->length);
-		cnt += p->length;
+		memcpy(buf + cnt, p->desc.value, p->desc.value_length);
+		cnt += p->desc.value_length;
 	}
 
 	cnt += ptp_write_u32(buf + cnt, 0xc);
@@ -165,14 +180,14 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 	// Pack in all property available value lists
 	for (int i = 0; i < cam->props->length; i++) {
 		struct PtpProp *p = &cam->props->handlers[i];
-		int avail_size = p->avail_size * p->avail_cnt;
+		int avail_size = p->desc.avail_size * p->desc.avail_cnt;
 		cnt += ptp_write_u32(buf + cnt, 5 * 4 + avail_size);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_AvailListChanged);
 		cnt += ptp_write_u32(buf + cnt, p->code);
 		cnt += ptp_write_u32(buf + cnt, 3); // type can be 1/2/3
-		cnt += ptp_write_u32(buf + cnt, p->avail_cnt);
+		cnt += ptp_write_u32(buf + cnt, p->desc.avail_cnt);
 
-		memcpy(buf + cnt, p->avail, avail_size);
+		memcpy(buf + cnt, p->desc.avail, avail_size);
 		cnt += avail_size;
 	}
 
@@ -183,7 +198,7 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 	(*size) = cnt;
 
 	return 0;
-};
+}
 
 static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 0))return 1;
@@ -359,5 +374,4 @@ void canon_register_base_eos(vcam *cam) {
 	vcam_register_opcode(cam, 0x905f,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, PTP_OC_CHDK,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, PTP_OC_MagicLantern, 	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0, NULL, NULL);
 }

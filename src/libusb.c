@@ -29,8 +29,8 @@ int libusb_init(libusb_context **ctx) {
 	vcam_log("vcam init\n");
 	// No allocation is needed as per spec. Implementation is hidden.
 	(*ctx) = malloc(sizeof(struct libusb_context));
-	(*ctx)->cams[0] =
-	(*ctx)->length = 5;
+	(*ctx)->cams[0] = vcamera_new("canon_1300d", 0, NULL);
+	(*ctx)->length = 1;
 	return 0;
 }
 
@@ -47,10 +47,8 @@ int libusb_get_configuration(libusb_device_handle *dev_handle, int *config) {
 }
 
 ssize_t libusb_get_device_list(libusb_context *ctx, libusb_device ***list) {
-	// No value for libusb_device is necessary
-	int n = 5;
-	*list = malloc(sizeof(void *) * n);
-	for (int i = 0; i < n; i++) {
+	*list = malloc(sizeof(void *) * ctx->length);
+	for (int i = 0; i < ctx->length; i++) {
 		(*list)[i] = malloc(sizeof(libusb_device));
 		(*list)[i]->cam = ctx->cams[i];
 	}

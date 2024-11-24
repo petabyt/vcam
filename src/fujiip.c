@@ -19,16 +19,7 @@
 
 static const char *server_ip_address = "192.168.0.1";
 
-//int fuji_open_remote_port = 0; // TODO: Move to int in vcam
-
-struct _GPPortPrivateLibrary {
-	int isopen;
-	vcam *vcamera;
-};
-
-static GPPort *port = NULL;
-
-static int ptpip_cmd_client_write(void *to, int length) {
+static int ptpip_cmd_client_write(vcam *cam, void *to, int length) {
 	static int first_write = 1;
 
 	if (first_write) {
@@ -39,15 +30,14 @@ static int ptpip_cmd_client_write(void *to, int length) {
 		return length;
 	}
 
-	C_PARAMS(port && port->pl && port->pl->vcamera);
-	int rc = vcam_write(port->pl->vcamera, 0x02, (unsigned char *)to, length);
+	int rc = vcam_write(cam, 0x02, (unsigned char *)to, length);
 	return rc;
 }
 
-static int ptpip_cmd_client_read(void *to, int length) {
+static int ptpip_cmd_client_read(vcam *cam, void *to, int length) {
 	static int left_of_init_packet = FUJI_ACK_PACKET_SIZE;
 
-	uint8_t *packet = fuji_get_ack_packet(port->pl->vcamera);
+	uint8_t *packet = fuji_get_ack_packet(cam);
 
 	if (left_of_init_packet) {
 		memcpy(to, packet + FUJI_ACK_PACKET_SIZE - left_of_init_packet, length);
@@ -55,13 +45,12 @@ static int ptpip_cmd_client_read(void *to, int length) {
 		return length;
 	}
 
-	C_PARAMS(port && port->pl && port->pl->vcamera);
-	int rc = vcam_read(port->pl->vcamera, 0x81, (unsigned char *)to, length);
+	int rc = vcam_read(cam, 0x81, (unsigned char *)to, length);
 	return rc;
 }
 
 // Recieve all packets from the app (initiator)
-static int tcp_recieve_all(int client_socket) {
+static int tcp_recieve_all(vcam *cam, int client_socket) {
 	uint32_t packet_length;
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
@@ -111,14 +100,14 @@ static int tcp_recieve_all(int client_socket) {
 
 	// Route the read data into the vcam. The camera is the responder,
 	// and will be the first to write data to the app.
-	int rc = ptpip_cmd_client_write(buffer, size);
+	int rc = ptpip_cmd_client_write(cam, buffer, size);
 	if (rc != size) {
 		return -1;
 	}
 
 	// Detect data phase from vcam
 	struct PtpBulkContainer *c = (struct PtpBulkContainer *)buffer;
-	if (port->pl->vcamera->nrinbulk == 0 && c->code != 0x0) {
+	if (cam->nrinbulk == 0 && c->code != 0x0) {
 		free(buffer);
 
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
@@ -141,7 +130,7 @@ static int tcp_recieve_all(int client_socket) {
 			return -1;
 		}
 
-		rc = ptpip_cmd_client_write(buffer, packet_length);
+		rc = ptpip_cmd_client_write(cam, buffer, packet_length);
 		if (rc != packet_length) {
 			vcam_log("Failed to send response to vcam\n");
 			return -1;
@@ -153,9 +142,9 @@ static int tcp_recieve_all(int client_socket) {
 	return 0;
 }
 
-static int tcp_send_all(int client_socket) {
+static int tcp_send_all(vcam *cam, int client_socket) {
 	uint32_t packet_length = 0;
-	int size = ptpip_cmd_client_read(&packet_length, 4);
+	int size = ptpip_cmd_client_read(cam, &packet_length, 4);
 	if (size != 4) {
 		vcam_log("send_all: vcam failed to provide 4 bytes\n", size);
 		return -1;
@@ -164,7 +153,7 @@ static int tcp_send_all(int client_socket) {
 	// Same trick from the recv part
 	char *buffer = malloc(size + packet_length);
 	((uint32_t *)buffer)[0] = packet_length;
-	int rc = ptpip_cmd_client_read(buffer + size, packet_length - size);
+	int rc = ptpip_cmd_client_read(cam, buffer + size, packet_length - size);
 
 	if (rc != packet_length - size) {
 		vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
@@ -183,7 +172,7 @@ static int tcp_send_all(int client_socket) {
 	if (c->type == PTP_PACKET_TYPE_DATA && c->code != 0x0) {
 
 		// Read packet length
-		size = ptpip_cmd_client_read(&packet_length, 4);
+		size = ptpip_cmd_client_read(cam, &packet_length, 4);
 		if (size != 4) {
 			vcam_log("response packet: vcam failed to provide 4 bytes: %d\n", size);
 			vcam_log("Code: %X\n", c->code);
@@ -193,7 +182,7 @@ static int tcp_send_all(int client_socket) {
 		// Same trick from the recv part
 		buffer = malloc(size + packet_length);
 		((uint32_t *)buffer)[0] = packet_length;
-		rc = ptpip_cmd_client_read(buffer + size, packet_length - size);
+		rc = ptpip_cmd_client_read(cam, buffer + size, packet_length - size);
 
 		if (rc != packet_length - size) {
 			vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
@@ -290,6 +279,7 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 	// TODO: Do this continuously with two frames? 
 	ptp_fuji_liveview(client_socket_video);
 
+	// TODO: Break loop on sigint?
 	while (1) {
 		uint32_t temp;
 		vcam_log("Liveview/event thread sleeping... (read attempts %d %d)\n", recv(client_socket_video, &temp, 4, 0), recv(client_socket_event, &temp, 4, 0));
@@ -299,7 +289,7 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 	return (void *)0;
 }
 
-void fuji_accept_remote_ports() {
+void fuji_accept_remote_ports(void) {
 	pthread_t thread;
 
 	if (pthread_create(&thread, NULL, fuji_accept_remote_ports_thread, NULL)) {
@@ -309,37 +299,23 @@ void fuji_accept_remote_ports() {
 	vcam_log("Started new thread to accept remote ports\n");
 }
 
-static int init_vcam(struct CamConfig *options) {
-	port = malloc(sizeof(GPPort));
-	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
-	port->pl->vcamera = vcamera_new(CAM_FUJI_WIFI);
-	port->pl->vcamera->conf = options;
+int fuji_wifi_main(const char *name, int argc, char **argv) {
+	vcam *cam = vcamera_new(name, argc, argv);
+	struct Fuji *f = fuji(cam);
 
-	if (port->pl->isopen)
-		return -1;
-
-	vcam_open(port->pl->vcamera, port->settings.usb.port);
-	port->pl->isopen = 1;
-
-	return 0;
-}
-
-int fuji_wifi_main(struct CamConfig *options) {
-	vcam_log("Fuji vcam - running '%s'\n", options->model);
-
-	init_vcam(options);
+	vcam_log("Fuji vcam - running '%s'\n", cam->model);
 
 	char this_ip[64];
 	get_local_ip(this_ip);
 
 	// (Skips client datagram discovery)
-	if (options->do_tether) {
+	if (f->do_tether) {
 		vcam_log("Fuji tether connect, skipping datagram\n");
 		fuji_tether_connect("192.168.1.7", 51560);
 	}
 
 	// PC AutoSave registration
-	if (options->do_register) {
+	if (f->do_register) {
 		vcam_log("Fuji register\n");
 		server_ip_address = this_ip;
 		fuji_ssdp_register(server_ip_address, "VCAM", "X-H1");
@@ -347,14 +323,15 @@ int fuji_wifi_main(struct CamConfig *options) {
 	}
 
 	// PC AutoSave
-	if (options->do_discovery) {
+	if (f->do_discovery) {
 		vcam_log("Fuji discovery on %s\n", this_ip);
 		server_ip_address = this_ip;
 		fuji_ssdp_import(server_ip_address, "VCAM");
 	}
 
-	if (options->use_custom_ip) {
-		server_ip_address = options->ip_address;
+
+	if (cam->custom_ip_addr) {
+		server_ip_address = cam->custom_ip_addr;
 		vcam_log("Fuji use local IP: %s\n", server_ip_address);
 	}
 
@@ -364,9 +341,9 @@ int fuji_wifi_main(struct CamConfig *options) {
 		return 1;
 	}
 
-	if (options->sig) {
-		vcam_log("Sending signal to parent %d\n", options->sig);
-		kill(options->sig, SIGUSR1);
+	if (cam->sig) {
+		vcam_log("Sending signal to parent %d\n", cam->sig);
+		kill(cam->sig, SIGUSR1);
 	}
 
 	struct sockaddr_in client_address;
@@ -382,14 +359,14 @@ int fuji_wifi_main(struct CamConfig *options) {
 	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	while (1) {
-		if (tcp_recieve_all(client_socket)) {
+		if (tcp_recieve_all(cam, client_socket)) {
 			goto err;
 		}
 
 		// Now the app has sent the data, and is waiting for a response.
 
 		// Read packet length
-		if (tcp_send_all(client_socket)) {
+		if (tcp_send_all(cam, client_socket)) {
 			goto err;
 		}
 	}
