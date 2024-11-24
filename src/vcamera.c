@@ -48,7 +48,7 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 	sprintf(new, "%s/%s", PWD, path);
 	FILE *file = fopen(new, "rb");
 	if (file == NULL) {
-		vcam_log("vcam_generic_send_file: File %s not found\n", path);
+		vcam_log("vcam_generic_send_file: File %s not found", path);
 	}
 
 	fseek(file, 0, SEEK_END);
@@ -60,7 +60,7 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, file_size);
 	free(buffer);
-	vcam_log("Generic sending %d\n", file_size);
+	vcam_log("Generic sending %d", file_size);
 
 	fclose(file);
 
@@ -68,7 +68,7 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 }
 
 int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size)) {
-	cam->opcodes = realloc(cam->opcodes, sizeof(struct PtpOpcodeList) * (sizeof(struct PtpOpcode) * cam->opcodes->length + 1));
+	cam->opcodes = realloc(cam->opcodes, sizeof(struct PtpOpcodeList) + (sizeof(struct PtpOpcode) * (cam->opcodes->length + 1)));
 
 	struct PtpOpcode *c = &cam->opcodes->handlers[cam->opcodes->length];
 	memset(c, 0, sizeof(struct PtpOpcode));
@@ -81,7 +81,7 @@ int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontain
 }
 
 int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue) {
-	cam->props = realloc(cam->props, sizeof(struct PtpPropList) * (sizeof(struct PtpProp) * cam->props->length + 1));
+	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 
 	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
 	memset(prop, 0, sizeof(struct PtpProp));
@@ -165,7 +165,7 @@ int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
 		if (prop->code == code) break;
 	}
 	if (prop == NULL) {
-		vcam_log("WARN: %s %04x prop that doesn't exist\n", __func__, code);
+		vcam_log("WARN: %s %04x prop that doesn't exist", __func__, code);
 		return -1;
 	}
 
@@ -246,6 +246,18 @@ void *read_file(struct ptp_dirent *cur) {
 	}
 	fclose(file);
 	return data;
+}
+
+int ptp_get_object_count(vcam *cam) {
+	int cnt = 0;
+	struct ptp_dirent *cur = cam->first_dirent;
+	while (cur) {
+		if (cur->id) { /* do not include 0 entry */
+			cnt++;
+		}
+		cur = cur->next;
+	}
+	return cnt;
 }
 
 void read_directories(vcam *cam, const char *path, struct ptp_dirent *parent) {
@@ -347,6 +359,8 @@ int vcam_exit(vcam *cam) {
 int vcam_close(vcam *cam) {
 	free(cam->inbulk);
 	free(cam->outbulk);
+	free(cam->props);
+	free(cam->opcodes);
 	return GP_OK;
 }
 
@@ -631,10 +645,11 @@ int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
 	return 1;
 }
 
-vcam *vcamera_new(const char *name, int argc, char **argv) {
+vcam *vcamera_new(void) {
 	vcam *cam = calloc(1, sizeof(vcam));
-	if (!cam)
-		return NULL;
+	if (!cam) abort();
+
+	cam->vcamera_filesystem = PWD "/bin/card";
 
 	read_tree(cam, cam->vcamera_filesystem);
 
@@ -646,11 +661,37 @@ vcam *vcamera_new(const char *name, int argc, char **argv) {
 
 	ptp_register_standard_opcodes(cam);
 
-	if (fuji_init_cam(cam, name, argc, argv) == 0) return cam;
-	if (canon_init_cam(cam, name, argc, argv) == 0) return cam;
+	return cam;
+}
 
-	vcam_log("Cam '%s' does not exist\n", name);
-	abort();
+int vcam_multi_main(vcam *cam, const char *name, int argc, char **argv, int do_start_main) {
+	if (fuji_init_cam(cam, name, argc, argv) == 0) {
+		if (do_start_main) {
+			int rc = fuji_wifi_main(cam);
+			vcam_close(cam);
+			return rc;
+		}
+	} else if (canon_init_cam(cam, name, argc, argv) == 0) {
+		if (do_start_main) {
+			int rc = ptpip_generic_main(cam);
+			vcam_close(cam);
+			return rc;
+		}
+	} else {
+		vcam_log("Invalid camera '%s'", name);
+		return -1;
+	}
 
-	return NULL;
+	return 0;
+}
+
+int vcam_main(const char *name, int argc, char **argv) {
+	return vcam_multi_main(vcamera_new(), name, argc, argv, 1);
+}
+
+vcam *vcam_new(const char *name) {
+	vcam *cam = vcamera_new();
+	int rc = vcam_multi_main(cam, name, 0, NULL, 0);
+	if (rc) return NULL;
+	return cam;
 }

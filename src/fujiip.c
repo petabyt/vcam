@@ -299,13 +299,12 @@ void fuji_accept_remote_ports(void) {
 	vcam_log("Started new thread to accept remote ports\n");
 }
 
-int fuji_wifi_main(const char *name, int argc, char **argv) {
-	vcam *cam = vcamera_new(name, argc, argv);
+int fuji_wifi_main(vcam *cam) {
 	struct Fuji *f = fuji(cam);
 
-	vcam_log("Fuji vcam - running '%s'\n", cam->model);
+	vcam_log("Fuji WiFi vcam - running '%s'\n", cam->model);
 
-	char this_ip[64];
+	char *this_ip = malloc(32);
 	get_local_ip(this_ip);
 
 	// (Skips client datagram discovery)

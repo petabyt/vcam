@@ -7,7 +7,7 @@
 #include <vcam.h>
 #include <dirent.h>
 
-static void close_all_fds() {
+static void close_all_fds(void) {
 	vcam_log("Closing all fds\n");
 	DIR *dir = opendir("/proc/self/fd");
 	if (!dir) return;
@@ -30,25 +30,12 @@ void sigint_handler(int x) {
 int main(int argc, char *argv[]) {
 	signal(SIGINT, sigint_handler);
 
-	struct CamConfig *options = vcam_new_config(argc, argv);
-	if (options == NULL) {
+	if (argc < 2) {
 		printf("Usage: vcam <model> ... flags ...\n");
 		return -1;
 	}
 
-	int rc = 0;
-	if (options->type == CAM_FUJI_WIFI) {
-		rc = fuji_wifi_main(options);
-	} else if (options->type == CAM_CANON) {
-		rc = canon_wifi_main(options);
-	} else {
-		if (options->type == -1) {
-			printf("No camera supplied\n");
-		} else {
-			printf("Unknown camera type\n");
-		}
-		rc = 1;
-	}
+	int rc = vcam_main(argv[1], argc - 2, argv + 2);
 
 	close_all_fds();
 	return rc;

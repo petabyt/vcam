@@ -65,4 +65,6 @@ int fuji_tether_connect(const char *ip, int port);
 // Launch thread to listen to liveview/event ports
 void fuji_accept_remote_ports(void);
 
+int vcam_fuji_setup(vcam *cam);
+
 #endif

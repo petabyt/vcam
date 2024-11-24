@@ -6,15 +6,24 @@
 
 #include <vcam.h>
 
+void canon_register_d4_hidden(vcam *cam);
+void canon_register_base_eos(vcam *cam);
+
 #define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos_events.bin"
 
 int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	strcpy(cam->manufac, "Canon Inc.");
+	cam->vendor = 0x4a9;
 	if (!strcmp(name, "canon_1300d")) {
 		strcpy(cam->model, "Canon EOS Rebel T6");
 		strcpy(cam->version, "3-1.2.0");
 		strcpy(cam->serial, "828af56");
+		canon_register_d4_hidden(cam);
+	} else if (!strcmp(name, "eos_m")) {
+		strcpy(cam->model, "Canon EOS M");
+		strcpy(cam->version, "1.0.0");
+		strcpy(cam->serial, "xxxx");
 	} else {
 		return -1;
 	}
@@ -221,6 +230,15 @@ static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+void canon_register_d4_hidden(vcam *cam) {
+	vcam_register_opcode(cam, PTP_OC_EOS_ExecuteEventProc, ptp_eos_exec_evproc, ptp_eos_exec_evproc_data);
+	vcam_register_opcode(cam, 0x9057,	ptp_eos_generic, NULL);
+	vcam_register_opcode(cam, 0x9058,	ptp_eos_generic, NULL);
+	vcam_register_opcode(cam, 0x9059,	ptp_eos_generic, NULL);
+	vcam_register_opcode(cam, 0x905a,	ptp_eos_generic, NULL);
+	vcam_register_opcode(cam, 0x905f,	ptp_eos_generic, NULL);
+}
+
 void canon_register_base_eos(vcam *cam) {
 	vcam_register_opcode(cam, PTP_OC_EOS_GetStorageIDs,			ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, PTP_OC_EOS_GetStorageInfo,			ptp_eos_generic, NULL);
@@ -365,13 +383,7 @@ void canon_register_base_eos(vcam *cam) {
 	vcam_register_opcode(cam, 0x9124,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x91f5,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x91f6,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, PTP_OC_EOS_ExecuteEventProc,	ptp_eos_exec_evproc, ptp_eos_exec_evproc_data);
-	vcam_register_opcode(cam, 0x9053,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0x9057,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0x9058,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0x9059,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0x905a,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0x905f,	ptp_eos_generic, NULL);
+	vcam_register_opcode(cam, 0x9053,	ptp_eos_generic, NULL); // TODO: special handling for 9053
 	vcam_register_opcode(cam, PTP_OC_CHDK,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, PTP_OC_MagicLantern, 	ptp_eos_generic, NULL);
 }

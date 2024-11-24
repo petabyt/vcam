@@ -67,20 +67,18 @@ typedef struct vcam {
 	uint8_t battery;
 }vcam;
 
-vcam *vcamera_new(const char *name, int argc, char **argv);
+vcam *vcamera_new(void);
+int vcam_main(const char *name, int argc, char **argv);
+vcam *vcam_new(const char *name);
 int vcam_parse_args(vcam *cam, int argc, char **argv, int *i);
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
 int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes);
 int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
 int vcam_open(vcam *cam, const char *port);
 int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size));
+
 int get_local_ip(char buffer[64]);
-
-// Called early before connection is established
-int vcam_fuji_setup(vcam *cam);
-int vcam_canon_setup(vcam *cam);
-
-int ptp_get_object_count(void);
+int ptp_get_object_count(vcam *cam);
 
 // Temporary function to help with unimplemented data structures
 int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp);
@@ -221,10 +219,12 @@ int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
 void ptp_register_standard_opcodes(vcam *cam);
-void canon_register_base_eos(vcam *cam);
 void fuji_register_opcodes(vcam *cam);
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv);
 int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);
+
+int fuji_wifi_main(vcam *cam);
+int ptpip_generic_main(vcam *cam);
 
 #include "data.h"
 #include "socket.h"

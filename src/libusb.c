@@ -26,16 +26,17 @@ struct libusb_context {
 };
 
 int libusb_init(libusb_context **ctx) {
-	vcam_log("vcam init\n");
+	vcam_log("libusb_init\n");
 	// No allocation is needed as per spec. Implementation is hidden.
 	(*ctx) = malloc(sizeof(struct libusb_context));
-	(*ctx)->cams[0] = vcamera_new("canon_1300d", 0, NULL);
-	(*ctx)->length = 1;
+	(*ctx)->cams[0] = vcam_new("canon_1300d");
+	(*ctx)->cams[1] = vcam_new("fuji_x_a2");
+	(*ctx)->length = 2;
 	return 0;
 }
 
 void libusb_exit(libusb_context *ctx) {
-	vcam_log("Deinit");
+	vcam_log("libusb_exit\n");
 }
 
 void libusb_set_debug(libusb_context *ctx, int level) {}
@@ -52,7 +53,7 @@ ssize_t libusb_get_device_list(libusb_context *ctx, libusb_device ***list) {
 		(*list)[i] = malloc(sizeof(libusb_device));
 		(*list)[i]->cam = ctx->cams[i];
 	}
-	return 1;
+	return ctx->length;
 }
 
 int libusb_get_device_descriptor(libusb_device *dev, struct libusb_device_descriptor *desc) {

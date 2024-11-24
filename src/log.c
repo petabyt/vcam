@@ -46,5 +46,5 @@ void vcam_log(const char *format, ...) {
 	vsnprintf(buffer, sizeof(buffer), format, args);
 	va_end(args);
 
-	printf("[VCAM] %s", buffer);
+	printf("[VCAM] %s\n", buffer);
 }

@@ -359,8 +359,7 @@ static void *bind_event_socket_thread(void *arg) {
 	return NULL;
 }
 
-int ptpip_generic_main(const char *name, int argc, char **argv) {
-	vcam *cam = vcamera_new(name, argc, argv);
+int ptpip_generic_main(vcam *cam) {
 	printf("vcam - running %s\n", cam->model);
 
 	int server_socket = new_ptp_tcp_socket(PTP_IP_PORT);

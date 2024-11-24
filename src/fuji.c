@@ -10,24 +10,10 @@
 #include "fuji.h"
 
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
+	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
-	for (int i = 0; i < argc; i++) {
-		if (vcam_parse_args(cam, argc, argv, &i)) continue;
-		if (!strcmp(argv[i], "--select-img")) {
-			f->is_select_multiple_images = 1;
-		} else if (!strcmp(argv[i], "--discovery")) {
-			f->do_discovery = 1;
-		} else if (!strcmp(argv[i], "--register")) {
-			f->do_register = 1;
-		} else if (!strcmp(argv[i], "--tether")) {
-			f->do_tether = 1;
-		} else {
-			printf("Unknown option %s\n", argv[i]);
-			return -1;
-		}
-	}
-
 	strcpy(cam->manufac, "Fujifilm Corp");
+	cam->vendor = 0x4cb;
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
 		f->image_get_version = 1;
@@ -87,6 +73,22 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		return -1;
 	}
 
+	for (int i = 0; i < argc; i++) {
+		if (vcam_parse_args(cam, argc, argv, &i)) continue;
+		if (!strcmp(argv[i], "--select-img")) {
+			f->is_select_multiple_images = 1;
+		} else if (!strcmp(argv[i], "--discovery")) {
+			f->do_discovery = 1;
+		} else if (!strcmp(argv[i], "--register")) {
+			f->do_register = 1;
+		} else if (!strcmp(argv[i], "--tether")) {
+			f->do_tether = 1;
+		} else {
+			printf("Unknown option %s\n", argv[i]);
+			return -1;
+		}
+	}
+
 	fuji_register_opcodes(cam);
 
 	return vcam_fuji_setup(cam);
@@ -137,7 +139,7 @@ int vcam_fuji_setup(vcam *cam) {
 	f->sent_images = 0;
 
 	// TODO: Better way to ignore folders (Fuji doesn't show them)
-	f->obj_count = ptp_get_object_count() - 1;
+	f->obj_count = ptp_get_object_count(cam) - 1;
 
 	vcam_log("Fuji: Found %d objects\n", f->obj_count);
 
