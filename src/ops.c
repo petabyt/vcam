@@ -83,23 +83,12 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	x += put_string(data + x, "G-V: 1.0;"); /* VendorExtensionDesc */
 	x += put_16bit_le(data + x, 0);		/* FunctionalMode */
 
-	cnt = 0;
-	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
-		if (ptp_functions[i].type != cam->type) continue;
-		for (int x = 0; x < ptp_functions[i].functions[x].code; x++) {
-			cnt++;
-		}
-	}
-
-	opcodes = malloc(cnt * sizeof(uint16_t));
+	opcodes = malloc(cam->opcodes->length * sizeof(uint16_t));
 
 	cnt = 0;
-	for (i = 0; i < sizeof(ptp_functions) / sizeof(ptp_functions[0]); i++) {
-		if (ptp_functions[i].type != cam->type) continue;
-		for (int z = 0; z < ptp_functions[i].functions[z].code; z++) {
-			opcodes[cnt] = ptp_functions[i].functions[z].code;
-			cnt++;
-		}
+	for (i = 0; i < cam->opcodes->length; i++) {
+		opcodes[cnt] = cam->opcodes->handlers[i].code;
+		cnt++;
 	}
 
 	x += put_16bit_le_array(data + x, opcodes, cnt); /* OperationsSupported */
@@ -112,10 +101,10 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	events[4] = 0x400d;
 	x += put_16bit_le_array(data + x, events, sizeof(events) / sizeof(events[0])); /* EventsSupported */
 
-	devprops = malloc(ptp_get_properties_length() * sizeof(uint16_t));
-	for (i = 0; i < ptp_get_properties_length(); i++)
-		devprops[i] = ptp_properties[i].code;
-	x += put_16bit_le_array(data + x, devprops, ptp_get_properties_length()); /* DevicePropertiesSupported */
+	devprops = malloc(cam->props->length * sizeof(uint16_t));
+	for (i = 0; i < cam->props->length; i++)
+		devprops[i] = cam->props->handlers[i].code;
+	x += put_16bit_le_array(data + x, devprops, cam->props->length); /* DevicePropertiesSupported */
 	free(devprops);
 
 	imageformats[0] = 0x3801;
@@ -132,9 +121,9 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 		x += put_string(data + x, "Generic Corp");
 	}
 
-	x += put_string(data + x, cam->conf->model);
-	x += put_string(data + x, cam->conf->version);
-	x += put_string(data + x, cam->conf->serial);
+	x += put_string(data + x, cam->model);
+	x += put_string(data + x, cam->version);
+	x += put_string(data + x, cam->serial);
 
 	ptp_senddata(cam, 0x1001, data, x);
 	free(data);
@@ -657,11 +646,14 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 
 	gp_log_("Processing thumbnail call for %d\n", ptp->params[0]);
 
-	if (cam->conf->do_discovery) {
+#warning "TODO"
+#if 0
+	if (cam->do_discovery) {
 		gp_log_("Returning nothing for discovery mode\n");
 		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
 		return 1;
 	}
+#endif
 
 	cur = first_dirent;
 	while (cur) {
@@ -868,111 +860,52 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-int put_propval(unsigned char *data, uint16_t type, PTPPropertyValue *val) {
-	switch (type) {
-	case 0x1:
-		return put_8bit_le(data, val->i8);
-	case 0x2:
-		return put_8bit_le(data, val->u8);
-	case 0x3:
-		return put_16bit_le(data, val->i16);
-	case 0x4:
-		return put_16bit_le(data, val->u16);
-	case 0x6:
-		return put_32bit_le(data, val->u32);
-	case 0xffff:
-		return put_string(data, val->str);
-	default:
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %d", type);
-		return 0;
-	}
-	return 0;
-}
-
-int get_propval(unsigned char *data, unsigned int len, uint16_t type, PTPPropertyValue *val) {
-#define CHECK_SIZE(x) \
-	if (len < x)  \
-		return 0;
-	switch (type) {
-	case 0x1:
-		CHECK_SIZE(1);
-		val->i8 = get_i8bit_le(data);
-		return 1;
-	case 0x2:
-		CHECK_SIZE(1);
-		val->u8 = get_8bit_le(data);
-		return 1;
-	case 0x3:
-		CHECK_SIZE(2);
-		val->i16 = get_16bit_le(data);
-		return 1;
-	case 0x4:
-		CHECK_SIZE(2);
-		val->u16 = get_16bit_le(data);
-		return 1;
-	case 0x6:
-		CHECK_SIZE(4);
-		val->u32 = get_32bit_le(data);
-		return 1;
-	case 0xffff: {
-		int slen;
-		CHECK_SIZE(1);
-		slen = get_8bit_le(data);
-		CHECK_SIZE(1 + slen * 2);
-		val->str = get_string(data);
-		return 1 + slen * 2;
-	}
-	default:
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %d", type);
-		return 0;
-	}
-	return 0;
-#undef CHECK_SIZE
+static inline int put_data(unsigned char *dest, void *data, int length) {
+	memcpy(dest, data, length);
+	return length;
 }
 
 int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	int i, x = 0;
 	unsigned char *data;
-	PTPDevicePropDesc desc;
 
-	if (vcam_check_trans_id(cam, ptp))return 1;
-	if (vcam_check_session(cam))return 1;
-	if (vcam_check_param_count(cam, ptp, 1))return 1;
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
-	for (i = 0; i < ptp_get_properties_length(); i++) {
-		if (ptp_properties[i].code == ptp->params[0])
-			break;
-	}
-	if (i == ptp_get_properties_length()) {
+	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
+	if (desc == NULL) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}
 	data = malloc(2000);
-	ptp_properties[i].getdesc(cam, &desc);
 
-	x += put_16bit_le(data + x, desc.DevicePropertyCode);
-	x += put_16bit_le(data + x, desc.DataType);
-	x += put_8bit_le(data + x, desc.GetSet);
-	x += put_propval(data + x, desc.DataType, &desc.FactoryDefaultValue);
-	x += put_propval(data + x, desc.DataType, &desc.CurrentValue);
-	x += put_8bit_le(data + x, desc.FormFlag);
-	switch (desc.FormFlag) {
+	x += put_16bit_le(data + x, desc->DevicePropertyCode);
+	x += put_16bit_le(data + x, desc->DataType);
+	x += put_8bit_le(data + x, desc->GetSet);
+	x += put_data(data + x, desc->factory_default_value, desc->factory_default_value_length);
+	x += put_data(data + x, desc->value, desc->value_length);
+	x += put_8bit_le(data + x, desc->FormFlag);
+	switch (desc->FormFlag) {
 	case 0:
 		break;
 	case 1: /* range */
+	// TODO: not supporting >4 byte ranges
+#if 0
 		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.MinimumValue);
 		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.MaximumValue);
 		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.StepSize);
+#endif
+		x += put_32bit_le(data + x, desc->form_min);
+		x += put_32bit_le(data + x, desc->form_max);
+		x += put_32bit_le(data + x, desc->form_step);
 		break;
 	case 2: /* ENUM */
-		x += put_16bit_le(data + x, desc.FORM.Enum.NumberOfValues);
-		for (i = 0; i < desc.FORM.Enum.NumberOfValues; i++)
-			x += put_propval(data + x, desc.DataType, &desc.FORM.Enum.SupportedValue[i]);
+		x += put_16bit_le(data + x, desc->avail_cnt);
+		x += put_data(data + x, desc->avail, desc->avail_size * desc->avail_cnt);
 		break;
 	}
-
-	ptp_free_devicepropdesc(&desc);
 
 	ptp_senddata(cam, 0x1014, data, x);
 	free(data);
@@ -981,11 +914,6 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
-	unsigned char *data;
-	int i, x = 0;
-	PTPPropertyValue val;
-	PTPDevicePropDesc desc;
-
 	if (vcam_check_trans_id(cam, ptp))return 1;
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
@@ -994,22 +922,15 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		return fuji_get_property(cam, ptp);
 	}
 
-	for (i = 0; i < ptp_get_properties_length(); i++) {
-		if (ptp_properties[i].code == ptp->params[0])
-			break;
-	}
-	if (i == ptp_get_properties_length()) {
+	int length;
+	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
+	if (prop_data == NULL) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}
-	data = malloc(2000);
-	ptp_properties[i].getdesc(cam, &desc);
-	ptp_properties[i].getvalue(cam, &val);
-	x = put_propval(data + x, desc.DataType, &val);
 
-	ptp_senddata(cam, 0x1015, data, x);
-	free(data);
+	ptp_senddata(cam, 0x1015, prop_data, length);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -1022,6 +943,7 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
+	#warning "TODO"
 	if (cam->type == CAM_FUJI_WIFI) {
 		if (fuji_set_prop_supported(cam, ptp->params[0])) {
 			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
@@ -1031,11 +953,11 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		}
 	}
 
-	for (i = 0; i < ptp_get_properties_length(); i++) {
-		if (ptp_properties[i].code == ptp->params[0])
+	for (i = 0; i < cam->props->length; i++) {
+		if (cam->props->handlers[i].code == ptp->params[0])
 			break;
 	}
-	if (i == ptp_get_properties_length()) {
+	if (i == cam->props->length) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
@@ -1067,6 +989,36 @@ int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
+
+	if (cam->type == CAM_FUJI_WIFI) {
+		return fuji_set_property(cam, ptp, data, len);
+	}
+
+	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
+	if (desc == NULL) {
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
+		/* we emitted the response already in _write */
+		return 1;
+	}
+
+	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data, (int)len);
+	if (rc) {
+		if (rc < 0) {
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			return 1;
+		}
+		ptp_response(cam, rc, 0);
+		return 1;
+	}
+
+	ptp_response(cam, PTP_RC_OK, 0);
+	return 1;
+}
+
 int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	vcam_log("Recieved data phase for 0xBEEF: %d\n", len);
 
@@ -1092,61 +1044,22 @@ int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsig
 	return 1;
 }
 
-int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
-	int i;
-	PTPPropertyValue val;
-	PTPDevicePropDesc desc;
-
-	if (vcam_check_trans_id(cam, ptp))return 1;
-	if (vcam_check_session(cam))return 1;
-	if (vcam_check_param_count(cam, ptp, 1))return 1;
-
-	if (cam->type == CAM_FUJI_WIFI) {
-		return fuji_set_property(cam, ptp, data, len);
-	}
-
-	for (i = 0; i < ptp_get_properties_length(); i++) {
-		if (ptp_properties[i].code == ptp->params[0])
-			break;
-	}
-	if (i == ptp_get_properties_length()) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
-		/* we emitted the response already in _write */
-		return 1;
-	}
-	if (!ptp_properties[i].setvalue) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x is not settable", ptp->params[0]);
-		ptp_response(cam, PTP_RC_AccessDenied, 0);
-		return 1;
-	}
-	ptp_properties[i].getdesc(cam, &desc);
-	if (!get_propval(data, len, desc.DataType, &val)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x is not retrievable", ptp->params[0]);
-		ptp_response(cam, PTP_RC_InvalidDevicePropFormat, 0);
-		return 1;
-	}
-	ptp_properties[i].setvalue(cam, &val);
-	ptp_response(cam, PTP_RC_OK, 0);
-	return 1;
+void ptp_register_standard_opcodes(vcam *cam) {
+	vcam_register_opcode(cam, 0x1001, ptp_deviceinfo_write, 		NULL);
+	vcam_register_opcode(cam, 0x1002, ptp_opensession_write, 		NULL);
+	vcam_register_opcode(cam, 0x1003, ptp_closesession_write, 	NULL);
+	vcam_register_opcode(cam, 0x1004, ptp_getstorageids_write, 	NULL);
+	vcam_register_opcode(cam, 0x1005, ptp_getstorageinfo_write, 	NULL);
+	vcam_register_opcode(cam, 0x1006, ptp_getnumobjects_write, 	NULL);
+	vcam_register_opcode(cam, 0x1007, ptp_getobjecthandles_write, NULL);
+	vcam_register_opcode(cam, 0x1008, ptp_getobjectinfo_write, 	NULL);
+	vcam_register_opcode(cam, 0x1009, ptp_getobject_write, 		NULL);
+	vcam_register_opcode(cam, 0x100A, ptp_getthumb_write, 		NULL);
+	vcam_register_opcode(cam, 0x100B, ptp_deleteobject_write, 	NULL);
+	vcam_register_opcode(cam, 0x100E, ptp_initiatecapture_write, 	NULL);
+	vcam_register_opcode(cam, 0x1014, ptp_getdevicepropdesc_write, 	NULL);
+	vcam_register_opcode(cam, 0x1015, ptp_getdevicepropvalue_write, 	NULL);
+	vcam_register_opcode(cam, 0x1016, ptp_setdevicepropvalue_write, 	ptp_setdevicepropvalue_write_data);
+	vcam_register_opcode(cam, 0x101B, ptp_getpartialobject_write, NULL);
+	vcam_register_opcode(cam, 0xBEEF, ptp_vusb_write, 		ptp_vusb_write_data);
 }
-
-struct ptp_function ptp_functions_generic[] = {
-	{0x1001,	ptp_deviceinfo_write, 		NULL			},
-	{0x1002,	ptp_opensession_write, 		NULL			},
-	{0x1003,	ptp_closesession_write, 	NULL			},
-	{0x1004,	ptp_getstorageids_write, 	NULL			},
-	{0x1005,	ptp_getstorageinfo_write, 	NULL			},
-	{0x1006,	ptp_getnumobjects_write, 	NULL			},
-	{0x1007,	ptp_getobjecthandles_write, NULL			},
-	{0x1008,	ptp_getobjectinfo_write, 	NULL			},
-	{0x1009,	ptp_getobject_write, 		NULL			},
-	{0x100A,	ptp_getthumb_write, 		NULL			},
-	{0x100B,	ptp_deleteobject_write, 	NULL			},
-	{0x100E,	ptp_initiatecapture_write, 	NULL			},
-	{0x1014,	ptp_getdevicepropdesc_write, 	NULL			},
-	{0x1015,	ptp_getdevicepropvalue_write, 	NULL			},
-	{0x1016,	ptp_setdevicepropvalue_write, 	ptp_setdevicepropvalue_write_data	},
-	{0x101B,	ptp_getpartialobject_write, 	NULL			},
-	{0xBEEF,	ptp_vusb_write, 		ptp_vusb_write_data			},
-	{0, NULL, NULL},
-};

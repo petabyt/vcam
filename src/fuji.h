@@ -1,6 +1,39 @@
 #ifndef VCAM_FUJI_H
 #define VCAM_FUJI_H
 
+struct Fuji {
+	int do_discovery;
+	int do_register;
+	int do_tether;
+	int is_select_multiple_images;
+	int image_get_version;
+	int get_object_version;
+	int remote_version;
+	int remote_get_object_version;
+
+	// === Fujifilm runtime vars ===
+	/// @brief Current value for PTP_PC_FUJI_ClientState
+	int client_state;
+	/// @brief Current value for PTP_PC_FUJI_CameraState
+	int camera_state;
+	/// @brief Current value for PTP_PC_FUJI_RemoteVersion
+	int min_remote_version;
+	/// @brief Current vaule for PTP_PC_FUJI_ObjectCount
+	int obj_count;
+	int compress_small;
+	int no_compressed;
+	/// @brief Internal enum for what the camera is currently doing
+	uint8_t internal_state;
+	/// @brief Number of images currently sent through the SEND MULTIPLE feature
+	int sent_images;
+};
+static inline struct Fuji *fuji(vcam *cam) {return cam->priv;}
+
+struct FujiPropEventSend {
+	unsigned short code;
+	unsigned int value;
+};
+
 #define FUJI_ACK_PACKET_SIZE 0x44
 
 #define FUJI_DUMMY_THUMB "bin/fuji/dummy_thumb2.jpg"
@@ -30,6 +63,6 @@ int fuji_ssdp_import(const char *ip, char *name);
 int fuji_tether_connect(const char *ip, int port);
 
 // Launch thread to listen to liveview/event ports
-void fuji_accept_remote_ports();
+void fuji_accept_remote_ports(void);
 
 #endif

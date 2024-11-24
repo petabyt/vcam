@@ -7,27 +7,30 @@
 #include <string.h>
 #include <vcam.h>
 
-int ptp_battery_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
+int ptp_battery_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x5001;
 	desc->DataType = 2; /* uint8 */
 	desc->GetSet = 0;   /* Get only */
-	desc->FactoryDefaultValue.u8 = 50;
-	desc->CurrentValue.u8 = 50;
+	desc->factory_default_value_u32 = 50;
+	desc->factory_default_value = &desc->factory_default_value_u32;
+	desc->value_u32 = 50;
+	desc->value = &desc->value_u32;
 	desc->FormFlag = 0x01; /* range */
-	desc->FORM.Range.MinimumValue.u8 = 0;
-	desc->FORM.Range.MaximumValue.u8 = 100;
-	desc->FORM.Range.StepSize.u8 = 1;
+	desc->form_min = 0;
+	desc->form_max = 100;
+	desc->form_step = 1;
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5001, 0xffffffff);
 	return 1;
 }
 
-int ptp_battery_getvalue(vcam *cam, PTPPropertyValue *val) {
-	val->u8 = 50;
+void *ptp_battery_getvalue(vcam *cam, int *length) {
+	(*length) = 1;
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5001, 0xffffffff);
-	return 1;
+	return &cam->battery;
 }
 
-int ptp_imagesize_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
+#if 0
+int ptp_imagesize_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x5003;
 	desc->DataType = 0xffff; /* STR */
 	desc->GetSet = 0;	 /* Get only */
@@ -44,13 +47,13 @@ int ptp_imagesize_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-int ptp_imagesize_getvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_imagesize_getvalue(vcam *cam, void *data, int length) {
 	val->str = strdup("640x480");
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5003, 0xffffffff);
 	return 1;
 }
 
-int ptp_shutterspeed_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
+int ptp_shutterspeed_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x500D;
 	desc->DataType = 0x0006; /* UINT32 */
 	desc->GetSet = 1;	 /* Get/Set */
@@ -75,20 +78,20 @@ int ptp_shutterspeed_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-int ptp_shutterspeed_getvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_shutterspeed_getvalue(vcam *cam, void *data, int length) {
 	val->u32 = cam->shutterspeed;
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x500d, 0xffffffff);
 	return 1;
 }
 
-int ptp_shutterspeed_setvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_shutterspeed_setvalue(vcam *cam, void *data, int length) {
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x500d, 0xffffffff);
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->u32);
 	cam->shutterspeed = val->u32;
 	return 1;
 }
 
-int ptp_fnumber_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
+int ptp_fnumber_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x5007;
 	desc->DataType = 0x0004; /* UINT16 */
 	desc->GetSet = 1;	 /* Get/Set */
@@ -122,20 +125,20 @@ int ptp_fnumber_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-int ptp_fnumber_getvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_fnumber_getvalue(vcam *cam, void *data, int length) {
 	val->u16 = cam->fnumber;
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5007, 0xffffffff);
 	return 1;
 }
 
-int ptp_fnumber_setvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_fnumber_setvalue(vcam *cam, void *data, int length) {
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5007, 0xffffffff);
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->u16);
 	cam->fnumber = val->u16;
 	return 1;
 }
 
-int ptp_exposurebias_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
+int ptp_exposurebias_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x5010;
 	desc->DataType = 0x0003; /* INT16 */
 	desc->GetSet = 1;	 /* Get/Set */
@@ -164,20 +167,20 @@ int ptp_exposurebias_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-int ptp_exposurebias_getvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_exposurebias_getvalue(vcam *cam, void *data, int length) {
 	val->i16 = cam->exposurebias;
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5010, 0xffffffff);
 	return 1;
 }
 
-int ptp_exposurebias_setvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_exposurebias_setvalue(vcam *cam, void *data, int length) {
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5010, 0xffffffff);
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %d as value", val->i16);
 	cam->exposurebias = val->i16;
 	return 1;
 }
 
-int ptp_datetime_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
+int ptp_datetime_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	struct tm *tm;
 	time_t xtime;
 	char xdate[40];
@@ -195,7 +198,7 @@ int ptp_datetime_getdesc(vcam *cam, PTPDevicePropDesc *desc) {
 	return 1;
 }
 
-int ptp_datetime_getvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_datetime_getvalue(vcam *cam, void *data, int length) {
 	struct tm *tm;
 	time_t xtime;
 	char xdate[40];
@@ -208,20 +211,17 @@ int ptp_datetime_getvalue(vcam *cam, PTPPropertyValue *val) {
 	return 1;
 }
 
-int ptp_datetime_setvalue(vcam *cam, PTPPropertyValue *val) {
+int ptp_datetime_setvalue(vcam *cam, void *data, int length) {
 	gp_log(GP_LOG_DEBUG, __FUNCTION__, "got %s as value", val->str);
 	return 1;
 }
+#endif
 
-struct ptp_property ptp_properties[] = {
-    {0x5001, ptp_battery_getdesc, ptp_battery_getvalue, NULL},
-    {0x5003, ptp_imagesize_getdesc, ptp_imagesize_getvalue, NULL},
-    {0x5007, ptp_fnumber_getdesc, ptp_fnumber_getvalue, ptp_fnumber_setvalue},
-    {0x5010, ptp_exposurebias_getdesc, ptp_exposurebias_getvalue, ptp_exposurebias_setvalue},
-    {0x500d, ptp_shutterspeed_getdesc, ptp_shutterspeed_getvalue, ptp_shutterspeed_setvalue},
-    {0x5011, ptp_datetime_getdesc, ptp_datetime_getvalue, ptp_datetime_setvalue},
-};
-
-int ptp_get_properties_length() {
-	return (sizeof(ptp_properties) / sizeof(ptp_properties[0]));
+void ptp_register_standard_props(vcam *cam) {
+	vcam_register_prop_handlers(cam, 0x5001, ptp_battery_getdesc, ptp_battery_getvalue, NULL);
+//	vcam_register_prop_handlers(cam, 0x5003, ptp_imagesize_getdesc, ptp_imagesize_getvalue, NULL);
+//	vcam_register_prop_handlers(cam, 0x5007, ptp_fnumber_getdesc, ptp_fnumber_getvalue, ptp_fnumber_setvalue);
+//	vcam_register_prop_handlers(cam, 0x5010, ptp_exposurebias_getdesc, ptp_exposurebias_getvalue, ptp_exposurebias_setvalue);
+//	vcam_register_prop_handlers(cam, 0x500d, ptp_shutterspeed_getdesc, ptp_shutterspeed_getvalue, ptp_shutterspeed_setvalue);
+//	vcam_register_prop_handlers(cam, 0x5011, ptp_datetime_getdesc, ptp_datetime_getvalue, ptp_datetime_setvalue);
 }

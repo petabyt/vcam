@@ -131,7 +131,7 @@ uint8_t get_8bit_le(unsigned char *data) {
 }
 
 int8_t get_i8bit_le(unsigned char *data) {
-	return data[0];
+	return (int8_t)data[0];
 }
 
 int put_64bit_le(unsigned char *data, uint64_t x) {

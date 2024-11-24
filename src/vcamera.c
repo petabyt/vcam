@@ -77,49 +77,121 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-void vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
-	struct PtpPropList *list = NULL;
-	for (list = cam->list; list->next != NULL; list = list->next) {
-		if (list->code == code) break;
+int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size)) {
+	cam->opcodes = realloc(cam->opcodes, sizeof(struct PtpOpcodeList) * (sizeof(struct PtpOpcode) * cam->opcodes->length + 1));
+
+	struct PtpOpcode *c = &cam->opcodes->handlers[cam->opcodes->length];
+	memset(c, 0, sizeof(struct PtpOpcode));
+	c->code = code;
+	c->write = write;
+	c->write_data = write_data;
+
+	cam->opcodes->length += 1;
+	return 0;
+}
+
+int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue) {
+	cam->props = realloc(cam->props, sizeof(struct PtpPropList) * (sizeof(struct PtpProp) * cam->props->length + 1));
+
+	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
+	memset(prop, 0, sizeof(struct PtpProp));
+	prop->getdesc = getdesc;
+	prop->getvalue = getvalue;
+	prop->setvalue = setvalue;
+
+	cam->props->length += 1;
+	return 0;
+}
+
+int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail, int avail_size, int avail_cnt) {
+	cam->props = realloc(cam->props, sizeof(struct PtpPropList) * (sizeof(struct PtpProp) * cam->props->length + 1));
+
+	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
+	memset(prop, 0, sizeof(struct PtpProp));
+	prop->getdesc = NULL;
+	prop->getvalue = NULL;
+	prop->setvalue = NULL;
+
+	prop->desc.avail = avail;
+	prop->desc.avail_size = avail_size;
+	prop->desc.avail_cnt = avail_cnt;
+
+	cam->props->length += 1;
+	return 0;
+}
+
+int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
+	struct PtpProp *prop = NULL;
+	for (int i = 0; i < cam->props->length; i++) {
+		prop = &cam->props->handlers[i];
+		if (prop->code == code) break;
 	}
-	
-	if (list == NULL) {
-		printf("vcam_set_prop_avail: Can't find prop\n");
-		exit(1);
+	if (prop == NULL) return -1;
+	if (prop->setvalue) {
+		return prop->setvalue(cam, data, length);
+	}
+	if (prop->desc.value_length != length)
+		prop->desc.value = realloc(prop->desc.value, length);
+	prop->desc.value_length = length;
+	memcpy(prop->desc.value, data, length);
+	return 0;
+}
+
+int vcam_set_prop(vcam *cam, int code, uint32_t data) {
+	return vcam_set_prop_data(cam, code, &data, 4);
+}
+
+struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
+	struct PtpProp *prop = NULL;
+	for (int i = 0; i < cam->props->length; i++) {
+		prop = &cam->props->handlers[i];
+		if (prop->code == code) break;
+	}
+	if (prop == NULL) return NULL;
+	return &prop->desc;
+	return 0;
+}
+
+void *vcam_get_prop_data(vcam *cam, int code, int *length) {
+	struct PtpProp *prop = NULL;
+	for (int i = 0; i < cam->props->length; i++) {
+		prop = &cam->props->handlers[i];
+		if (prop->code == code) break;
+	}
+	if (prop == NULL) return NULL;
+
+	if (prop->getvalue) {
+		return prop->getvalue(cam, &length);
+	}
+
+	(*length) = prop->desc.value_length;
+	return prop->desc.value;
+}
+
+int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
+	struct PtpProp *prop = NULL;
+	for (int i = 0; i < cam->props->length; i++) {
+		prop = &cam->props->handlers[i];
+		if (prop->code == code) break;
+	}
+	if (prop == NULL) {
+		vcam_log("WARN: %s %04x prop that doesn't exist\n", __func__, code);
+		return -1;
 	}
 
 	// Realloc when list changes
 	void *dup = NULL;
-	if (list->avail == NULL) {
+	if (prop->desc.avail == NULL) {
 		dup = malloc(size * cnt);
 		memcpy(dup, data, size * cnt);
 	} else {
-		dup = realloc(list->avail, size * cnt);
+		dup = realloc(prop->desc.avail, size * cnt);
 	}
 
-	list->avail = dup;
-	list->avail_size = size;
-	list->avail_cnt = cnt;
-}
-
-void vcam_set_prop(vcam *cam, int code, uint32_t value) {
-	cam->list_tail->code = code;
-	cam->list_tail->data = malloc(sizeof(uint32_t));
-	cam->list_tail->length = sizeof(uint32_t);
-	memcpy(cam->list_tail->data, &value, sizeof(uint32_t));
-	cam->list_tail->next = calloc(1, sizeof(struct PtpPropList));
-
-	cam->list_tail = cam->list_tail->next;
-}
-
-void vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
-	cam->list_tail->code = code;
-	cam->list_tail->data = malloc(length);
-	cam->list_tail->length = length;
-	memcpy(cam->list_tail->data, data, length);
-	cam->list_tail->next = calloc(1, sizeof(struct PtpPropList));
-
-	cam->list_tail = cam->list_tail->next;
+	prop->desc.avail = dup;
+	prop->desc.avail_size = size;
+	prop->desc.avail_cnt = cnt;
+	return 0;
 }
 
 void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes) {
@@ -300,27 +372,8 @@ int vcam_exit(vcam *cam) {
 	return GP_OK;
 }
 
+// TODO: delete
 int vcam_open(vcam *cam, const char *port) {
-#ifdef FUZZING
-	char *s = strchr(port, ':');
-
-	if (s) {
-		if (s[1] == '>') { /* record mode */
-			cam->fuzzf = fopen(s + 2, "wb");
-			cam->fuzzmode = FUZZMODE_PROTOCOL;
-		} else {
-			cam->fuzzf = fopen(s + 1, "rb");
-#ifndef FUZZ_PTP
-			/* first 4 byte are vendor and product USB id */
-			if (cam->fuzzf)
-				fseek(cam->fuzzf, 4, SEEK_SET);
-#endif
-			cam->fuzzpending = 0;
-			cam->fuzzmode = FUZZMODE_NORMAL;
-		}
-	}
-#endif
-
 	if (cam->type == CAM_FUJI_WIFI) {
 		vcam_fuji_setup(cam);
 	} else if (cam->type == CAM_CANON) {
@@ -332,13 +385,6 @@ int vcam_open(vcam *cam, const char *port) {
 }
 
 int vcam_close(vcam *cam) {
-#ifdef FUZZING
-	if (cam->fuzzf) {
-		fclose(cam->fuzzf);
-		cam->fuzzf = NULL;
-		cam->fuzzpending = 0;
-	}
-#endif
 	free(cam->inbulk);
 	free(cam->outbulk);
 	return GP_OK;
@@ -479,59 +525,6 @@ void vcam_process_output(vcam *cam) {
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes) {
 	unsigned int toread = bytes;
 
-#ifdef FUZZING
-	/* here we are not using the virtual ptp camera, but just read from a file, or write to it. */
-	if (cam->fuzzf) {
-		unsigned int hasread;
-
-		memset(data, 0, toread);
-		if (cam->fuzzmode == FUZZMODE_PROTOCOL) {
-			fwrite(cam->inbulk, 1, toread, cam->fuzzf);
-			/* fallthrough */
-		} else {
-#ifdef FUZZ_PTP
-			/* for reading fuzzer data */
-			if (cam->fuzzpending) {
-				toread = cam->fuzzpending;
-				if (toread > bytes)
-					toread = bytes;
-				cam->fuzzpending -= toread;
-				hasread = fread(data, 1, toread, cam->fuzzf);
-			} else {
-				hasread = fread(data, 1, 4, cam->fuzzf);
-				if (hasread != 4)
-					return GP_ERROR_IO_READ;
-
-				toread = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
-
-				if (toread > bytes) {
-					cam->fuzzpending = toread - bytes;
-					toread = bytes;
-				}
-				if (toread <= 4)
-					return toread;
-
-				toread -= 4;
-
-				hasread = fread(data + 4, 1, toread, cam->fuzzf);
-
-				hasread += 4; /* readd size */
-			}
-#else
-			/* just return a blob of data in generic fuzzing */
-			hasread = fread(data, 1, bytes, cam->fuzzf);
-			if (!hasread && feof(cam->fuzzf))
-				return GP_ERROR_IO_READ;
-#endif
-			toread = hasread;
-
-			return toread;
-		}
-	}
-#endif /* FUZZING */
-
-	/* Emulated PTP camera stuff */
-
 	if (toread > cam->nrinbulk)
 		toread = cam->nrinbulk;
 
@@ -630,11 +623,6 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	struct ptp_interrupt *pint;
 
 	if (!first_interrupt) {
-#ifdef FUZZING
-		/* this emulates plugged out devices during fuzzing */
-		if (cam->fuzzf && feof(cam->fuzzf))
-			return GP_ERROR_IO;
-#endif
 		return GP_ERROR_TIMEOUT;
 	}
 	gettimeofday(&now, NULL);
@@ -673,13 +661,11 @@ vcam *vcamera_new(vcameratype type) {
 	if (!cam)
 		return NULL;
 
-	cam->conf = NULL;
 
 	read_tree(vcamera_filesystem);
 
-	// Property linked list
-	cam->list_tail = calloc(1, sizeof(struct PtpPropList));
-	cam->list = cam->list_tail;
+	cam->props = calloc(1, sizeof(struct PtpPropList));
+	cam->opcodes = calloc(1, sizeof(struct PtpOpcodeList));
 
 	cam->type = type;
 	cam->seqnr = 0;

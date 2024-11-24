@@ -9,10 +9,86 @@
 #include <cl_data.h>
 #include "fuji.h"
 
-struct FujiPropEventSend {
-	unsigned short code;
-	unsigned int value;
-};
+int fuji_init_cam(vcam *cam, const char *name) {
+	struct Fuji *f = fuji(cam);
+	if (!strcmp(name, "fuji_x_a2")) {
+		strcpy(cam->model, "X-A2");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_A2;
+		f->image_get_version = 1;
+		f->get_object_version = 2;
+		f->remote_version = 0;
+	} else if (!strcmp(name, "fuji_x_t20")) {
+		strcpy(cam->model, "X-T20");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_T20;
+		f->image_get_version = 3;
+		f->get_object_version = 4;
+		f->remote_version = 0x00020004;
+		f->remote_get_object_version = 2;
+	} else if (!strcmp(name, "fuji_x_t2")) {
+		strcpy(cam->model, "X-T2");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_T2;
+		f->image_get_version = 3;
+		f->get_object_version = 4;
+		f->remote_version = 0x0002000a;
+		f->remote_get_object_version = 2;
+	} else if (!strcmp(name, "fuji_x_s10")) {
+		strcpy(cam->model, "X-S10");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_S10;
+		f->image_get_version = 3;
+		f->get_object_version = 4;
+		f->remote_version = 0x0002000a; // fuji sets to 2000b
+		f->remote_get_object_version = 4;
+	} else if (!strcmp(name, "fuji_x_t4")) {
+		strcpy(cam->model, "X-T4");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_S10;
+		f->image_get_version = 4;
+		f->get_object_version = 5;
+		f->remote_version = 0x0002000a; // fuji sets to 2000c
+		f->remote_get_object_version = 5;
+		// PTP_PC_FUJI_ImageGetLimitedVersion = 1
+		// PTP_PC_FUJI_Unknown_D52F = 1
+	} else if (!strcmp(name, "fuji_x_h1")) {
+		strcpy(cam->model, "X-H1");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_H1;
+		f->image_get_version = 3; // fuji sets to 4
+		f->get_object_version = 4;
+		f->remote_version = 0x00020006; // fuji sets to 2000C
+		f->remote_get_object_version = 4;
+	} else if (!strcmp(name, "fuji_x_dev")) {
+		strcpy(cam->model, "X-DEV");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_DEV;
+		f->image_get_version = 3;
+		f->get_object_version = 4;
+		f->remote_version = 0x00020006;
+		f->remote_get_object_version = 4;
+	} else if (!strcmp(name, "fuji_x_f10")) {
+		strcpy(cam->model, "X-F10");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X_F10;
+		f->image_get_version = 3;
+		f->get_object_version = 4;
+		f->remote_version = 0x00020004; // fuji sets to 2000C
+		f->remote_get_object_version = 2;
+	} else if (!strcmp(name, "fuji_x30")) {
+		strcpy(cam->model, "X30");
+		cam->type = CAM_FUJI_WIFI;
+		cam->variant = V_FUJI_X30;
+		f->image_get_version = 3;
+		f->get_object_version = 3; // 2016 fuji sets to 4
+		f->remote_version = 0x00020002; // 2024 fuji sets to 2000C
+		f->remote_get_object_version = 1;
+	} else {
+		return -1;
+	}
+	return vcam_fuji_setup(cam);
+}
 
 enum CameraStates {
 	// Initial state before ACK
@@ -36,7 +112,7 @@ uint8_t *fuji_get_ack_packet(vcam *cam) {
 		.guid4 = 0x50e036dd,
 	};
 
-	char *name = cam->conf->model;
+	char *name = cam->model;
 	int i;
 	for (i = 0; name[i] != '\0'; i++) {
 		p.device_name[i * 2] = name[i];
@@ -49,48 +125,49 @@ uint8_t *fuji_get_ack_packet(vcam *cam) {
 }
 
 int vcam_fuji_setup(vcam *cam) {
-	cam->client_state = 2;
-	cam->camera_state = 0;
-	cam->remote_version = 0;
-	cam->compress_small = 0;
-	cam->no_compressed = 0;
-	cam->internal_state = CAM_STATE_READY;
-	cam->sent_images = 0;
+	struct Fuji *f = fuji(cam);
+	f->client_state = 2;
+	f->camera_state = 0;
+	f->min_remote_version = 0;
+	f->compress_small = 0;
+	f->no_compressed = 0;
+	f->internal_state = CAM_STATE_READY;
+	f->sent_images = 0;
 
 	// TODO: Better way to ignore folders (Fuji doesn't show them)
-	cam->obj_count = ptp_get_object_count() - 1;
+	f->obj_count = ptp_get_object_count() - 1;
 
-	vcam_log("Fuji: Found %d objects\n", cam->obj_count);
+	vcam_log("Fuji: Found %d objects\n", f->obj_count);
 
 	// Check if remote mode is supported
 	if (cam->conf->remote_version) {
-		cam->camera_state = FUJI_REMOTE_ACCESS;
+		f->camera_state = FUJI_REMOTE_ACCESS;
 	} else {
-		cam->camera_state = FUJI_FULL_ACCESS;
+		f->camera_state = FUJI_FULL_ACCESS;
 	}
 
 	if (cam->conf->do_discovery) {
-		cam->camera_state = FUJI_PC_AUTO_SAVE;
+		f->camera_state = FUJI_PC_AUTO_SAVE;
 	}
 
 	if (cam->conf->is_select_multiple_images) {
 		vcam_log("Configuring fuji to select multiple images\n");
-		cam->camera_state = FUJI_MULTIPLE_TRANSFER;
+		f->camera_state = FUJI_MULTIPLE_TRANSFER;
 		// ID 0 is DCIM, set to 1, which is first jpeg
 		first_dirent->next->id = 1;
 	}
 
 	// Common startup events for all cameras
-	ptp_notify_event(cam, PTP_PC_FUJI_CameraState, cam->camera_state);
+	ptp_notify_event(cam, PTP_PC_FUJI_CameraState, f->camera_state);
 
-	if (cam->camera_state == FUJI_MULTIPLE_TRANSFER) {
+	if (f->camera_state == FUJI_MULTIPLE_TRANSFER) {
 		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
 	}
 
-	ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, cam->obj_count);
+	ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
 
 	if (cam->conf->remote_version) {
-		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount2, cam->obj_count);
+		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount2, f->obj_count);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
@@ -100,7 +177,8 @@ int vcam_fuji_setup(vcam *cam) {
 }
 
 int fuji_is_compressed_mode(vcam *cam) {
-	return (int)(cam->compress_small);
+	struct Fuji *f = fuji(cam);
+	return (int)(f->compress_small);
 }
 
 int fuji_set_prop_supported(vcam *cam, int code) {
@@ -137,6 +215,7 @@ int fuji_set_prop_supported(vcam *cam, int code) {
 }
 
 int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	struct Fuji *f = fuji(cam);
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
 
@@ -145,22 +224,22 @@ int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigne
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_ClientState:
 		assert(len == 2);
-		cam->client_state = uint[0];
+		f->client_state = uint[0];
 		//usleep(1000 * 1000 * 3);
 		break;
 	case PTP_PC_FUJI_RemoteVersion:
 		assert(len == 4);
-		cam->remote_version = uint[0];
+		f->min_remote_version = uint[0];
 		break;
 	case PTP_PC_FUJI_GetObjectVersion:
 		break;
 	case PTP_PC_FUJI_CompressSmall:
-		cam->compress_small = uint16[0];
+		f->compress_small = uint16[0];
 		break;
 	case PTP_PC_FUJI_NoCompression:
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
-		cam->no_compressed = uint16[0];
+		f->no_compressed = uint16[0];
 		//usleep(1000 * 5000); // Fuji seems to take a while here
 		break;
 	case PTP_PC_FUJI_RemoteGetObjectVersion:
@@ -170,10 +249,10 @@ int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigne
 		assert(len == 2);
 		ptp_notify_event(cam, PTP_PC_FUJI_CameraState, uint16[0]);
 		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, cam->obj_count);
+		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, cam->obj_count);
+		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
 		break;
 	case PTP_PC_FUJI_GeoTagVersion:
 		break;
@@ -213,6 +292,7 @@ int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 }
 
 int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
+	struct Fuji *f = fuji(cam);
 	vcam_log("Get property %X\n", ptp->params[0]);
 	int data = -1;
 	switch (ptp->params[0]) {
@@ -220,15 +300,15 @@ int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
 		return fuji_send_events(cam, ptp);
 	case PTP_PC_FUJI_ObjectCount:
 	case PTP_PC_FUJI_ObjectCount2:
-		data = cam->obj_count;
+		data = f->obj_count;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_ClientState:
-		data = cam->client_state;
+		data = f->client_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_CameraState:
-		data = cam->camera_state;
+		data = f->camera_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
 	case PTP_PC_FUJI_ImageGetVersion:
@@ -284,12 +364,13 @@ int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
 
 void fuji_accept_remote_ports();
 int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
+	struct Fuji *f = fuji(cam);
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
-		cam->internal_state = CAM_STATE_IDLE_REMOTE;
+		f->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("Opening remote ports\n"); // BUG: It does this twice
 		fuji_accept_remote_ports();
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
-		cam->internal_state = CAM_STATE_IDLE_REMOTE;
+		f->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("One time sending all remote props\n");
 		ptp_notify_event(cam, PTP_PC_FUJI_DeviceError, 0);
 		ptp_notify_event(cam, PTP_PC_FlashMode, 0x800a);
@@ -383,31 +464,31 @@ int ptp_fuji_liveview(int socket) {
 }
 
 void fuji_downloaded_object(vcam *cam) {
+	struct Fuji *f = fuji(cam);
 	// In MULTIPLE_TRANSFER mode, the camera 'deletes' the first object and replaces it with
 	// the second object, once a partialtransfer or object is completely downloaded.
 	// It seems we get this notification once GetPartialObject calls reach the end of an object.
-	if (cam->camera_state == FUJI_MULTIPLE_TRANSFER) {
+	if (f->camera_state == FUJI_MULTIPLE_TRANSFER) {
 		printf("Dirent %s\n", first_dirent->next->fsname);
 		struct ptp_dirent *next = first_dirent->next;
 		next->id = 1;
 		first_dirent = next;
 
-		if (cam->sent_images == 3) {
-			vcam_log("Enough images send %d, killing connection\n", cam->sent_images);
+		if (f->sent_images == 3) {
+			vcam_log("Enough images send %d, killing connection\n", f->sent_images);
 			cam->next_cmd_kills_connection = 1;
 		}
 
 		// Then we resend the events from the start of the connection
-		ptp_notify_event(cam, PTP_PC_FUJI_CameraState, cam->camera_state);
+		ptp_notify_event(cam, PTP_PC_FUJI_CameraState, f->camera_state);
 		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
 
-		cam->sent_images++;
+		f->sent_images++;
 	}
 }
 
-struct ptp_function ptp_functions_fuji_wifi[] = {
-	{PTP_OC_FUJI_GetDeviceInfo,	ptp_fuji_get_device_info, NULL },
-	{0x101c,	ptp_fuji_capture, NULL },
-	{0x1018,	ptp_fuji_capture, NULL },
-	{0, NULL, NULL},
-};
+void fuji_register_opcodes(vcam *cam) {
+	vcam_register_opcode(cam, PTP_OC_FUJI_GetDeviceInfo, ptp_fuji_get_device_info, NULL);
+	vcam_register_opcode(cam, 0x101c, ptp_fuji_capture, NULL);
+	vcam_register_opcode(cam, 0x1018, ptp_fuji_capture, NULL);
+}

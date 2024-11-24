@@ -16,6 +16,7 @@
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
 
+#if 0
 // Generic options setup by CLI, put in cam->conf
 // This structure is zeroed
 struct CamConfig {
@@ -44,6 +45,7 @@ struct CamConfig {
 	// Canon stuff
 	int digic;
 };
+#endif
 
 typedef enum vcameratype {
 	GENERIC_PTP = 1,
@@ -77,25 +79,15 @@ typedef struct ptpcontainer {
 	unsigned int has_data_phase;
 }ptpcontainer;
 
-struct PtpPropList {
-	int code;
-	void *data;
-	int length;
-
-	void *avail;
-	int avail_size;
-	int avail_cnt;
-
-	void *next;
-};
-
-// All members are garunteed to be zero by calloc()
+// All members are guaranteed to be zero by calloc()
 typedef struct vcam {
-#ifdef FUZZING
-	int	fuzzmode;
-	FILE *fuzzf;
-	unsigned int fuzzpending;
-#endif
+	uint16_t vendor;
+	uint16_t product;
+	vcameratype	type;
+	vcameravariant variant;
+	char model[32];
+	char version[16];
+	char serial[16];
 
 	unsigned char *inbulk;
 	int	nrinbulk;
@@ -106,55 +98,28 @@ typedef struct vcam {
 	ptpcontainer ptpcmd;
 	long last_cmd_timestamp;
 
-	// Linked list containing bulk properties
-	struct PtpPropList *list;
-	struct PtpPropList *list_tail;
+	struct PtpOpcodeList *opcodes;
+	struct PtpPropList *props;
 
-	uint16_t vendor;
-	uint16_t product;
-	vcameratype	type;
+	int next_cmd_kills_connection;
 
-	struct CamConfig *conf;
+	void *priv;
 
-	// === Generic camera runtime vars ===
 	int exposurebias;
 	unsigned int shutterspeed;
 	unsigned int fnumber;
 	unsigned int focal_length;
 	unsigned int target_distance_feet;
-
-	// === Fujifilm runtime vars ===
-	/// @brief Current value for PTP_PC_FUJI_ClientState
-	int client_state;
-	/// @brief Current value for PTP_PC_FUJI_CameraState
-	int camera_state;
-	/// @brief Current value for PTP_PC_FUJI_RemoteVersion
-	int remote_version;
-	/// @brief Current vaule for PTP_PC_FUJI_ObjectCount
-	int obj_count;
-	int compress_small;
-	int no_compressed;
-	/// @brief Internal enum for what the camera is currently doing
-	uint8_t internal_state;
-	/// @brief Number of images currently sent through the SEND MULTIPLE feature
-	int sent_images;
-	uint8_t next_cmd_kills_connection;
-
-	// === Canon PTP/IP server related things ===
-	int is_lv_ready;
+	uint8_t battery;
 }vcam;
 
 vcam *vcamera_new(vcameratype);
-struct CamConfig *vcam_new_config(int argc, char **argv);
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
 int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes);
 int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
 int vcam_open(vcam *cam, const char *port);
-int vcam_get_variant_info(char *arg, struct CamConfig *o);
-
+int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size));
 int get_local_ip(char buffer[64]);
-int fuji_wifi_main(struct CamConfig *options);
-int canon_wifi_main(struct CamConfig *options);
 
 // Called early before connection is established
 int vcam_fuji_setup(vcam *cam);
@@ -168,14 +133,17 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp);
 void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes);
 void ptp_response(vcam *cam, uint16_t code, int nparams, ...);
 
-void vcam_set_prop(vcam *cam, int code, uint32_t value);
-void vcam_set_prop_data(vcam *cam, int code, void *data, int length);
-void vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data);
+int vcam_set_prop(vcam *cam, int code, uint32_t value);
+int vcam_set_prop_data(vcam *cam, int code, void *data, int length);
+int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data);
 
-struct ptp_function {
-	int	code;
-	int	(*write)(vcam *cam, ptpcontainer *ptp);
-	int	(*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
+struct PtpOpcodeList {
+	int length;
+	struct PtpOpcode {
+		int code;
+		int (*write)(vcam *cam, ptpcontainer *ptp);
+		int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size);
+	}handlers[];
 };
 
 // Standard PTP opcode implementations
@@ -200,62 +168,56 @@ int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsig
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp);
 int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp);
 
-typedef union _PTPPropertyValue {
-	char *str; /* common string, malloced */
-	uint8_t u8;
-	int8_t i8;
-	uint16_t u16;
-	int16_t i16;
-	uint32_t u32;
-	int32_t i32;
-	uint64_t u64;
-	int64_t i64;
-	/* XXXX: 128 bit signed and unsigned missing */
-	struct array {
-		uint32_t count;
-		union _PTPPropertyValue *v; /* malloced, count elements */
-	} a;
-} PTPPropertyValue;
+// GetPropertyValue stubs
 
-struct _PTPPropDescRangeForm {
-	PTPPropertyValue MinimumValue;
-	PTPPropertyValue MaximumValue;
-	PTPPropertyValue StepSize;
-};
-typedef struct _PTPPropDescRangeForm PTPPropDescRangeForm;
-
-/* Property Describing Dataset, Enum Form */
-struct _PTPPropDescEnumForm {
-	uint16_t NumberOfValues;
-	PTPPropertyValue *SupportedValue; /* malloced */
-};
-typedef struct _PTPPropDescEnumForm PTPPropDescEnumForm;
-
-/* Device Property Describing Dataset (DevicePropDesc) */
-struct _PTPDevicePropDesc {
+struct PtpPropDesc {
 	uint16_t DevicePropertyCode;
 	uint16_t DataType;
 	uint8_t GetSet;
-	PTPPropertyValue FactoryDefaultValue;
-	PTPPropertyValue CurrentValue;
+	void *factory_default_value;
+	int factory_default_value_length;
+	void *value;
+	int value_length;
+
+	uint32_t factory_default_value_u32;
+	uint32_t value_u32;
+
+	void *avail;
+	int avail_size;
+	int avail_cnt;
+
 	uint8_t FormFlag;
-	union {
-		PTPPropDescEnumForm Enum;
-		PTPPropDescRangeForm Range;
-	} FORM;
-};
-typedef struct _PTPDevicePropDesc PTPDevicePropDesc;
-
-// GetPropertyValue stubs
-
-struct ptp_property {
-	int code;
-	int (*getdesc)(vcam *cam, PTPDevicePropDesc *);
-	int (*getvalue)(vcam *cam, PTPPropertyValue *);
-	int (*setvalue)(vcam *cam, PTPPropertyValue *);
+	int form_min;
+	int form_max;
+	int form_step;
 };
 
-int ptp_get_properties_length(void);
+typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *);
+typedef void *ptp_prop_getvalue(vcam *cam, int *length);
+typedef int ptp_prop_setvalue(vcam *cam, const void *data, int length);
+
+struct PtpPropList {
+	int length;
+	struct PtpProp {
+		int code;
+
+		/// @note may be NULL
+		ptp_prop_getdesc *getdesc;
+		/// @note may be NULL
+		ptp_prop_getvalue *getvalue;
+		/// @note may be NULL
+		ptp_prop_setvalue *setvalue;
+
+		struct PtpPropDesc desc;
+	}handlers[];
+};
+
+int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue);
+int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail, int avail_size, int avail_cnt);
+struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code);
+void *vcam_get_prop_data(vcam *cam, int code, int *length);
+int vcam_set_prop_data(vcam *cam, int code, void *data, int length);
+int vcam_set_prop(vcam *cam, int code, uint32_t data);
 
 int vcam_check_session(vcam *cam);
 int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp);
@@ -282,21 +244,7 @@ extern uint32_t ptp_objectid;
 
 void vcam_dump(void *ptr, size_t len);
 
-void ptp_free_devicepropdesc(PTPDevicePropDesc *dpd);
-
-// vcam data structure API
-int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt);
-int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt);
-char *get_string(unsigned char *data);
-int put_string(unsigned char *data, char *str);
-int put_8bit_le(unsigned char *data, uint8_t x);
-int put_16bit_le(unsigned char *data, uint16_t x);
-int put_32bit_le(unsigned char *data, uint32_t x);
-int put_64bit_le(unsigned char *data, uint64_t x);
-int8_t get_i8bit_le(unsigned char *data);
-uint8_t get_8bit_le(unsigned char *data);
-uint16_t get_16bit_le(unsigned char *data);
-uint32_t get_32bit_le(unsigned char *data);
+void ptp_free_devicepropdesc(struct PtpPropDesc *dpd);
 
 void *read_file(struct ptp_dirent *cur);
 void free_dirent(struct ptp_dirent *ent);
@@ -306,7 +254,7 @@ void vcam_virtual_pop_object(int id);
 
 int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
-#pragma pack(push, 1)
+//#pragma pack(push, 1)
 struct GenericEvent {
 	uint32_t size;
 	uint16_t x;
@@ -314,26 +262,17 @@ struct GenericEvent {
 	uint32_t transaction;
 	uint32_t value;
 };
-#pragma pack(pop)
+//#pragma pack(pop)
 
 int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
-int ptp_write_unicode_string(char *dat, char *string);
-int ptp_read_unicode_string(char *buffer, char *dat, int max);
-int ptp_read_utf8_string(void *dat, char *string, int max);
-int ptp_read_string(uint8_t *dat, char *string, int max);
-int ptp_write_string(uint8_t *dat, char *string);
-int ptp_write_utf8_string(void *dat, char *string);
-int ptp_read_uint16_array(uint8_t *dat, uint16_t *buf, int max, int *length);
-inline static int ptp_write_u8 (void *buf, uint8_t out) { ((uint8_t *)buf)[0] = out; return 1; }
-inline static int ptp_write_u16(void *buf, uint16_t out) { ((uint16_t *)buf)[0] = out; return 2; }
-inline static int ptp_write_u32(void *buf, uint32_t out) { ((uint32_t *)buf)[0] = out; return 4; }
-inline static int ptp_read_u32 (void *buf, uint32_t *out) { *out = ((uint32_t *)buf)[0]; return 4; }
-inline static int ptp_read_u16 (void *buf, uint16_t *out) { *out = ((uint16_t *)buf)[0]; return 2; }
-inline static int ptp_read_u8  (void *buf, uint8_t *out) { *out = ((uint8_t *)buf)[0]; return 1; }
+void ptp_register_standard_opcodes(vcam *cam);
+void canon_register_base_eos(vcam *cam);
+void fuji_register_opcodes(vcam *cam);
 
+#include "data.h"
 #include "socket.h"
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

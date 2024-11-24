@@ -23,6 +23,10 @@ CFLAGS += '-D PWD="$(shell pwd)"'
 # Is this actually needed by GCC?
 $(SO_FILES): CFLAGS += $(SO_CFLAGS)
 
+VCAM2_FILES := cpp/test.o cpp/vcam.o
+vcam2: $(VCAM2_FILES)
+	g++ -g -ggdb $(VCAM2_FILES) -lexif -o vcam2
+
 # generic libusb.so Canon EOS Device
 libusb-vcam.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb-vcam.so
@@ -38,12 +42,16 @@ install: vcam libusb-vcam.so
 	sudo cp libusb-vcam.so /usr/lib/
 
 -include src/*.d
+-include cpp/*.d
 %.o: %.c $(H)
 	$(CC) -MMD -c $< $(CFLAGS) -o $@
 
+%.o: %.cpp $(H)
+	g++ -MMD -c $< $(CFLAGS) -o $@
+
 clean:
-	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d
-	$(RM) fuji canon vcam vcam-otg
+	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d cpp/*.o cpp/*.d
+	$(RM) fuji canon vcam vcam-otg vcam2
 
 ln:
 	ln ../camlib/src/ptp.h src/ptp.h
