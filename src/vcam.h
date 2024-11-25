@@ -10,9 +10,6 @@
 #include <ptp.h>
 #include "gphoto.h"
 
-#define FUZZMODE_PROTOCOL	0
-#define FUZZMODE_NORMAL		1
-
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
 
@@ -121,10 +118,8 @@ int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsig
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp);
 int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp);
 
-// GetPropertyValue stubs
-
 union PtpPropValue {
-	void *data;
+	void *str;
 	uint8_t u8;
 	int8_t i8;
 	uint16_t u16;
@@ -133,35 +128,33 @@ union PtpPropValue {
 	int32_t i32;
 	uint64_t u64;
 	int64_t i64;
+	struct array {
+		uint32_t count;
+		union PtpPropValue *v;
+	} a;
 };
 
 struct PtpPropDesc {
 	uint16_t DevicePropertyCode;
 	uint16_t DataType;
 	uint8_t GetSet;
-	void *factory_default_value;
-	int factory_default_value_length;
-	void *value;
-	int value_length;
 
-	uint32_t factory_default_value_u32;
-	uint32_t value_u32;
+	union PtpPropValue value;
+	union PtpPropValue factory_default_value;
 
-	void *avail;
-	int avail_size;
-	int avail_cnt;
+	// Raw data of enum list
+	union PtpPropValue *enum_list;
+	int enum_count;
 
 	uint8_t FormFlag;
-	int form_min;
-	int form_max;
-	int form_step;
-
-	//union PtpPropValue form_min;
+	union PtpPropValue form_min;
+	union PtpPropValue form_max;
+	union PtpPropValue form_step;
 };
 
 typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *);
-typedef void *ptp_prop_getvalue(vcam *cam, int *length);
-typedef int ptp_prop_setvalue(vcam *cam, const void *data, int length);
+typedef union PtpPropValue ptp_prop_getvalue(vcam *cam);
+typedef int ptp_prop_setvalue(vcam *cam, union PtpPropValue value);
 
 struct PtpPropList {
 	int length;

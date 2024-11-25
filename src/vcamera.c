@@ -68,6 +68,7 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 }
 
 int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size)) {
+	// Allow overriding opcodes
 	for (int i = 0; i < cam->opcodes->length; i++) {
 		struct PtpOpcode *c = &cam->opcodes->handlers[i];
 		if (c->code == code) {
@@ -103,7 +104,7 @@ int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, 
 	return 0;
 }
 
-int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail, int avail_size, int avail_cnt) {
+int vcam_register_prop(vcam *cam, int code, union PtpPropValue value, int type, union PtpPropValue *enum_list, int enum_count) {
 	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 
 	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
@@ -113,17 +114,16 @@ int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail,
 	prop->getvalue = NULL;
 	prop->setvalue = NULL;
 
-	prop->desc.value = data; // TODO: dup mem
-	prop->desc.value_length = length;
-	prop->desc.avail = avail; // TODO: dup mem
-	prop->desc.avail_size = avail_size;
-	prop->desc.avail_cnt = avail_cnt;
+	prop->desc.value = value;
+	prop->desc.DataType = type;
+	prop->desc.enum_list = enum_list;
+	prop->desc.enum_count = enum_count;
 
 	cam->props->length += 1;
 	return 0;
 }
 
-int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
+int vcam_set_prop_value(vcam *cam, int code, union PtpPropValue value) {
 	struct PtpProp *prop = NULL;
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
@@ -132,17 +132,15 @@ int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
 	}
 	if (prop == NULL) return -1;
 	if (prop->setvalue) {
-		return prop->setvalue(cam, data, length);
+		return prop->setvalue(cam, value);
 	}
-	if (prop->desc.value_length != length)
-		prop->desc.value = realloc(prop->desc.value, length);
-	prop->desc.value_length = length;
-	memcpy(prop->desc.value, data, length);
+	prop->desc.value = value; // TODO: dup value
 	return 0;
 }
 
-int vcam_set_prop(vcam *cam, int code, uint32_t data) {
-	return vcam_set_prop_data(cam, code, &data, 4);
+int vcam_set_prop_u32(vcam *cam, int code, uint32_t data) {
+	union PtpPropValue value = {.u32 = data};
+	return vcam_set_prop_value(cam, code, value);
 }
 
 struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
@@ -162,24 +160,24 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
 	return 0;
 }
 
-void *vcam_get_prop_data(vcam *cam, int code, int *length) {
+int vcam_get_prop_data(vcam *cam, int code, union PtpPropValue *value) {
 	struct PtpProp *prop = NULL;
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
 		if (prop->code == code) break;
 		prop = NULL;
 	}
-	if (prop == NULL) return NULL;
+	if (prop == NULL) return -1;
 
 	if (prop->getvalue) {
-		return prop->getvalue(cam, length);
+		(*value) = prop->getvalue(cam);
+		return 0;
 	}
-
-	(*length) = prop->desc.value_length;
-	return prop->desc.value;
+	(*value) = prop->desc.value;
+	return 0;
 }
 
-int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
+int vcam_set_prop_avail(vcam *cam, int code, int type, int cnt, void *data) {
 	struct PtpProp *prop = NULL;
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
@@ -200,7 +198,7 @@ int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
 		dup = realloc(prop->desc.avail, size * cnt);
 	}
 
-	prop->desc.avail = dup;
+	prop->desc.enum_list = (union PtpPropValue *)data;
 	prop->desc.avail_size = size;
 	prop->desc.avail_cnt = cnt;
 	return 0;

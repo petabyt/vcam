@@ -31,14 +31,15 @@ void *ptp_battery_getvalue(vcam *cam, int *length) {
 	return &cam->battery;
 }
 
-#if 0
 int ptp_imagesize_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x5003;
-	desc->DataType = 0xffff; /* STR */
+	desc->DataType = 0xffff;
 	desc->GetSet = 0;	 /* Get only */
-	desc->FactoryDefaultValue.str = strdup("640x480");
-	desc->CurrentValue.str = strdup("640x480");
+	desc->factory_default_value = strdup("640x480");
+	desc->value = strdup("640x480");
 	desc->FormFlag = 0x02; /* enum */
+	desc->avail_cnt = 3;
+	desc->
 	desc->FORM.Enum.NumberOfValues = 3;
 	desc->FORM.Enum.SupportedValue = malloc(3 * sizeof(desc->FORM.Enum.SupportedValue[0]));
 	desc->FORM.Enum.SupportedValue[0].str = strdup("640x480");
@@ -54,6 +55,8 @@ int ptp_imagesize_getvalue(vcam *cam, void *data, int length) {
 	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5003, 0xffffffff);
 	return 1;
 }
+
+#if 0
 
 int ptp_shutterspeed_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x500D;
