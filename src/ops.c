@@ -76,9 +76,9 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	data = malloc(2000);
 
-	x += put_16bit_le(data + x, 100); /* StandardVersion */
-	x += put_32bit_le(data + x, 100); /* VendorExtensionID */
-	x += put_16bit_le(data + x, 100); /* VendorExtensionVersion */
+	x += put_16bit_le(data + x, 0x64); /* StandardVersion */
+	x += put_32bit_le(data + x, 0x6); /* VendorExtensionID */
+	x += put_16bit_le(data + x, 0x64); /* VendorExtensionVersion */
 	x += put_string(data + x, "G-V: 1.0;"); /* VendorExtensionDesc */
 	x += put_16bit_le(data + x, 0);		/* FunctionalMode */
 
@@ -343,9 +343,9 @@ int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
-	if (vcam_check_trans_id(cam, ptp))return 1;
-	if (vcam_check_session(cam))return 1;
-	if (vcam_check_param_count(cam, ptp, 3))return 1;
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 3)) return 1;
 
 	vcam_log("GetPartialObject %d (%X %X)\n", ptp->params[0], ptp->params[1], ptp->params[2]);
 
@@ -386,17 +386,6 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	fclose(file);
 
 	ptp_response(cam, PTP_RC_OK, 0);
-
-#warning "TODO"
-#if 0
-	if (cam->type == CAM_FUJI_WIFI) {
-		// Once the end of the file is read, cam seems to switch
-		// Can be triggered by cam's size being lower or request size being lower (TODO: just the latter)
-		if (read != 0x100000 || size != 0x100000) {
-			fuji_downloaded_object(cam);
-		}
-	}
-#endif
 	return 1;
 }
 
@@ -848,6 +837,27 @@ static inline int put_data(unsigned char *dest, void *data, int length) {
 	return length;
 }
 
+int put_propval(unsigned char *dest, uint16_t type, void *data) {
+	switch (type) {
+		case 0x1:
+			return put_8bit_le(dest, ((uint8_t *)data)[0]);
+		case 0x2:
+			return put_8bit_le(dest, ((uint8_t *)data)[0]);
+		case 0x3:
+			return put_16bit_le(dest, ((uint16_t *)data)[0]);
+		case 0x4:
+			return put_16bit_le(dest, ((uint16_t *)data)[0]);
+		case 0x6:
+			return put_32bit_le(dest, ((uint32_t *)data)[0]);
+		case 0xffff:
+			return put_string(dest, data);
+		default:
+			gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %d", type);
+			return 0;
+	}
+	return 0;
+}
+
 int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	int i, x = 0;
 	unsigned char *data;
@@ -863,6 +873,8 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 	data = malloc(2000);
+
+	vcam_log("dump %d %d\n", desc->GetSet, desc->DataType);
 
 	x += put_16bit_le(data + x, desc->DevicePropertyCode);
 	x += put_16bit_le(data + x, desc->DataType);
@@ -880,9 +892,9 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.MaximumValue);
 		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.StepSize);
 #endif
-		x += put_32bit_le(data + x, desc->form_min);
-		x += put_32bit_le(data + x, desc->form_max);
-		x += put_32bit_le(data + x, desc->form_step);
+		x += put_propval(data + x, desc->DataType, &desc->form_min);
+		x += put_propval(data + x, desc->DataType, &desc->form_max);
+		x += put_propval(data + x, desc->DataType, &desc->form_step);
 		break;
 	case 2: /* ENUM */
 		x += put_16bit_le(data + x, desc->avail_cnt);
@@ -901,14 +913,8 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
-#warning "TODO fuji"
-#if 0
-	if (cam->type == CAM_FUJI_WIFI) {
-		return fuji_get_property(cam, ptp);
-	}
-#endif
-
 	int length;
+	vcam_log("%X\n", cam->props->handlers[0].code);
 	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
 	if (prop_data == NULL) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
@@ -928,18 +934,6 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_trans_id(cam, ptp))return 1;
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
-
-	#warning "TODO"
-#if 0
-	if (cam->type == CAM_FUJI_WIFI) {
-		if (fuji_set_prop_supported(cam, ptp->params[0])) {
-			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
-			return 1;
-		} else {
-			return 1;
-		}
-	}
-#endif
 
 	for (i = 0; i < cam->props->length; i++) {
 		if (cam->props->handlers[i].code == ptp->params[0])
@@ -981,13 +975,6 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 	if (vcam_check_trans_id(cam, ptp)) return 1;
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
-
-#warning "TODO Fuji"
-#if 0
-	if (cam->type == CAM_FUJI_WIFI) {
-		return fuji_set_property(cam, ptp, data, len);
-	}
-#endif
 
 	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
 	if (desc == NULL) {

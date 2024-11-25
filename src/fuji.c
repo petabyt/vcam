@@ -185,7 +185,7 @@ int fuji_is_compressed_mode(vcam *cam) {
 	return (int)(f->compress_small);
 }
 
-int fuji_set_prop_supported(vcam *cam, int code) {
+int ptp_fuji_setdevicepropvalue_write(vcam *cam, int code) {
 	struct Fuji *f = fuji(cam);
 	int codes[] = {
 		PTP_PC_FUJI_CameraState,
@@ -205,21 +205,22 @@ int fuji_set_prop_supported(vcam *cam, int code) {
 	};
 
 	for (size_t i = 0; i < (sizeof(codes) / sizeof(codes[0])); i++) {
-		if (codes[i] == code) return 0;
+		if (codes[i] == code) return 1;
 	}
 
 	if (f->remote_version) {
 		for (size_t i = 0; i < (sizeof(codes_remote_only) / sizeof(codes_remote_only[0])); i++) {
-			if (codes_remote_only[i] == code) return 0;
+			if (codes_remote_only[i] == code) return 1;
 		}
 	}
 
 	vcam_log("Request to set unknown property %X\n", code);
+	ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 
 	return 1;
 }
 
-int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	struct Fuji *f = fuji(cam);
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
@@ -296,7 +297,7 @@ int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
+int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	vcam_log("Get property %X\n", ptp->params[0]);
 	int data = -1;
@@ -367,7 +368,7 @@ int fuji_get_property(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-void fuji_accept_remote_ports();
+void fuji_accept_remote_ports(void);
 int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
@@ -468,6 +469,18 @@ int ptp_fuji_liveview(int socket) {
 	return 0;
 }
 
+int ptp_fuji_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
+	int rc = ptp_getpartialobject_write(cam, ptp);
+
+	// Once the end of the file is read, the cam seems to switch object IDs
+	// From what I can tell, this can be triggered by cam's size being lower or request size being lower (TODO: just the latter)
+	if (ptp->params[2] != 0x100000) {
+		fuji_downloaded_object(cam);
+	}
+
+	return rc;
+}
+
 void fuji_downloaded_object(vcam *cam) {
 	struct Fuji *f = fuji(cam);
 	// In MULTIPLE_TRANSFER mode, the camera 'deletes' the first object and replaces it with
@@ -492,8 +505,25 @@ void fuji_downloaded_object(vcam *cam) {
 	}
 }
 
+int ptp_fuji_discovery_getthumb_write(vcam *cam, ptpcontainer *ptp) {
+	gp_log_("%s: Returning nothing for discovery mode", __func__);
+	ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
+	return 1;
+}
+
 void fuji_register_opcodes(vcam *cam) {
 	vcam_register_opcode(cam, PTP_OC_FUJI_GetDeviceInfo, ptp_fuji_get_device_info, NULL);
 	vcam_register_opcode(cam, 0x101c, ptp_fuji_capture, NULL);
 	vcam_register_opcode(cam, 0x1018, ptp_fuji_capture, NULL);
+
+	// We have completely custom implementations of these
+	vcam_register_opcode(cam, PTP_OC_SetDevicePropValue, ptp_fuji_setdevicepropvalue_write, ptp_fuji_setdevicepropvalue_write_data);
+	vcam_register_opcode(cam, PTP_OC_GetDevicePropValue, ptp_getdevicepropvalue_write, 	NULL);
+
+	vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_getpartialobject_write, NULL);
+
+	struct Fuji *f = fuji(cam);
+	if (f->do_discovery) {
+		vcam_register_opcode(cam, PTP_OC_GetThumb, ptp_fuji_discovery_getthumb_write, NULL);
+	}
 }

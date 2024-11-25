@@ -328,7 +328,6 @@ int fuji_wifi_main(vcam *cam) {
 		fuji_ssdp_import(server_ip_address, "VCAM");
 	}
 
-
 	if (cam->custom_ip_addr) {
 		server_ip_address = cam->custom_ip_addr;
 		vcam_log("Fuji use local IP: %s\n", server_ip_address);

@@ -123,6 +123,18 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp);
 
 // GetPropertyValue stubs
 
+union PtpPropValue {
+	void *data;
+	uint8_t u8;
+	int8_t i8;
+	uint16_t u16;
+	int16_t i16;
+	uint32_t u32;
+	int32_t i32;
+	uint64_t u64;
+	int64_t i64;
+};
+
 struct PtpPropDesc {
 	uint16_t DevicePropertyCode;
 	uint16_t DataType;
@@ -143,6 +155,8 @@ struct PtpPropDesc {
 	int form_min;
 	int form_max;
 	int form_step;
+
+	//union PtpPropValue form_min;
 };
 
 typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *);
@@ -171,6 +185,9 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code);
 void *vcam_get_prop_data(vcam *cam, int code, int *length);
 int vcam_set_prop_data(vcam *cam, int code, void *data, int length);
 int vcam_set_prop(vcam *cam, int code, uint32_t data);
+
+void ptp_register_standard_opcodes(vcam *cam);
+void ptp_register_standard_props(vcam *cam);
 
 int vcam_check_session(vcam *cam);
 int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp);
@@ -218,7 +235,6 @@ int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
-void ptp_register_standard_opcodes(vcam *cam);
 void fuji_register_opcodes(vcam *cam);
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv);
 int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);

@@ -29,11 +29,6 @@ struct Fuji {
 };
 static inline struct Fuji *fuji(vcam *cam) {return cam->priv;}
 
-struct FujiPropEventSend {
-	unsigned short code;
-	unsigned int value;
-};
-
 #define FUJI_ACK_PACKET_SIZE 0x44
 
 #define FUJI_DUMMY_THUMB "bin/fuji/dummy_thumb2.jpg"

@@ -13,8 +13,10 @@ int ptp_battery_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->GetSet = 0;   /* Get only */
 	desc->factory_default_value_u32 = 50;
 	desc->factory_default_value = &desc->factory_default_value_u32;
+	desc->factory_default_value_length = 1;
 	desc->value_u32 = 50;
 	desc->value = &desc->value_u32;
+	desc->value_length = 1;
 	desc->FormFlag = 0x01; /* range */
 	desc->form_min = 0;
 	desc->form_max = 100;
@@ -219,6 +221,7 @@ int ptp_datetime_setvalue(vcam *cam, void *data, int length) {
 
 void ptp_register_standard_props(vcam *cam) {
 	vcam_register_prop_handlers(cam, 0x5001, ptp_battery_getdesc, ptp_battery_getvalue, NULL);
+	vcam_register_prop(cam, 0x5001);
 //	vcam_register_prop_handlers(cam, 0x5003, ptp_imagesize_getdesc, ptp_imagesize_getvalue, NULL);
 //	vcam_register_prop_handlers(cam, 0x5007, ptp_fnumber_getdesc, ptp_fnumber_getvalue, ptp_fnumber_setvalue);
 //	vcam_register_prop_handlers(cam, 0x5010, ptp_exposurebias_getdesc, ptp_exposurebias_getvalue, ptp_exposurebias_setvalue);

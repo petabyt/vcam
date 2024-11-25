@@ -68,6 +68,15 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 }
 
 int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size)) {
+	for (int i = 0; i < cam->opcodes->length; i++) {
+		struct PtpOpcode *c = &cam->opcodes->handlers[i];
+		if (c->code == code) {
+			c->write = write;
+			c->write_data = write_data;
+			return 0;
+		}
+	}
+
 	cam->opcodes = realloc(cam->opcodes, sizeof(struct PtpOpcodeList) + (sizeof(struct PtpOpcode) * (cam->opcodes->length + 1)));
 
 	struct PtpOpcode *c = &cam->opcodes->handlers[cam->opcodes->length];
@@ -85,6 +94,7 @@ int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, 
 
 	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
 	memset(prop, 0, sizeof(struct PtpProp));
+	prop->code = code;
 	prop->getdesc = getdesc;
 	prop->getvalue = getvalue;
 	prop->setvalue = setvalue;
@@ -94,15 +104,18 @@ int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, 
 }
 
 int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail, int avail_size, int avail_cnt) {
-	cam->props = realloc(cam->props, sizeof(struct PtpPropList) * (sizeof(struct PtpProp) * cam->props->length + 1));
+	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 
 	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
 	memset(prop, 0, sizeof(struct PtpProp));
+	prop->code = code;
 	prop->getdesc = NULL;
 	prop->getvalue = NULL;
 	prop->setvalue = NULL;
 
-	prop->desc.avail = avail;
+	prop->desc.value = data; // TODO: dup mem
+	prop->desc.value_length = length;
+	prop->desc.avail = avail; // TODO: dup mem
 	prop->desc.avail_size = avail_size;
 	prop->desc.avail_cnt = avail_cnt;
 
@@ -115,6 +128,7 @@ int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
 		if (prop->code == code) break;
+		prop = NULL;
 	}
 	if (prop == NULL) return -1;
 	if (prop->setvalue) {
@@ -136,8 +150,14 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
 		if (prop->code == code) break;
+		prop = NULL;
 	}
 	if (prop == NULL) return NULL;
+	if (prop->getvalue) {
+		struct PtpPropDesc *desc = malloc(sizeof(struct PtpPropDesc));
+		prop->getdesc(cam, desc);
+		return desc;
+	}
 	return &prop->desc;
 	return 0;
 }
@@ -147,6 +167,7 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length) {
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
 		if (prop->code == code) break;
+		prop = NULL;
 	}
 	if (prop == NULL) return NULL;
 
@@ -163,6 +184,7 @@ int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
 		if (prop->code == code) break;
+		prop = NULL;
 	}
 	if (prop == NULL) {
 		vcam_log("WARN: %s %04x prop that doesn't exist", __func__, code);
@@ -659,7 +681,10 @@ vcam *vcamera_new(void) {
 
 	cam->last_cmd_timestamp = 0;
 
+	cam->battery = 50;
+
 	ptp_register_standard_opcodes(cam);
+	ptp_register_standard_props(cam);
 
 	return cam;
 }

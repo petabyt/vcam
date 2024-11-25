@@ -384,6 +384,6 @@ void canon_register_base_eos(vcam *cam) {
 	vcam_register_opcode(cam, 0x91f5,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x91f6,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9053,	ptp_eos_generic, NULL); // TODO: special handling for 9053
-	vcam_register_opcode(cam, PTP_OC_CHDK,	ptp_eos_generic, NULL);
+	//vcam_register_opcode(cam, PTP_OC_CHDK,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, PTP_OC_MagicLantern, 	ptp_eos_generic, NULL);
 }
