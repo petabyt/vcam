@@ -33,6 +33,7 @@ int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	return 0;
 }
 
+#warning "TODO make not static"
 static struct EosInfo {
 	int first_events;
 	int lv_ready;

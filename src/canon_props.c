@@ -99,10 +99,8 @@ int vcam_canon_setup(vcam *cam) {
 
 	uint8_t avail_list_d105[] = {0};
 	vcam_set_prop_avail(cam, 0xD105, avail_list_d105, 0);
-
 	uint32_t avail_list_d108[] = {0x3, };
 	vcam_set_prop_avail(cam, 0xD108, avail_list_d108, 1);
-
 	uint32_t avail_list_d106[] = {0x0, 0x1, 0x10, 0x11, 0x7, };
 	vcam_set_prop_avail(cam, 0xD106, avail_list_d106, 5);
 	uint32_t avail_list_d107[] = {0x3, 0x4, 0x5, };

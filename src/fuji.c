@@ -106,6 +106,7 @@ enum CameraStates {
 };
 
 uint8_t *fuji_get_ack_packet(vcam *cam) {
+	#warning "TODO make not static"
 	static struct FujiInitPacket p = {
 		.length = 0x44,
 		.type = PTPIP_INIT_COMMAND_ACK,
