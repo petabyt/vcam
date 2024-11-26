@@ -4,8 +4,9 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/socket.h>
-#include <vcam.h>
+#include <unistd.h>
 #include <dirent.h>
+#include <vcam.h>
 
 static void close_all_fds(void) {
 	vcam_log("Closing all fds\n");

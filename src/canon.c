@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
+#include <unistd.h>
 #include <vcam.h>
 
 void canon_register_d4_hidden(vcam *cam);

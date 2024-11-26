@@ -10,10 +10,17 @@
 #include <ptp.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include "gphoto.h"
 
-#define FUZZMODE_PROTOCOL	0
-#define FUZZMODE_NORMAL		1
+#define GP_OK 0
+#define GP_ERROR -1
+#define GP_ERROR_TIMEOUT -10
+
+typedef enum {
+	GP_LOG_ERROR = 0,	/**< \brief Log message is an error information. */
+	GP_LOG_VERBOSE = 1,	/**< \brief Log message is an verbose debug information. */
+	GP_LOG_DEBUG = 2,	/**< \brief Log message is an debug information. */
+	GP_LOG_DATA = 3		/**< \brief Log message is a data hex dump. */
+} GPLogLevel;
 
 void gp_log(GPLogLevel level, const char *domain, const char *format, ...);
 void vcam_log(const char *format, ...);

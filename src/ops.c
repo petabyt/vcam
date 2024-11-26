@@ -9,7 +9,10 @@
 #include <string.h>
 #include <time.h>
 #include "vcam.h"
-#include "fuji.h"
+
+#ifdef HAVE_LIBEXIF
+#include <libexif/exif-data.h>
+#endif
 
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
@@ -513,10 +516,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 
 	uint32_t compressed_size = cur->stbuf.st_size;
 
-	// Fuji weirdness
-	if (fuji_is_compressed_mode(cam)) {
-		compressed_size = 0x19000;
-	}
+#warning "TODO compressed_size = 0x19000 if fuji is in wifi mode"
 
 	x += put_16bit_le(data + x, ofc);
 	x += put_16bit_le(data + x, 0);			 /* ProtectionStatus, no protection */

@@ -185,7 +185,8 @@ int fuji_is_compressed_mode(vcam *cam) {
 	return (int)(f->compress_small);
 }
 
-int ptp_fuji_setdevicepropvalue_write(vcam *cam, int code) {
+int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
+	int code = ptp->params[0];
 	struct Fuji *f = fuji(cam);
 	int codes[] = {
 		PTP_PC_FUJI_CameraState,

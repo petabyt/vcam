@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
