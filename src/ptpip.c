@@ -86,6 +86,11 @@ static void *tcp_receive_single_packet(int client_socket, int *length) {
 		break;
 	}
 
+	if (size < 4) {
+		vcam_log("Didn't read enough of packet");
+		return NULL;
+	}
+
 	// Allocate the rest of the packet to read
 	uint8_t *buffer = malloc(size + packet_length);
 	if (buffer == NULL) abort();
