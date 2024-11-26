@@ -1,4 +1,7 @@
 -include config.mak
+
+all: libusb-vcam.so vcam
+
 include pi.mak
 
 # WiFi hardware for spoofing (requires AP support)

@@ -12,34 +12,26 @@
 
 #include <vcam.h>
 
-//#define TCP_NOISY
+struct Priv {
+	uint8_t *socket_init_resp;
+	int left_of_init_packet;
+	int first_write;
+};
+static inline struct Priv *priv(vcam *cam) {
+	return (struct Priv *)cam->hw_priv;
+}
 
 void *conv_ip_cmd_packet_to_usb(char *buffer, int length, int *outlength);
 void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength);
 void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outlength, int opcode);
 
-// TODO: Convert to structure
-static uint8_t socket_init_resp[] = {
-0x2e, 0x0, 0x0, 0x0,
-0x2, 0x0, 0x0, 0x0,
-0x1, 0x0, 0x0, 0x0,
-0x0, 0x0, 0x0, 0x0,
-0x0, 0x0, 0x0, 0x0,
-0x0, 0x1, 0x0, 0xbb,
-0xc1, 0x85, 0x9f, 0xab,
-0x45, 0x0, 0x4f, 0x0, 0x53, 0x0, 0x54, 0x0, 0x36, 0x0, 0x7b, 0x0, 0x0, 0x0,
-0x0, 0x0,
-0x1, 0x0,};
-
 static int ptpip_cmd_write(vcam *cam, void *to, int length) {
-	static int first_write = 1;
-
 	// First packet from the app, info about device
-	if (first_write) {
+	if (priv(cam)->first_write) {
 		struct FujiInitPacket *p = (struct FujiInitPacket *)to;
 		vcam_log("vusb: init socket (%d bytes)", length);
 
-		first_write = 0;
+		priv(cam)->first_write = 0;
 
 		// Pretend like we read the packet
 		return length;
@@ -64,7 +56,7 @@ static int ptpip_cmd_read(vcam *cam, void *to, int length) {
 	return rc;
 }
 
-static void *tcp_recieve_single_packet(int client_socket, int *length) {
+static void *tcp_receive_single_packet(int client_socket, int *length) {
 	// Read packet length (from the app, which is the initiator)
 	uint32_t packet_length;
 	ssize_t size;
@@ -96,6 +88,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 
 	// Allocate the rest of the packet to read
 	uint8_t *buffer = malloc(size + packet_length);
+	if (buffer == NULL) abort();
 	((uint32_t *)buffer)[0] = packet_length;
 
 	// Continue reading the rest of the data
@@ -117,10 +110,10 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 	return buffer;
 }
 
-// Recieve data from app TCP, and route into vcam
-static int tcp_recieve_all(vcam *cam, int client_socket) {
+// Receive data from app TCP, and route into vcam
+static int tcp_receive_all(vcam *cam, int client_socket) {
 	int packet_length = 0;
-	void *buffer = tcp_recieve_single_packet(client_socket, &packet_length);
+	void *buffer = tcp_receive_single_packet(client_socket, &packet_length);
 	if (buffer == NULL) {
 		return -1;
 	}
@@ -138,17 +131,17 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 
 		free(new_buffer);
 	} else if (bc->type == PTPIP_INIT_COMMAND_REQ) {
-		// Recieved init packet, send it into vcam to init vcam structs
-		vcam_log("Recieved init packet");
+		// Received init packet, send it into vcam to init vcam structs
+		vcam_log("Received init packet");
 		ptpip_cmd_write(cam, buffer, packet_length);
 		return 0;
 	}
 
 	if (bc->data_phase == 2) {
-		vcam_log("Recieved data phase");
+		vcam_log("Received data phase");
 
 		// Read in data start packet
-		void *buffer_ds = tcp_recieve_single_packet(client_socket, &packet_length);
+		void *buffer_ds = tcp_receive_single_packet(client_socket, &packet_length);
 		if (buffer_ds == NULL) {
 			return -1;
 		}
@@ -159,8 +152,8 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 			return -1;
 		}
 
-		// Recieve data end packet (which has payload)
-		void *buffer_de = tcp_recieve_single_packet(client_socket, &packet_length);
+		// Receive data end packet (which has payload)
+		void *buffer_de = tcp_receive_single_packet(client_socket, &packet_length);
 		if (buffer_de == NULL) {
 			return -1;
 		}
@@ -215,17 +208,15 @@ static void *ptpip_cmd_read_single_packet(vcam *cam, int *length) {
 }
 
 static int tcp_send_all(vcam *cam, int client_socket) {
-	static int left_of_init_packet = sizeof(socket_init_resp);
-
 	// Wait until 'hello' packet is sent
-	if (left_of_init_packet) {
-		int size = send(client_socket, socket_init_resp, left_of_init_packet, 0);
+	if (priv(cam)->left_of_init_packet) {
+		int size = send(client_socket, priv(cam)->socket_init_resp, priv(cam)->left_of_init_packet, 0);
 		if (size <= 0) {
 			perror("Error sending data to client");
 			return -1;
 		}
 
-		left_of_init_packet -= size;
+		priv(cam)->left_of_init_packet -= size;
 		return 0;
 	}
 
@@ -320,7 +311,7 @@ static int ack_event_socket(int client_event_socket) {
 		return -1;
 	}
 
-	vcam_log("Recieved event socket req");
+	vcam_log("Received event socket req");
 
 	uint32_t ack[2] = {
 		8, // size
@@ -360,6 +351,25 @@ static void *bind_event_socket_thread(void *arg) {
 }
 
 int ptpip_generic_main(vcam *cam) {
+	cam->hw_priv = malloc(sizeof(struct Priv));
+	priv(cam)->first_write = 1;
+
+	// TODO: Don't hardcode
+	uint8_t socket_init_resp[] = {
+		0x2e, 0x0, 0x0, 0x0,
+		0x2, 0x0, 0x0, 0x0,
+		0x1, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0,
+		0x0, 0x1, 0x0, 0xbb,
+		0xc1, 0x85, 0x9f, 0xab,
+		0x45, 0x0, 0x4f, 0x0, 0x53, 0x0, 0x54, 0x0, 0x36, 0x0, 0x7b, 0x0, 0x0, 0x0,
+		0x0, 0x0,
+		0x1, 0x0,};
+	priv(cam)->socket_init_resp = malloc(sizeof(socket_init_resp));
+	memcpy(priv(cam)->socket_init_resp, socket_init_resp, sizeof(socket_init_resp));
+	priv(cam)->left_of_init_packet = sizeof(socket_init_resp);
+
 	printf("vcam - running %s\n", cam->model);
 
 	int server_socket = new_ptp_tcp_socket(PTP_IP_PORT);
@@ -376,11 +386,11 @@ int ptpip_generic_main(vcam *cam) {
 
 	vcam_log("Connection accepted from %s:%d", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
-	static int have_setup_events_socket = 0;
+	int have_setup_events_socket = 0;
 	pthread_t thread;
 	while (1) {
-		if (tcp_recieve_all(cam, client_socket)) {
-			vcam_log("tcp_recieve_all failed");
+		if (tcp_receive_all(cam, client_socket)) {
+			vcam_log("tcp_receive_all failed");
 			goto err;
 		}
 

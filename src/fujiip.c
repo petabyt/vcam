@@ -50,7 +50,7 @@ static int ptpip_cmd_client_read(vcam *cam, void *to, int length) {
 }
 
 // Recieve all packets from the app (initiator)
-static int tcp_recieve_all(vcam *cam, int client_socket) {
+static int tcp_receive_all(vcam *cam, int client_socket) {
 	uint32_t packet_length;
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
@@ -112,7 +112,7 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 		if (size != sizeof(uint32_t)) {
-			vcam_log("Failed to recieve 4 bytes of data phase response\n");
+			vcam_log("Failed to receive 4 bytes of data phase response\n");
 			return -1;
 		}
 
@@ -121,7 +121,7 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 		((uint32_t *)buffer)[0] = packet_length;
 		rc = recv(client_socket, buffer + size, packet_length - size, 0);
 		if (rc != packet_length - size) {
-			vcam_log("Failed to recieve data phase response\n");
+			vcam_log("Failed to receive data phase response\n");
 			return -1;
 		}
 
@@ -357,7 +357,7 @@ int fuji_wifi_main(vcam *cam) {
 	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	while (1) {
-		if (tcp_recieve_all(cam, client_socket)) {
+		if (tcp_receive_all(cam, client_socket)) {
 			goto err;
 		}
 

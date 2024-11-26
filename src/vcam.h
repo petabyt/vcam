@@ -37,7 +37,10 @@ typedef struct ptpcontainer {
 
 // All members are guaranteed to be zero by calloc()
 typedef struct vcam {
+	/// @brief Priv pointer for device-specific PTP code
 	void *priv;
+	/// @brief Priv pointer for hardware layer (TCP/IP)
+	void *hw_priv;
 	uint16_t vendor;
 	uint16_t product;
 	char model[32];
@@ -45,7 +48,10 @@ typedef struct vcam {
 	char serial[16];
 	char manufac[32];
 
+	/// @brief NULL to use default IP
 	char *custom_ip_addr;
+
+	/// @brief Optional PID of parent process, will signal it once PTP/IP is listening for connections
 	pid_t sig;
 
 	struct ptp_interrupt *first_interrupt;

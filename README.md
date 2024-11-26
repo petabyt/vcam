@@ -5,8 +5,11 @@ responder (server) side of PTP/USB, PTP/IP, and UPnP. It also perfectly emulates
 
 <img title="Fujifilm Camera Connect connected to spoofed X-H1-ABCD" src="bin/Screenshot_20240402-140041.png" width="300"><img src="bin/Screenshot_20240402-140506.png" width="300">
 
+This started out as a fork of gphoto's [vcamera](https://github.com/gphoto/libgphoto2/tree/master/libgphoto2_port/vusb) regression tester.
+Since then it has been heavily modified and improved to more closely replicate the PTP responders found in camera firmware.
+
 ## Roadmap
-- [x] Basic PTP responder implementation (thanks Marcus Meissner)
+- [x] Basic PTP responder (vcamera) implementation (thanks Marcus Meissner)
 - [x] `libusb-v1.0.so` drop-in replacement - spoof Linux PTP apps
 - [x] PTP/IP packet & behavior support
 - [x] Complete Fujifilm X implementation (2015-2020)
@@ -20,10 +23,9 @@ responder (server) side of PTP/USB, PTP/IP, and UPnP. It also perfectly emulates
 - For regression testing - link a PTP client against the fake `libusb.so` and test functionality in CI
 - For easier prototyping - vcam can be used instead of a physical camera (no need to wait for a camera to recharge to continue testing)
 - [Black box testing](https://en.wikipedia.org/wiki/Black-box_testing) - test against vendor software without disassembling
-- Note that this tool is very *experimental*, and the code quality reflects that.
 
 ## Compiling
-Run on linux. It can work on WSL if you can route the IP through the Windows firewall.
+This will only run on Linux. It can work on WSL2 if you can route the IP through the Windows firewall.
 ```
 make vcam
 ./vcam fuji_x_a2
