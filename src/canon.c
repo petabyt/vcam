@@ -9,10 +9,27 @@
 void canon_register_d4_hidden(vcam *cam);
 void canon_register_base_eos(vcam *cam);
 
+
+struct CanonBase {
+	int first_events;
+	int lv_ready;
+	int calls_to_liveview;
+};
+static inline struct CanonBase *priv(vcam *cam) {
+	return (struct CanonBase *)cam->priv;
+}
+
 #define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos_events.bin"
 
 int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
+	cam->priv = malloc(sizeof(struct CanonBase));
+	struct CanonBase *p = priv(cam);
+
+	p->first_events = 0;
+	p->lv_ready = 0;
+	p->calls_to_liveview = 0;
+
 	strcpy(cam->manufac, "Canon Inc.");
 	cam->vendor = 0x4a9;
 	if (!strcmp(name, "canon_1300d")) {
@@ -33,13 +50,6 @@ int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	return 0;
 }
 
-#warning "TODO make not static"
-static struct EosInfo {
-	int first_events;
-	int lv_ready;
-	int calls_to_liveview;
-} eos_info = {0};
-
 struct EosEventUint {
 	uint32_t size;
 	uint32_t type;
@@ -48,10 +58,11 @@ struct EosEventUint {
 };
 
 static int ptp_eos_viewfinder_data(vcam *cam, ptpcontainer *ptp) {
+	struct CanonBase *p = priv(cam);
 	usleep(1000 * 10);
-	eos_info.calls_to_liveview++;
+	p->calls_to_liveview++;
 
-	if (eos_info.calls_to_liveview < 15) {
+	if (p->calls_to_liveview < 15) {
 		ptp_response(cam, PTP_RC_CANON_NotReady, 0);
 		return 1;
 	}
@@ -63,12 +74,12 @@ static int ptp_eos_viewfinder_data(vcam *cam, ptpcontainer *ptp) {
 }
 
 static int ptp_eos_generic(vcam *cam, ptpcontainer *ptp) {
+	struct CanonBase *p = priv(cam);
 	switch (ptp->code) {
 	case PTP_OC_EOS_SetRemoteMode:
 	case PTP_OC_EOS_SetEventMode:
-		{
-			if (vcam_check_param_count(cam, ptp, 1))return 1; }
-		eos_info.first_events = 1;
+		if (vcam_check_param_count(cam, ptp, 1)) return 1;
+		p->first_events = 1;
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
@@ -132,6 +143,7 @@ static int ptp_eos_set_property(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 static int ptp_eos_set_property_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	struct CanonBase *p = priv(cam);
 	uint32_t *dat = (uint32_t *)data;
 	uint32_t length = dat[0];
 	uint32_t code = dat[1];
@@ -142,7 +154,7 @@ static int ptp_eos_set_property_data(vcam *cam, ptpcontainer *ptp, unsigned char
 
 	switch (code) {
 	case PTP_PC_EOS_CaptureDestination:
-		eos_info.lv_ready = 1;
+		p->lv_ready = 1;
 		break;
 	}
 
@@ -215,9 +227,10 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 }
 
 static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
-	if (vcam_check_param_count(cam, ptp, 0))return 1;
+	struct CanonBase *p = priv(cam);
+	if (vcam_check_param_count(cam, ptp, 0)) return 1;
 
-	if (eos_info.first_events) {
+	if (p->first_events) {
 		int size = 0;
 		uint8_t *buffer = malloc(10000);
 		eos_pack_all_props(cam, buffer, &size);
@@ -227,7 +240,7 @@ static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
 
 		free(buffer);
 
-		eos_info.first_events = 0;
+		p->first_events = 0;
 		return 1;
 	}
 
