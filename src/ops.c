@@ -7,7 +7,7 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <time.h>
 #include "vcam.h"
 #include "fuji.h"
 
@@ -347,7 +347,7 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 3)) return 1;
 
-	vcam_log("GetPartialObject %d (%X %X)\n", ptp->params[0], ptp->params[1], ptp->params[2]);
+	vcam_log("GetPartialObject %d (%X %X)", ptp->params[0], ptp->params[1], ptp->params[2]);
 
 	struct ptp_dirent *cur = cam->first_dirent;
 	while (cur) {
@@ -364,7 +364,7 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 
 	FILE *file = fopen(cur->fsname, "rb");
 	if (file == NULL) {
-		vcam_log("File %s not found\n", cur->fsname);
+		vcam_log("File %s not found", cur->fsname);
 		exit(-1);
 	}
 
@@ -380,7 +380,7 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	int read = fread(buffer, 1, size, file); // TODO: check for folder
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, read);
-	vcam_log("Generic sending %d\n", read);
+	vcam_log("Generic sending %d", read);
 
 	free(buffer);
 	fclose(file);
@@ -618,15 +618,6 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 
 	gp_log_("Processing thumbnail call for %d\n", ptp->params[0]);
 
-#warning "TODO"
-#if 0
-	if (cam->do_discovery) {
-		gp_log_("Returning nothing for discovery mode\n");
-		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
-		return 1;
-	}
-#endif
-
 	cur = cam->first_dirent;
 	while (cur) {
 		if (cur->id == ptp->params[0])
@@ -856,7 +847,6 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	x += put_16bit_le(data + x, desc->DevicePropertyCode);
 	x += put_16bit_le(data + x, desc->DataType);
 	x += put_8bit_le(data + x, desc->GetSet);
-	printf("%d\n", ptp_get_prop_size(desc->factory_default_value, desc->DataType));
 	x += put_data(data + x, desc->factory_default_value, ptp_get_prop_size(desc->factory_default_value, desc->DataType));
 	x += put_data(data + x, desc->value, ptp_get_prop_size(desc->value, desc->DataType));
 	x += put_8bit_le(data + x, desc->FormFlag);
@@ -923,7 +913,7 @@ int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_trans_id(cam, ptp))return 1;
 	if (vcam_check_session(cam))return 1;
 
-	vcam_log(
+	printf(
 		"\tRecieved 0xBEEF\n"
 		"\tSize: %d\n"
 		"\tType: %d\n"
@@ -932,7 +922,7 @@ int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 		ptp->size, ptp->type, ptp->code, ptp->seqnr
 	);
 
-	vcam_log("Params (%d): ", ptp->nparams);
+	printf("Params (%d): ", ptp->nparams);
 	for (int i = 0; i < ptp->nparams; i++) {
 		printf("%d ", ptp->params[i]);
 	}
@@ -973,10 +963,10 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 }
 
 int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
-	vcam_log("Recieved data phase for 0xBEEF: %d\n", len);
+	vcam_log("Recieved data phase for 0xBEEF: %d", len);
 
 	if (ptp->nparams != 1) {
-		vcam_log("Expected a checksum parameter\n");
+		vcam_log("Expected a checksum parameter");
 	}
 
 	int checksum = 0;
@@ -985,11 +975,11 @@ int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsig
 	}
 
 	if (checksum != ptp->params[0]) {
-		vcam_log("Invalid checksum %d/%d\n", checksum, ptp->params[0]);
+		vcam_log("Invalid checksum %d/%d", checksum, ptp->params[0]);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		return 1;
 	} else {
-		vcam_log("Verified checksum %d/%d\n", checksum, ptp->params[0]);
+		vcam_log("Verified checksum %d/%d", checksum, ptp->params[0]);
 	}
 
 	ptp_response(cam, PTP_RC_OK, 0);

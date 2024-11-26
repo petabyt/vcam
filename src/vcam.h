@@ -8,11 +8,14 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <ptp.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "gphoto.h"
 
 #define FUZZMODE_PROTOCOL	0
 #define FUZZMODE_NORMAL		1
 
+void gp_log(GPLogLevel level, const char *domain, const char *format, ...);
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
 

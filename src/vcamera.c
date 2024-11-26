@@ -8,7 +8,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
-#include <vcam.h>
+#include <time.h>
+#include <dirent.h>
+#include "vcam.h"
 
 void vcam_dump(void *ptr, size_t len) {
 	FILE *f = fopen("DUMP", "wb");
@@ -276,26 +278,25 @@ int ptp_get_object_count(vcam *cam) {
 
 void read_directories(vcam *cam, const char *path, struct ptp_dirent *parent) {
 	struct ptp_dirent *cur;
-	gp_system_dir dir;
-	gp_system_dirent de;
+	struct dirent *de;
 
-	dir = gp_system_opendir(path);
+	DIR *dir = opendir(path);
 	if (!dir)
 		return;
-	while ((de = gp_system_readdir(dir))) {
-		if (!strcmp(gp_system_filename(de), "."))
+	while ((de = readdir(dir))) {
+		if (!strcmp(de->d_name, "."))
 			continue;
-		if (!strcmp(gp_system_filename(de), ".."))
+		if (!strcmp(de->d_name, ".."))
 			continue;
 
 		cur = malloc(sizeof(struct ptp_dirent));
 		if (!cur)
 			break;
-		cur->name = strdup(gp_system_filename(de));
-		cur->fsname = malloc(strlen(path) + 1 + strlen(gp_system_filename(de)) + 1);
+		cur->name = strdup(de->d_name);
+		cur->fsname = malloc(strlen(path) + 1 + strlen(de->d_name) + 1);
 		strcpy(cur->fsname, path);
 		strcat(cur->fsname, "/");
-		strcat(cur->fsname, gp_system_filename(de));
+		strcat(cur->fsname, de->d_name);
 		//gp_log_("Found filename: %s\n", cur->fsname);
 		cur->id = cam->ptp_objectid++;
 		cur->next = cam->first_dirent;
@@ -306,7 +307,7 @@ void read_directories(vcam *cam, const char *path, struct ptp_dirent *parent) {
 		if (S_ISDIR(cur->stbuf.st_mode))
 			read_directories(cam, cur->fsname, cur); /* recurse! */
 	}
-	gp_system_closedir(dir);
+	closedir(dir);
 }
 
 int vcam_get_object_count(vcam *cam) {

@@ -4,7 +4,7 @@ include pi.mak
 # WiFi hardware for spoofing (requires AP support)
 WIFI_DEV ?= wlp0s20f3
 
-VCAM_CORE += src/log.o src/vcamera.o src/gphoto.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fujiip.o src/ptpip.o
+VCAM_CORE += src/log.o src/vcamera.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fujiip.o src/ptpip.o
 VCAM_CORE += src/canon_setup.o src/data.o src/props.o src/fujissdp.o src/socket.o
 
 # include libusb-1.0 headers for .so

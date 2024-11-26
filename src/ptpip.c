@@ -37,7 +37,7 @@ static int ptpip_cmd_write(vcam *cam, void *to, int length) {
 	// First packet from the app, info about device
 	if (first_write) {
 		struct FujiInitPacket *p = (struct FujiInitPacket *)to;
-		vcam_log("vusb: init socket (%d bytes)\n", length);
+		vcam_log("vusb: init socket (%d bytes)", length);
 
 		first_write = 0;
 
@@ -76,7 +76,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 		#endif
 
 		if (size == 0) {
-			vcam_log("Initiator isn't sending anything, trying again\n");
+			vcam_log("Initiator isn't sending anything, trying again");
 			usleep(1000 * 500); // 1s
 			continue;
 		}
@@ -87,7 +87,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 		}
 
 		if (size != 4) {
-			vcam_log("Couldn't read 4 bytes, only got %d\n", size);
+			vcam_log("Couldn't read 4 bytes, only got %d", size);
 			return NULL;
 		}
 
@@ -110,7 +110,7 @@ static void *tcp_recieve_single_packet(int client_socket, int *length) {
 		perror("Error reading data from socket");
 		return NULL;
 	} else if (size != packet_length) {
-		vcam_log("Couldn't read the rest of the packet, only got %d\n", size);
+		vcam_log("Couldn't read the rest of the packet, only got %d", size);
 		return NULL;
 	}
 
@@ -139,13 +139,13 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 		free(new_buffer);
 	} else if (bc->type == PTPIP_INIT_COMMAND_REQ) {
 		// Recieved init packet, send it into vcam to init vcam structs
-		vcam_log("Recieved init packet\n");
+		vcam_log("Recieved init packet");
 		ptpip_cmd_write(cam, buffer, packet_length);
 		return 0;
 	}
 
 	if (bc->data_phase == 2) {
-		vcam_log("Recieved data phase\n");
+		vcam_log("Recieved data phase");
 
 		// Read in data start packet
 		void *buffer_ds = tcp_recieve_single_packet(client_socket, &packet_length);
@@ -155,7 +155,7 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 
 		struct PtpIpStartDataPacket *ds = (struct PtpIpStartDataPacket *)buffer_ds;
 		if (ds->type != PTPIP_DATA_PACKET_START) {
-			vcam_log("Didn't get end data packet\n");
+			vcam_log("Didn't get end data packet");
 			return -1;
 		}
 
@@ -167,7 +167,7 @@ static int tcp_recieve_all(vcam *cam, int client_socket) {
 
 		struct PtpIpEndDataPacket *ed = (struct PtpIpEndDataPacket *)buffer_de;
 		if (ed->type != PTPIP_DATA_PACKET_END) {
-			vcam_log("Didn't get end data packet\n");
+			vcam_log("Didn't get end data packet");
 			return -1;
 		}
 
@@ -193,7 +193,7 @@ static void *ptpip_cmd_read_single_packet(vcam *cam, int *length) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_read(cam, &packet_length, 4);
 	if (size != 4) {
-		vcam_log("send_all: vcam failed to provide 4 bytes: %d\n", size);
+		vcam_log("send_all: vcam failed to provide 4 bytes: %d", size);
 		return NULL;
 	}
 
@@ -203,7 +203,7 @@ static void *ptpip_cmd_read_single_packet(vcam *cam, int *length) {
 	int rc = ptpip_cmd_read(cam, buffer + size, packet_length - size);
 
 	if (rc != packet_length - size) {
-		vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
+		vcam_log("Read %d, wanted %d", rc, packet_length - size);
 		return NULL;
 	}
 
@@ -307,7 +307,7 @@ static int new_ptp_tcp_socket(int port) {
 		return -1;
 	}
 
-	vcam_log("Socket listening on port %d...\n", port);
+	vcam_log("Socket listening on port %d...", port);
 
 	return server_socket;
 }
@@ -316,11 +316,11 @@ static int ack_event_socket(int client_event_socket) {
 	struct PtpIpHeader init;
 	ssize_t size = recv(client_event_socket, &init, 12, 0);
 	if (size != 12) {
-		vcam_log("Failed to read socket init: %d\n", size);
+		vcam_log("Failed to read socket init: %d", size);
 		return -1;
 	}
 
-	vcam_log("Recieved event socket req\n");
+	vcam_log("Recieved event socket req");
 
 	uint32_t ack[2] = {
 		8, // size
@@ -329,11 +329,11 @@ static int ack_event_socket(int client_event_socket) {
 
 	size = send(client_event_socket, ack, sizeof(ack), 0);	
 	if (size != sizeof(ack)) {
-		vcam_log("Failed to send socket ack\n");
+		vcam_log("Failed to send socket ack");
 		return -1;
 	}
 
-	vcam_log("Send event socket ack\n");
+	vcam_log("Send event socket ack");
 
 	return 0;
 }
@@ -342,7 +342,7 @@ static void *bind_event_socket_thread(void *arg) {
 	struct sockaddr_in client_address;
 	socklen_t client_address_length = sizeof(client_address);
 	int server_socket = *((int *)arg);
-	vcam_log("Waiting for event socket on new thread...\n");
+	vcam_log("Waiting for event socket on new thread...");
 	int client_event_socket = accept(server_socket, (struct sockaddr *)&client_address, &client_address_length);
 	if (ack_event_socket(client_event_socket)) {
 		return NULL;
@@ -352,7 +352,7 @@ static void *bind_event_socket_thread(void *arg) {
 
 	// Canon devices don't seem to send any events
 	while (1) {
-		vcam_log("Event thread sleeping\n");
+		vcam_log("Event thread sleeping");
 		usleep(1000 * 1000);
 	}
 
@@ -374,13 +374,13 @@ int ptpip_generic_main(vcam *cam) {
 		return -1;
 	}
 
-	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+	vcam_log("Connection accepted from %s:%d", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	static int have_setup_events_socket = 0;
 	pthread_t thread;
 	while (1) {
 		if (tcp_recieve_all(cam, client_socket)) {
-			vcam_log("tcp_recieve_all failed\n");
+			vcam_log("tcp_recieve_all failed");
 			goto err;
 		}
 
@@ -388,7 +388,7 @@ int ptpip_generic_main(vcam *cam) {
 
 		// Read packet length
 		if (tcp_send_all(cam, client_socket)) {
-			vcam_log("tcp_send_all failed\n");
+			vcam_log("tcp_send_all failed");
 			goto err;
 		}
 
@@ -403,13 +403,13 @@ int ptpip_generic_main(vcam *cam) {
 	}
 
 	close(client_socket);
-	vcam_log("Connection closed\n");
+	vcam_log("Connection closed");
 	close(server_socket);
 
 	return 0;
 
 err:;
-	vcam_log("Connection forced down\n");
+	vcam_log("Connection forced down");
 	close(client_socket);
 	close(server_socket);
 	return -1;
