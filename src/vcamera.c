@@ -103,7 +103,7 @@ int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, 
 	return 0;
 }
 
-int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail, int avail_size, int avail_cnt) {
+int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc) {
 	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 
 	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
@@ -113,17 +113,13 @@ int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail,
 	prop->getvalue = NULL;
 	prop->setvalue = NULL;
 
-	prop->desc.value = data; // TODO: dup mem
-	prop->desc.value_length = length;
-	prop->desc.avail = avail; // TODO: dup mem
-	prop->desc.avail_size = avail_size;
-	prop->desc.avail_cnt = avail_cnt;
+	memcpy(&prop->desc, desc, sizeof(struct PtpPropDesc));
 
 	cam->props->length += 1;
 	return 0;
 }
 
-int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
+int vcam_set_prop_data(vcam *cam, int code, void *data) {
 	struct PtpProp *prop = NULL;
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
@@ -132,17 +128,18 @@ int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
 	}
 	if (prop == NULL) return -1;
 	if (prop->setvalue) {
-		return prop->setvalue(cam, data, length);
+		return prop->setvalue(cam, data);
 	}
-	if (prop->desc.value_length != length)
-		prop->desc.value = realloc(prop->desc.value, length);
-	prop->desc.value_length = length;
-	memcpy(prop->desc.value, data, length);
+	if (prop->desc.value != NULL)
+		free(prop->desc.value);
+	int size = ptp_get_prop_size(data, prop->desc.DataType);
+	prop->desc.value = malloc(size);
+	memcpy(prop->desc.value, data, size);
 	return 0;
 }
 
 int vcam_set_prop(vcam *cam, int code, uint32_t data) {
-	return vcam_set_prop_data(cam, code, &data, 4);
+	return vcam_set_prop_data(cam, code, &data);
 }
 
 struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
@@ -159,7 +156,6 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
 		return desc;
 	}
 	return &prop->desc;
-	return 0;
 }
 
 void *vcam_get_prop_data(vcam *cam, int code, int *length) {
@@ -170,16 +166,19 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length) {
 		prop = NULL;
 	}
 	if (prop == NULL) return NULL;
-
+	void *data;
 	if (prop->getvalue) {
-		return prop->getvalue(cam, length);
+		data = prop->getvalue(cam);
+	} else {
+		data = prop->desc.value;
 	}
-
-	(*length) = prop->desc.value_length;
-	return prop->desc.value;
+	if (length != NULL) {
+		(*length) = ptp_get_prop_size(data, prop->desc.DataType);
+	}
+	return data;
 }
 
-int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
+int vcam_set_prop_avail(vcam *cam, int code, void *list, int cnt) {
 	struct PtpProp *prop = NULL;
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
@@ -190,18 +189,11 @@ int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data) {
 		vcam_log("WARN: %s %04x prop that doesn't exist", __func__, code);
 		return -1;
 	}
-
-	// Realloc when list changes
-	void *dup = NULL;
-	if (prop->desc.avail == NULL) {
-		dup = malloc(size * cnt);
-		memcpy(dup, data, size * cnt);
-	} else {
-		dup = realloc(prop->desc.avail, size * cnt);
-	}
-
-	prop->desc.avail = dup;
-	prop->desc.avail_size = size;
+	prop->desc.FormFlag = PTP_EnumerationForm; // Should this function set it or check it?
+	int size = ptp_prop_list_size(prop->desc.DataType, list, cnt);
+	free(prop->desc.avail);
+	prop->desc.avail = malloc(size);
+	memcpy(prop->desc.avail, list, size);
 	prop->desc.avail_cnt = cnt;
 	return 0;
 }

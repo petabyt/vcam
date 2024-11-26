@@ -11,7 +11,6 @@
 
 #include <vcam.h>
 
-
 struct libusb_device_handle {
 	vcam *cam;
 };

@@ -141,7 +141,7 @@ int vcam_fuji_setup(vcam *cam) {
 	// TODO: Better way to ignore folders (Fuji doesn't show them)
 	f->obj_count = ptp_get_object_count(cam) - 1;
 
-	vcam_log("Fuji: Found %d objects\n", f->obj_count);
+	vcam_log("Fuji: Found %d objects", f->obj_count);
 
 	// Check if remote mode is supported
 	if (f->remote_version) {
@@ -155,7 +155,7 @@ int vcam_fuji_setup(vcam *cam) {
 	}
 
 	if (f->is_select_multiple_images) {
-		vcam_log("Configuring fuji to select multiple images\n");
+		vcam_log("Configuring fuji to select multiple images");
 		f->camera_state = FUJI_MULTIPLE_TRANSFER;
 		// ID 0 is DCIM, set to 1, which is first jpeg
 		cam->first_dirent->next->id = 1;
@@ -214,7 +214,7 @@ int ptp_fuji_setdevicepropvalue_write(vcam *cam, int code) {
 		}
 	}
 
-	vcam_log("Request to set unknown property %X\n", code);
+	vcam_log("Request to set unknown property %X", code);
 	ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 
 	return 1;
@@ -225,7 +225,7 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
 
-	vcam_log("Fuji Set property %X -> %X (size %d)\n", ptp->params[0], uint[0], len);
+	vcam_log("Fuji Set property %X -> %X (size %d)", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
 	case PTP_PC_FUJI_ClientState:

@@ -7,27 +7,29 @@
 #include <string.h>
 #include <vcam.h>
 
+static void init_prop(struct PtpPropDesc *desc) {
+	// If only we had a custom allocator...
+	desc->factory_default_value = malloc(4);
+	desc->value = malloc(4);
+	desc->form_min = malloc(4);
+	desc->form_max = malloc(4);
+	desc->form_step = malloc(4);
+}
+
 int ptp_battery_getdesc(vcam *cam, struct PtpPropDesc *desc) {
 	desc->DevicePropertyCode = 0x5001;
-	desc->DataType = 2; /* uint8 */
-	desc->GetSet = 0;   /* Get only */
-	desc->factory_default_value_u32 = 50;
-	desc->factory_default_value = &desc->factory_default_value_u32;
-	desc->factory_default_value_length = 1;
-	desc->value_u32 = 50;
-	desc->value = &desc->value_u32;
-	desc->value_length = 1;
-	desc->FormFlag = 0x01; /* range */
-	desc->form_min = 0;
-	desc->form_max = 100;
-	desc->form_step = 1;
-	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5001, 0xffffffff);
+	desc->DataType = PTP_TC_UINT8;
+	desc->GetSet = PTP_AC_ReadWrite;
+	ptp_write_u8(desc->factory_default_value, 50);
+	ptp_write_u8(desc->value, 50);
+	desc->FormFlag = PTP_RangeForm;
+	ptp_write_u8(desc->form_min, 0);
+	ptp_write_u8(desc->form_max, 100);
+	ptp_write_u8(desc->form_step, 1);
 	return 1;
 }
 
 void *ptp_battery_getvalue(vcam *cam, int *length) {
-	(*length) = 1;
-	ptp_inject_interrupt(cam, 1000, PTP_EC_DevicePropChanged, 1, 0x5001, 0xffffffff);
 	return &cam->battery;
 }
 
@@ -220,8 +222,43 @@ int ptp_datetime_setvalue(vcam *cam, void *data, int length) {
 #endif
 
 void ptp_register_standard_props(vcam *cam) {
-	vcam_register_prop_handlers(cam, 0x5001, ptp_battery_getdesc, ptp_battery_getvalue, NULL);
-	vcam_register_prop(cam, 0x5001);
+	{
+		struct PtpPropDesc desc;
+		init_prop(&desc);
+		desc.DevicePropertyCode = 0x5001;
+		desc.DataType = PTP_TC_UINT8;
+		desc.GetSet = PTP_AC_ReadWrite;
+		ptp_write_u8(desc.factory_default_value, 50);
+		ptp_write_u8(desc.value, 50);
+		desc.FormFlag = PTP_RangeForm;
+		ptp_write_u8(desc.form_min, 0);
+		ptp_write_u8(desc.form_max, 100);
+		ptp_write_u8(desc.form_step, 1);
+		vcam_register_prop(cam, 0x5001, &desc);
+	}
+	{
+		struct PtpPropDesc desc;
+
+		desc.factory_default_value = malloc(64);
+		desc.value = malloc(64);
+		desc.avail = malloc(300);
+
+		desc.DevicePropertyCode = 0x5003;
+		desc.DataType = PTP_TC_STRING;
+		desc.GetSet = PTP_AC_Read;
+		ptp_write_string(desc.factory_default_value, "640x480");
+		ptp_write_string(desc.value, "640x480");
+		desc.FormFlag = PTP_EnumerationForm;
+		uint8_t *d = (uint8_t *)desc.avail;
+		d += ptp_write_string(d, "640x480");
+		d += ptp_write_string(d, "1024x768");
+		d += ptp_write_string(d, "2048x1536");
+		desc.avail_cnt = 3;
+		vcam_register_prop(cam, 0x5003, &desc);
+	}
+
+
+	//vcam_register_prop_handlers(cam, 0x5001, ptp_battery_getdesc, ptp_battery_getvalue, NULL);
 //	vcam_register_prop_handlers(cam, 0x5003, ptp_imagesize_getdesc, ptp_imagesize_getvalue, NULL);
 //	vcam_register_prop_handlers(cam, 0x5007, ptp_fnumber_getdesc, ptp_fnumber_getvalue, ptp_fnumber_setvalue);
 //	vcam_register_prop_handlers(cam, 0x5010, ptp_exposurebias_getdesc, ptp_exposurebias_getvalue, ptp_exposurebias_setvalue);

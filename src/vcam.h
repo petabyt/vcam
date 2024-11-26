@@ -23,7 +23,6 @@ typedef struct ptpcontainer {
 	unsigned int seqnr;
 	unsigned int nparams;
 	unsigned int params[6];
-	unsigned int has_data_phase;
 }ptpcontainer;
 
 // All members are guaranteed to be zero by calloc()
@@ -87,8 +86,8 @@ void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes);
 void ptp_response(vcam *cam, uint16_t code, int nparams, ...);
 
 int vcam_set_prop(vcam *cam, int code, uint32_t value);
-int vcam_set_prop_data(vcam *cam, int code, void *data, int length);
-int vcam_set_prop_avail(vcam *cam, int code, int size, int cnt, void *data);
+int vcam_set_prop_data(vcam *cam, int code, void *data);
+int vcam_set_prop_avail(vcam *cam, int code, void *list, int cnt);
 
 struct PtpOpcodeList {
 	int length;
@@ -140,28 +139,22 @@ struct PtpPropDesc {
 	uint16_t DataType;
 	uint8_t GetSet;
 	void *factory_default_value;
-	int factory_default_value_length;
 	void *value;
-	int value_length;
-
-	uint32_t factory_default_value_u32;
-	uint32_t value_u32;
 
 	void *avail;
-	int avail_size;
 	int avail_cnt;
 
 	uint8_t FormFlag;
-	int form_min;
-	int form_max;
-	int form_step;
-
-	//union PtpPropValue form_min;
+	void *form_min;
+	void *form_max;
+	void *form_step;
 };
 
+// TODO: This should be refactored to be on_getdesc/etc. There is no need to allocate an entire structure every single time
+// GetDevicePropDesc is called.
 typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *);
-typedef void *ptp_prop_getvalue(vcam *cam, int *length);
-typedef int ptp_prop_setvalue(vcam *cam, const void *data, int length);
+typedef void *ptp_prop_getvalue(vcam *cam);
+typedef int ptp_prop_setvalue(vcam *cam, const void *data);
 
 struct PtpPropList {
 	int length;
@@ -180,10 +173,10 @@ struct PtpPropList {
 };
 
 int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue);
-int vcam_register_prop(vcam *cam, int code, void *data, int length, void *avail, int avail_size, int avail_cnt);
+int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc);
 struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code);
 void *vcam_get_prop_data(vcam *cam, int code, int *length);
-int vcam_set_prop_data(vcam *cam, int code, void *data, int length);
+int vcam_set_prop_data(vcam *cam, int code, void *data);
 int vcam_set_prop(vcam *cam, int code, uint32_t data);
 
 void ptp_register_standard_opcodes(vcam *cam);

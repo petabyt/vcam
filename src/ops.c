@@ -832,30 +832,9 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
-static inline int put_data(unsigned char *dest, void *data, int length) {
+static int put_data(unsigned char *dest, void *data, int length) {
 	memcpy(dest, data, length);
 	return length;
-}
-
-int put_propval(unsigned char *dest, uint16_t type, void *data) {
-	switch (type) {
-		case 0x1:
-			return put_8bit_le(dest, ((uint8_t *)data)[0]);
-		case 0x2:
-			return put_8bit_le(dest, ((uint8_t *)data)[0]);
-		case 0x3:
-			return put_16bit_le(dest, ((uint16_t *)data)[0]);
-		case 0x4:
-			return put_16bit_le(dest, ((uint16_t *)data)[0]);
-		case 0x6:
-			return put_32bit_le(dest, ((uint32_t *)data)[0]);
-		case 0xffff:
-			return put_string(dest, data);
-		default:
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %d", type);
-			return 0;
-	}
-	return 0;
 }
 
 int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
@@ -874,31 +853,24 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	data = malloc(2000);
 
-	vcam_log("dump %d %d\n", desc->GetSet, desc->DataType);
-
 	x += put_16bit_le(data + x, desc->DevicePropertyCode);
 	x += put_16bit_le(data + x, desc->DataType);
 	x += put_8bit_le(data + x, desc->GetSet);
-	x += put_data(data + x, desc->factory_default_value, desc->factory_default_value_length);
-	x += put_data(data + x, desc->value, desc->value_length);
+	printf("%d\n", ptp_get_prop_size(desc->factory_default_value, desc->DataType));
+	x += put_data(data + x, desc->factory_default_value, ptp_get_prop_size(desc->factory_default_value, desc->DataType));
+	x += put_data(data + x, desc->value, ptp_get_prop_size(desc->value, desc->DataType));
 	x += put_8bit_le(data + x, desc->FormFlag);
 	switch (desc->FormFlag) {
 	case 0:
 		break;
 	case 1: /* range */
-	// TODO: not supporting >4 byte ranges
-#if 0
-		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.MinimumValue);
-		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.MaximumValue);
-		x += put_propval(data + x, desc.DataType, &desc.FORM.Range.StepSize);
-#endif
-		x += put_propval(data + x, desc->DataType, &desc->form_min);
-		x += put_propval(data + x, desc->DataType, &desc->form_max);
-		x += put_propval(data + x, desc->DataType, &desc->form_step);
+		x += ptp_copy_prop(data + x, desc->DataType, desc->form_min);
+		x += ptp_copy_prop(data + x, desc->DataType, desc->form_max);
+		x += ptp_copy_prop(data + x, desc->DataType, desc->form_step);
 		break;
 	case 2: /* ENUM */
 		x += put_16bit_le(data + x, desc->avail_cnt);
-		x += put_data(data + x, desc->avail, desc->avail_size * desc->avail_cnt);
+		x += ptp_copy_prop_list(data + x, desc->DataType, desc->avail, desc->avail_cnt);
 		break;
 	}
 
@@ -909,12 +881,11 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
-	if (vcam_check_trans_id(cam, ptp))return 1;
-	if (vcam_check_session(cam))return 1;
-	if (vcam_check_param_count(cam, ptp, 1))return 1;
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
 	int length;
-	vcam_log("%X\n", cam->props->handlers[0].code);
 	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
 	if (prop_data == NULL) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
@@ -957,9 +928,8 @@ int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 		"\tSize: %d\n"
 		"\tType: %d\n"
 		"\tCode: %X\n"
-		"\tseqnr: %d\n"
-		"\tdataphase: %d\n",
-		ptp->size, ptp->type, ptp->code, ptp->seqnr, ptp->has_data_phase
+		"\tseqnr: %d\n",
+		ptp->size, ptp->type, ptp->code, ptp->seqnr
 	);
 
 	vcam_log("Params (%d): ", ptp->nparams);
@@ -983,7 +953,12 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 		return 1;
 	}
 
-	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data, (int)len);
+	int prop_size = ptp_get_prop_size(data, desc->DataType);
+	if (len > prop_size) {
+		vcam_log("%d bytes copied over for property that is only %d bytes", len, prop_size);
+	}
+
+	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data);
 	if (rc) {
 		if (rc < 0) {
 			ptp_response(cam, PTP_RC_GeneralError, 0);

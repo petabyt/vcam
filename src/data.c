@@ -7,6 +7,78 @@
 
 int ptp_panic(char *x) {abort();}
 
+int ptp_get_prop_size(uint8_t *d, int type) {
+	uint32_t length32;
+	uint8_t length8;
+	switch (type) {
+	case PTP_TC_INT8:
+	case PTP_TC_UINT8:
+		return 1;
+	case PTP_TC_INT16:
+	case PTP_TC_UINT16:
+		return 2;
+	case PTP_TC_INT32:
+	case PTP_TC_UINT32:
+		return 4;
+	case PTP_TC_INT64:
+	case PTP_TC_UINT64:
+		return 8;
+	case PTP_TC_UINT8ARRAY:
+		ptp_read_u32(d, &length32);
+		return 4 + ((int)length32 * 1);
+	case PTP_TC_UINT16ARRAY:
+		ptp_read_u32(d, &length32);
+		return 4 + ((int)length32 * 2);
+	case PTP_TC_UINT32ARRAY:
+		ptp_read_u32(d, &length32);
+		return 4 + ((int)length32 * 4);
+	case PTP_TC_UINT64ARRAY:
+		ptp_read_u32(d, &length32);
+		return 4 + ((int)length32 * 8);
+	case PTP_TC_STRING:
+		ptp_read_u8(d, &length8);
+		return 1 + ((int)length8 * 2);
+	}
+
+	gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %d", type);
+	abort();
+	return 0;
+}
+
+int ptp_copy_prop(uint8_t *dest, uint16_t type, uint8_t *data) {
+	int size = ptp_get_prop_size(data, type);
+	memcpy(dest, data, size);
+	return size;
+}
+
+int ptp_get_prop_list_size(uint8_t *data, int type, int cnt) {
+	int of = 0;
+	for (int i = 0; i < cnt; i++) {
+		int size = ptp_get_prop_size(data + of, type);
+		of += size;
+	}
+	return of;
+}
+
+int ptp_copy_prop_list(uint8_t *dest, uint16_t type, uint8_t *data, int len) {
+	int of = 0;
+	for (int i = 0; i < len; i++) {
+		int size = ptp_get_prop_size(data + of, type);
+		memcpy(dest + of, data + of, size);
+		of += size;
+	}
+	return of;
+}
+
+int ptp_prop_list_size(uint16_t type, uint8_t *data, int len) {
+	int of = 0;
+	for (int i = 0; i < len; i++) {
+		int size = ptp_get_prop_size(data + of , type);
+		of += size;
+	}
+	return of;
+}
+
 int ptp_read_utf8_string(void *dat, char *string, int max) {
 	char *d = (char *)dat;
 	int x = 0;
