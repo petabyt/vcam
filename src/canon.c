@@ -138,7 +138,6 @@ static int ptp_eos_exec_evproc_data(vcam *cam, ptpcontainer *ptp, unsigned char 
 }
 
 static int ptp_eos_set_property(vcam *cam, ptpcontainer *ptp) {
-	ptp_response(cam, PTP_RC_OK, 0);
 	// Wait until the payload
 	return 1;
 }
@@ -153,7 +152,7 @@ static int ptp_eos_set_property_data(vcam *cam, ptpcontainer *ptp, unsigned char
 	assert(length == 0xc);
 
 	switch (code) {
-	case PTP_PC_EOS_CaptureDestination:
+	case PTP_DPC_EOS_CaptureDestination:
 		p->lv_ready = 1;
 		break;
 	}

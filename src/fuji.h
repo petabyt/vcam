@@ -2,6 +2,7 @@
 #define VCAM_FUJI_H
 
 struct Fuji {
+	enum FujiTransport transport;
 	int do_discovery;
 	int do_register;
 	int do_tether;
@@ -27,7 +28,7 @@ struct Fuji {
 	/// @brief Number of images currently sent through the SEND MULTIPLE feature
 	int sent_images;
 };
-static inline struct Fuji *fuji(vcam *cam) {return cam->priv;}
+static inline struct Fuji *fuji(vcam *cam) { return cam->priv; }
 
 #define FUJI_ACK_PACKET_SIZE 0x44
 

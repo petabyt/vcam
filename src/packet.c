@@ -37,14 +37,14 @@ void *conv_ip_data_packets_to_usb(void *ds_buffer, void *de_buffer, int *outleng
 	struct PtpIpStartDataPacket *ds = (struct PtpIpStartDataPacket *)(ds_buffer);
 	struct PtpIpEndDataPacket *de = (struct PtpIpEndDataPacket *)(de_buffer);
 
-	struct PtpBulkContainer *c = (struct PtpBulkContainer *)malloc(12 + (int)(ds->data_phase_length));
-	c->length = 12 + (int)(ds->data_phase_length);
+	struct PtpBulkContainer *c = (struct PtpBulkContainer *)malloc(12 + (int)(ds->payload_length));
+	c->length = 12 + (int)(ds->payload_length);
 	c->type = PTP_PACKET_TYPE_DATA;
 	c->code = opcode;
 	c->transaction = ds->transaction;
 
 	// Copy to new pkt payload from data pkt (both are offset 12)
-	memcpy(((uint8_t *)c) + 12, ((uint8_t *)de) + 12, (size_t)ds->data_phase_length);
+	memcpy(((uint8_t *)c) + 12, ((uint8_t *)de) + 12, (size_t)ds->payload_length);
 
 	return c;
 }
@@ -67,7 +67,7 @@ void *conv_usb_packet_to_ip(char *buffer, int length, int *outlength) {
 		sd->length = sizeof(struct PtpIpStartDataPacket);
 		sd->type = PTPIP_DATA_PACKET_START;
 		sd->transaction = c->transaction;
-		sd->data_phase_length = (uint64_t)payload_length;
+		sd->payload_length = (uint64_t)payload_length;
 
 		struct PtpIpEndDataPacket *ed = (struct PtpIpEndDataPacket *)(newpkt + sizeof(struct PtpIpStartDataPacket));
 		ed->length = sizeof(struct PtpIpEndDataPacket) + payload_length;

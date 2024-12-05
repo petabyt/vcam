@@ -9,11 +9,15 @@
 #include <cl_data.h>
 #include "fuji.h"
 
+int fuji_usb_init_cam(vcam *cam);
+
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
 	strcpy(cam->manufac, "Fujifilm Corp");
+	strcpy(cam->serial, "123456");
 	cam->vendor = 0x4cb;
+	cam->product = 0x2c6;
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
 		f->image_get_version = 1;
@@ -43,8 +47,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->get_object_version = 5;
 		f->remote_version = 0x0002000a; // fuji sets to 2000c
 		f->remote_get_object_version = 5;
-		// PTP_PC_FUJI_ImageGetLimitedVersion = 1
-		// PTP_PC_FUJI_Unknown_D52F = 1
+		// PTP_DPC_FUJI_ImageGetLimitedVersion = 1
+		// PTP_DPC_FUJI_Unknown_D52F = 1
 	} else if (!strcmp(name, "fuji_x_h1")) {
 		strcpy(cam->model, "X-H1");
 		f->image_get_version = 3; // fuji sets to 4
@@ -75,23 +79,33 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;
-		if (!strcmp(argv[i], "--select-img")) {
+		if (!strcmp(argv[i], "--usb")) {
+			f->transport = FUJI_FEATURE_USB_CARD_READER;
+		} else if (!strcmp(argv[i], "--rawconv")) {
+			f->transport = FUJI_FEATURE_RAW_CONV;
+		} else if (!strcmp(argv[i], "--select-img")) {
 			f->is_select_multiple_images = 1;
 		} else if (!strcmp(argv[i], "--discovery")) {
 			f->do_discovery = 1;
+			f->transport = FUJI_FEATURE_AUTOSAVE;
 		} else if (!strcmp(argv[i], "--register")) {
 			f->do_register = 1;
+			f->transport = FUJI_FEATURE_AUTOSAVE;
 		} else if (!strcmp(argv[i], "--tether")) {
 			f->do_tether = 1;
+			f->transport = FUJI_FEATURE_WIRELESS_TETHER;
 		} else {
 			printf("Unknown option %s\n", argv[i]);
 			return -1;
 		}
 	}
 
-	fuji_register_opcodes(cam);
-
-	return vcam_fuji_setup(cam);
+	if (f->transport == FUJI_FEATURE_WIRELESS_COMM || f->transport == FUJI_FEATURE_WIRELESS_TETHER || f->transport == FUJI_FEATURE_AUTOSAVE) {
+		fuji_register_opcodes(cam);
+		return vcam_fuji_setup(cam);
+	} else {
+		fuji_usb_init_cam(cam);
+	}
 }
 
 enum CameraStates {
@@ -163,19 +177,19 @@ int vcam_fuji_setup(vcam *cam) {
 	}
 
 	// Common startup events for all cameras
-	ptp_notify_event(cam, PTP_PC_FUJI_CameraState, f->camera_state);
+	ptp_notify_event(cam, PTP_DPC_FUJI_CameraState, f->camera_state);
 
 	if (f->camera_state == FUJI_MULTIPLE_TRANSFER) {
-		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
 	}
 
-	ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
+	ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount, f->obj_count);
 
 	if (f->remote_version) {
-		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount2, f->obj_count);
-		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount2, f->obj_count);
+		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D52F, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D400, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
 	}
 
 	return 0;
@@ -190,20 +204,20 @@ int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int code = ptp->params[0];
 	struct Fuji *f = fuji(cam);
 	int codes[] = {
-		PTP_PC_FUJI_CameraState,
-		PTP_PC_FUJI_ClientState,
-		PTP_PC_FUJI_GetObjectVersion,
-		PTP_PC_FUJI_NoCompression,
-		PTP_PC_FUJI_CompressSmall,
-		PTP_PC_FUJI_ImageGetVersion,
-		PTP_PC_FUJI_GeoTagVersion,
-		PTP_PC_FUJI_AutoSaveVersion,
-		PTP_PC_FUJI_Unknown_D228,
+		PTP_DPC_FUJI_CameraState,
+		PTP_DPC_FUJI_ClientState,
+		PTP_DPC_FUJI_GetObjectVersion,
+		PTP_DPC_FUJI_EnableCorrectFileSize,
+		PTP_DPC_FUJI_CompressSmall,
+		PTP_DPC_FUJI_ImageGetVersion,
+		PTP_DPC_FUJI_GeoTagVersion,
+		PTP_DPC_FUJI_AutoSaveVersion,
+		PTP_DPC_FUJI_AutoSaveDatabaseStatus,
 	};
 
 	int codes_remote_only[] = {
-	    PTP_PC_FUJI_RemoteVersion,
-	    PTP_PC_FUJI_RemoteGetObjectVersion,		
+	    PTP_DPC_FUJI_RemoteVersion,
+	    PTP_DPC_FUJI_RemoteGetObjectVersion,		
 	};
 
 	for (size_t i = 0; i < (sizeof(codes) / sizeof(codes[0])); i++) {
@@ -230,43 +244,43 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 	vcam_log("Fuji Set property %X -> %X (size %d)", ptp->params[0], uint[0], len);
 
 	switch (ptp->params[0]) {
-	case PTP_PC_FUJI_ClientState:
+	case PTP_DPC_FUJI_ClientState:
 		assert(len == 2);
 		f->client_state = uint[0];
 		//usleep(1000 * 1000 * 3);
 		break;
-	case PTP_PC_FUJI_RemoteVersion:
+	case PTP_DPC_FUJI_RemoteVersion:
 		assert(len == 4);
 		f->min_remote_version = uint[0];
 		break;
-	case PTP_PC_FUJI_GetObjectVersion:
+	case PTP_DPC_FUJI_GetObjectVersion:
 		break;
-	case PTP_PC_FUJI_CompressSmall:
+	case PTP_DPC_FUJI_CompressSmall:
 		f->compress_small = uint16[0];
 		break;
-	case PTP_PC_FUJI_NoCompression:
+	case PTP_DPC_FUJI_EnableCorrectFileSize:
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
 		f->no_compressed = uint16[0];
 		//usleep(1000 * 5000); // Fuji seems to take a while here
 		break;
-	case PTP_PC_FUJI_RemoteGetObjectVersion:
+	case PTP_DPC_FUJI_RemoteGetObjectVersion:
 		assert(len == 4);
 		break;
-	case PTP_PC_FUJI_CameraState:
+	case PTP_DPC_FUJI_CameraState:
 		assert(len == 2);
-		ptp_notify_event(cam, PTP_PC_FUJI_CameraState, uint16[0]);
-		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
-		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D52F, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_Unknown_D400, 1);
-		ptp_notify_event(cam, PTP_PC_FUJI_ObjectCount, f->obj_count);
+		ptp_notify_event(cam, PTP_DPC_FUJI_CameraState, uint16[0]);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount, f->obj_count);
+		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D52F, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D400, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount, f->obj_count);
 		break;
-	case PTP_PC_FUJI_GeoTagVersion:
+	case PTP_DPC_FUJI_GeoTagVersion:
 		break;
-	case PTP_PC_FUJI_AutoSaveVersion:
+	case PTP_DPC_FUJI_AutoSaveVersion:
 		break;
-	case PTP_PC_FUJI_Unknown_D228:
+	case PTP_DPC_FUJI_AutoSaveDatabaseStatus:
 		break;
 	}
 
@@ -304,40 +318,40 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	vcam_log("Get property %X\n", ptp->params[0]);
 	int data = -1;
 	switch (ptp->params[0]) {
-	case PTP_PC_FUJI_EventsList:
+	case PTP_DPC_FUJI_EventsList:
 		return fuji_send_events(cam, ptp);
-	case PTP_PC_FUJI_ObjectCount:
-	case PTP_PC_FUJI_ObjectCount2:
+	case PTP_DPC_FUJI_ObjectCount:
+	case PTP_DPC_FUJI_ObjectCount2:
 		data = f->obj_count;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_ClientState:
+	case PTP_DPC_FUJI_ClientState:
 		data = f->client_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_CameraState:
+	case PTP_DPC_FUJI_CameraState:
 		data = f->camera_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_ImageGetVersion:
+	case PTP_DPC_FUJI_ImageGetVersion:
 		data = f->image_get_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_GetObjectVersion: {
+	case PTP_DPC_FUJI_GetObjectVersion: {
 		data = f->get_object_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		} break;
-	case PTP_PC_FUJI_RemoteGetObjectVersion:
+	case PTP_DPC_FUJI_RemoteGetObjectVersion:
 		if (f->remote_get_object_version) {
 			data = f->remote_get_object_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		}
 		break;
-//	case PTP_PC_FUJI_ImageGetLimitedVersion:
-	case PTP_PC_FUJI_CompressionCutOff:
+//	case PTP_DPC_FUJI_ImageGetLimitedVersion:
+	case PTP_DPC_FUJI_CompressionCutOff:
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
-	case PTP_PC_FUJI_RemoteVersion:
+	case PTP_DPC_FUJI_RemoteVersion:
 		if (f->remote_version) {
 			data = f->remote_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
@@ -345,15 +359,15 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		}
 		break;
-	case PTP_PC_FUJI_StorageID:
+	case PTP_DPC_FUJI_StorageID:
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1);
 		break;
-	case PTP_PC_FUJI_Unknown_D52F:
+	case PTP_DPC_FUJI_Unknown_D52F:
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_PC_FUJI_AutoSaveVersion:
+	case PTP_DPC_FUJI_AutoSaveVersion:
 		data = 1;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;		
@@ -380,27 +394,27 @@ int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
 		f->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("One time sending all remote props\n");
-		ptp_notify_event(cam, PTP_PC_FUJI_DeviceError, 0);
-		ptp_notify_event(cam, PTP_PC_FlashMode, 0x800a);
-		ptp_notify_event(cam, PTP_PC_CaptureDelay, 0);
-		ptp_notify_event(cam, PTP_PC_FUJI_CaptureRemaining, 0x761);
-		ptp_notify_event(cam, PTP_PC_FUJI_MovieRemainingTime, 0x19d1);
-		ptp_notify_event(cam, PTP_PC_ExposureProgramMode, 0x3);
-		ptp_notify_event(cam, PTP_PC_FUJI_BatteryLevel, 0xa);
-		ptp_notify_event(cam, PTP_PC_FUJI_Quality, 0x4);
-		ptp_notify_event(cam, PTP_PC_FUJI_ImageAspectRatio, 0xa);
-		ptp_notify_event(cam, PTP_PC_FUJI_ExposureIndex, 0x80003200);
-		ptp_notify_event(cam, PTP_PC_FUJI_MovieISO, 0x80003200);
-		ptp_notify_event(cam, PTP_PC_FUJI_ShutterSpeed2, 0xffffffff);
-		ptp_notify_event(cam, PTP_PC_FUJI_CommandDialMode, 0x0);
-		ptp_notify_event(cam, PTP_PC_FNumber, 0xa);
-		ptp_notify_event(cam, PTP_PC_ExposureBiasCompensation, 0x0);
-		ptp_notify_event(cam, PTP_PC_WhiteBalance, 0x2);
-		ptp_notify_event(cam, PTP_PC_FUJI_FilmSimulation, 0x6);
-		ptp_notify_event(cam, PTP_PC_FocusMode, 0x8001);
-		ptp_notify_event(cam, PTP_PC_FUJI_FocusMeteringMode, 0x03020604);
-		ptp_notify_event(cam, PTP_PC_FUJI_AFStatus, 0x0);
-		ptp_notify_event(cam, PTP_PC_FUJI_DriveMode, 0xa);
+		ptp_notify_event(cam, PTP_DPC_FUJI_DeviceError, 0);
+		ptp_notify_event(cam, PTP_DPC_FlashMode, 0x800a);
+		ptp_notify_event(cam, PTP_DPC_CaptureDelay, 0);
+		ptp_notify_event(cam, PTP_DPC_FUJI_CaptureRemaining, 0x761);
+		ptp_notify_event(cam, PTP_DPC_FUJI_MovieRemainingTime, 0x19d1);
+		ptp_notify_event(cam, PTP_DPC_ExposureProgramMode, 0x3);
+		ptp_notify_event(cam, PTP_DPC_FUJI_BatteryLevel, 0xa);
+		ptp_notify_event(cam, PTP_DPC_FUJI_Quality, 0x4);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ImageAspectRatio, 0xa);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ExposureIndex, 0x80003200);
+		ptp_notify_event(cam, PTP_DPC_FUJI_MovieISO, 0x80003200);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ShutterSpeed2, 0xffffffff);
+		ptp_notify_event(cam, PTP_DPC_FUJI_CommandDialMode, 0x0);
+		ptp_notify_event(cam, PTP_DPC_FNumber, 0xa);
+		ptp_notify_event(cam, PTP_DPC_ExposureBiasCompensation, 0x0);
+		ptp_notify_event(cam, PTP_DPC_WhiteBalance, 0x2);
+		ptp_notify_event(cam, PTP_DPC_FUJI_FilmSimulation, 0x6);
+		ptp_notify_event(cam, PTP_DPC_FocusMode, 0x8001);
+		ptp_notify_event(cam, PTP_DPC_FUJI_FocusMeteringMode, 0x03020604);
+		ptp_notify_event(cam, PTP_DPC_FUJI_AFStatus, 0x0);
+		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown1, 0xa);
 	}
 
 	ptp_response(cam, PTP_RC_OK, 0);
@@ -424,21 +438,21 @@ int ptp_fuji_get_device_info(vcam *cam, ptpcontainer *ptp) {
 
 	// Send all valid values of each property
 	uint8_t payload_5012[] = {0x4, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x3, 0x0, 0x0, 0x0, 0x2, 0x0, 0x4, 0x0, };
-	of += devinfo_add_prop(data + of, 22, PTP_PC_CaptureDelay, payload_5012);
+	of += devinfo_add_prop(data + of, 22, PTP_DPC_CaptureDelay, payload_5012);
 	uint8_t payload_500c[] = {0x4, 0x0, 0x1, 0x2, 0x0, 0x9, 0x80, 0x2, 0x2, 0x0, 0x9, 0x80, 0xa, 0x80, };
-	of += devinfo_add_prop(data + of, 20, PTP_PC_FlashMode, payload_500c);
+	of += devinfo_add_prop(data + of, 20, PTP_DPC_FlashMode, payload_500c);
 	uint8_t payload_5005[] = {0x4, 0x0, 0x1, 0x2, 0x0, 0x2, 0x0, 0x2, 0xa, 0x0, 0x2, 0x0, 0x4, 0x0, 0x6, 0x80, 0x1, 0x80, 0x2, 0x80, 0x3, 0x80, 0x6, 0x0, 0xa, 0x80, 0xb, 0x80, 0xc, 0x80, };
-	of += devinfo_add_prop(data + of, 36, PTP_PC_WhiteBalance, payload_5005);
+	of += devinfo_add_prop(data + of, 36, PTP_DPC_WhiteBalance, payload_5005);
 	uint8_t payload_5010[] = {0x3, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x2, 0x13, 0x0, 0x48, 0xf4, 0x95, 0xf5, 0xe3, 0xf6, 0x30, 0xf8, 0x7d, 0xf9, 0xcb, 0xfa, 0x18, 0xfc, 0x65, 0xfd, 0xb3, 0xfe, 0x0, 0x0, 0x4d, 0x1, 0x9b, 0x2, 0xe8, 0x3, 0x35, 0x5, 0x83, 0x6, 0xd0, 0x7, 0x1d, 0x9, 0x6b, 0xa, 0xb8, 0xb, };
-	of += devinfo_add_prop(data + of, 54, PTP_PC_ExposureBiasCompensation, payload_5010);
+	of += devinfo_add_prop(data + of, 54, PTP_DPC_ExposureBiasCompensation, payload_5010);
 	uint8_t payload_d001[] = {0x4, 0x0, 0x1, 0x1, 0x0, 0x2, 0x0, 0x2, 0xb, 0x0, 0x1, 0x0, 0x2, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5, 0x0, 0x6, 0x0, 0x7, 0x0, 0x8, 0x0, 0x9, 0x0, 0xa, 0x0, 0xb, 0x0, };
-	of += devinfo_add_prop(data + of, 38, PTP_PC_FUJI_FilmSimulation, payload_d001);
+	of += devinfo_add_prop(data + of, 38, PTP_DPC_FUJI_FilmSimulation, payload_d001);
 	uint8_t payload_d02a[] = {0x6, 0x0, 0x1, 0xff, 0xff, 0xff, 0xff, 0x0, 0x19, 0x0, 0x80, 0x2, 0x19, 0x0, 0x90, 0x1, 0x0, 0x80, 0x20, 0x3, 0x0, 0x80, 0x40, 0x6, 0x0, 0x80, 0x80, 0xc, 0x0, 0x80, 0x0, 0x19, 0x0, 0x80, 0x64, 0x0, 0x0, 0x40, 0xc8, 0x0, 0x0, 0x0, 0xfa, 0x0, 0x0, 0x0, 0x40, 0x1, 0x0, 0x0, 0x90, 0x1, 0x0, 0x0, 0xf4, 0x1, 0x0, 0x0, 0x80, 0x2, 0x0, 0x0, 0x20, 0x3, 0x0, 0x0, 0xe8, 0x3, 0x0, 0x0, 0xe2, 0x4, 0x0, 0x0, 0x40, 0x6, 0x0, 0x0, 0xd0, 0x7, 0x0, 0x0, 0xc4, 0x9, 0x0, 0x0, 0x80, 0xc, 0x0, 0x0, 0xa0, 0xf, 0x0, 0x0, 0x88, 0x13, 0x0, 0x0, 0x0, 0x19, 0x0, 0x0, 0x0, 0x32, 0x0, 0x40, 0x0, 0x64, 0x0, 0x40, 0x0, 0xc8, 0x0, 0x40, };
-	of += devinfo_add_prop(data + of, 120, PTP_PC_FUJI_ExposureIndex, payload_d02a);
+	of += devinfo_add_prop(data + of, 120, PTP_DPC_FUJI_ExposureIndex, payload_d02a);
 	uint8_t payload_d019[] = {0x4, 0x0, 0x1, 0x1, 0x0, 0x1, 0x0, 0x2, 0x2, 0x0, 0x0, 0x0, 0x1, 0x0, };
-	of += devinfo_add_prop(data + of, 20, PTP_PC_FUJI_RecMode, payload_d019);
+	of += devinfo_add_prop(data + of, 20, PTP_DPC_FUJI_RecMode, payload_d019);
 	uint8_t payload_d17c[] = {0x6, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x4, 0x4, 0x2, 0x3, 0x1, 0x0, 0x0, 0x0, 0x0, 0x7, 0x7, 0x9, 0x10, 0x1, 0x0, 0x0, 0x0, };
-	of += devinfo_add_prop(data + of, 30, PTP_PC_FUJI_FocusMeteringMode, payload_d17c);
+	of += devinfo_add_prop(data + of, 30, PTP_DPC_FUJI_FocusMeteringMode, payload_d17c);
 
 	ptp_senddata(cam, ptp->code, (void *)data, of);
 	ptp_response(cam, PTP_RC_OK, 0);
@@ -500,8 +514,8 @@ void fuji_downloaded_object(vcam *cam) {
 		}
 
 		// Then we resend the events from the start of the connection
-		ptp_notify_event(cam, PTP_PC_FUJI_CameraState, f->camera_state);
-		ptp_notify_event(cam, PTP_PC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_CameraState, f->camera_state);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
 
 		f->sent_images++;
 	}
@@ -518,10 +532,9 @@ void fuji_register_opcodes(vcam *cam) {
 	vcam_register_opcode(cam, 0x101c, ptp_fuji_capture, NULL);
 	vcam_register_opcode(cam, 0x1018, ptp_fuji_capture, NULL);
 
-	// We have completely custom implementations of these
+	// We have completely custom implementations of these, override standard implementations
 	vcam_register_opcode(cam, PTP_OC_SetDevicePropValue, ptp_fuji_setdevicepropvalue_write, ptp_fuji_setdevicepropvalue_write_data);
 	vcam_register_opcode(cam, PTP_OC_GetDevicePropValue, ptp_getdevicepropvalue_write, 	NULL);
-
 	vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_getpartialobject_write, NULL);
 
 	struct Fuji *f = fuji(cam);

@@ -22,6 +22,13 @@ typedef enum {
 	GP_LOG_DATA = 3		/**< \brief Log message is a data hex dump. */
 } GPLogLevel;
 
+enum CamBackendType {
+	VCAM_LIBUSB,
+	VCAM_TCP,
+	VCAM_VHCI,
+	VCAM_OTG_GADGET,
+};
+
 void gp_log(GPLogLevel level, const char *domain, const char *format, ...);
 void vcam_log(const char *format, ...);
 void gp_log_(const char *format, ...);
