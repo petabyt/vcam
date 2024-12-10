@@ -80,6 +80,8 @@ struct usbip_header_ret_submit {
 	int32_t	start_frame; /* ISO and INT */
 	int32_t	number_of_packets;  /* ISO only */
 	int32_t	error_count; /* ISO only */
+
+	uint32_t pad[2];
 };
 
 /*

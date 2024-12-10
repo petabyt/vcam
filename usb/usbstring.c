@@ -1,3 +1,4 @@
+// modified danielc 2024
 /*
  * Copyright (C) 2003 David Brownell
  *
@@ -17,7 +18,7 @@ static inline void put_unaligned_le16(uint16_t val, uint16_t *cp)
 	*p++ = (uint8_t) (val >> 8);
 }
 
-int utf8_to_utf16le(const char *s, uint16_t *cp, unsigned len)
+int utf8_to_utf16le(const char *s, uint16_t *cp, unsigned max)
 {
 	int	count = 0;
 	uint8_t	c;
@@ -27,7 +28,7 @@ int utf8_to_utf16le(const char *s, uint16_t *cp, unsigned len)
 	 * BUT it currently rejects legit 4-byte UTF-8 code points,
 	 * which need surrogate pairs.  (Unicode 3.1 can use them.)
 	 */
-	while (len != 0 && (c = (uint8_t) *s++) != 0) {
+	while ((c = (uint8_t) *s++) != 0) {
 		if (c & 0x80) {
 			// 2-byte sequence:
 			// 00000yyyyyxxxxxx = 110yyyyy 10xxxxxx
@@ -73,9 +74,8 @@ int utf8_to_utf16le(const char *s, uint16_t *cp, unsigned len)
 			uchar = c;
 		put_unaligned_le16 (uchar, cp++);
 		count++;
-		len--;
 	}
-	return count;
+	return count * 2;
 fail:
 	return -1;
 }
