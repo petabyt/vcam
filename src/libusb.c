@@ -1,6 +1,5 @@
 // Fake libusb-v1.0 .so spoofer for vcam
 // Copyright Daniel C - GNU Lesser General Public License v2.1  
-
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -96,6 +95,7 @@ int libusb_get_config_descriptor(libusb_device *dev, uint8_t config_index, struc
 
 void libusb_free_config_descriptor(struct libusb_config_descriptor *config) {
 	free(config);
+	// TODO: free memory
 }
 
 int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {

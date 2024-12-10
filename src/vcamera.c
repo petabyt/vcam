@@ -422,7 +422,7 @@ void vcam_process_output(vcam *cam) {
 		/* not clear if normal cameras react like this */
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "input size was %d, minimum is 12", ptp.size);
 
-		hexdump(cam->outbulk, ptp.size);
+		//hexdump(cam->outbulk, ptp.size);
 
 		// Does this work on PTP/IP?
 		ptp_response(cam, PTP_RC_GeneralError, 0);
@@ -683,15 +683,15 @@ vcam *vcamera_new(void) {
 	return cam;
 }
 
-int vcam_multi_main(vcam *cam, const char *name, int argc, char **argv, int do_start_main) {
+int vcam_multi_main(vcam *cam, const char *name, int argc, char **argv, enum CamBackendType backend) {
 	if (fuji_init_cam(cam, name, argc, argv) == 0) {
-		if (do_start_main) {
+		if (backend == VCAM_TCP) {
 			int rc = fuji_wifi_main(cam);
 			vcam_close(cam);
 			return rc;
 		}
 	} else if (canon_init_cam(cam, name, argc, argv) == 0) {
-		if (do_start_main) {
+		if (backend == VCAM_TCP) {
 			int rc = ptpip_generic_main(cam);
 			vcam_close(cam);
 			return rc;
@@ -710,7 +710,7 @@ int vcam_main(const char *name, int argc, char **argv) {
 
 vcam *vcam_new(const char *name) {
 	vcam *cam = vcamera_new();
-	int rc = vcam_multi_main(cam, name, 0, NULL, 0);
+	int rc = vcam_multi_main(cam, name, 0, NULL, VCAM_LIBUSB);
 	if (rc) return NULL;
 	return cam;
 }

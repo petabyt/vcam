@@ -1,5 +1,6 @@
 // Packet conversion to support legacy code
-
+// Converts PTP/USB to PTP/IP packets on the fly
+// TODO: This was a PoC, leaks memory, needs to be finished off
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
