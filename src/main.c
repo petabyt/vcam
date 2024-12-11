@@ -9,7 +9,7 @@
 #include <vcam.h>
 
 static void close_all_fds(void) {
-	vcam_log("Closing all fds\n");
+	//vcam_log("Closing all fds");
 	DIR *dir = opendir("/proc/self/fd");
 	if (!dir) return;
 
@@ -31,12 +31,32 @@ void sigint_handler(int x) {
 int main(int argc, char *argv[]) {
 	signal(SIGINT, sigint_handler);
 
-	if (argc < 2) {
-		printf("Usage: vcam <model> ... flags ...\n");
+	if (argc < 3) {
+		printf(
+			"Usage: vcam <model> <backend> ... flags ...\n"
+			"Example:\n"
+			"vcam canon_1300d tcp\n"
+		);
 		return -1;
 	}
 
-	int rc = vcam_main(argv[1], argc - 2, argv + 2);
+	const char *name = argv[1];
+	const char *backend_str = argv[2];
+
+	enum CamBackendType backend;
+	if (!strcmp(backend_str, "tcp")) {
+		backend = VCAM_TCP;
+	} else if (!strcmp(backend_str, "otg")) {
+		backend = VCAM_GADGETFS;
+	} else if (!strcmp(backend_str, "vhci")) {
+		backend = VCAM_VHCI;
+	} else {
+		vcam_log("Unknown backend '%s'\n", argv[0]);
+		return -1;
+	}
+
+	vcam *cam = vcam_init_standard();
+	int rc = vcam_main(cam, name, backend, argc - 2, argv + 2);
 
 	close_all_fds();
 	return rc;

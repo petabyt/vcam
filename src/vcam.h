@@ -26,7 +26,7 @@ enum CamBackendType {
 	VCAM_LIBUSB,
 	VCAM_TCP,
 	VCAM_VHCI,
-	VCAM_OTG_GADGET,
+	VCAM_GADGETFS,
 };
 
 void gp_log(GPLogLevel level, const char *domain, const char *format, ...);
@@ -89,8 +89,8 @@ typedef struct vcam {
 	uint8_t battery;
 }vcam;
 
-vcam *vcamera_new(void);
-int vcam_main(const char *name, int argc, char **argv);
+vcam *vcam_init_standard(void);
+int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, char **argv);
 vcam *vcam_new(const char *name);
 int vcam_parse_args(vcam *cam, int argc, char **argv, int *i);
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
@@ -99,7 +99,11 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
 int vcam_open(vcam *cam, const char *port);
 int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size));
 
+int vcam_start_usbthing(vcam *cam, enum CamBackendType backend);
+
 int get_local_ip(char buffer[64]);
+
+__attribute__((deprecated))
 int ptp_get_object_count(vcam *cam);
 
 // Temporary function to help with unimplemented data structures

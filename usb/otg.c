@@ -80,7 +80,7 @@ static int start_vcam(int argc, char **argv) {
 
 	GPPort *port = malloc(sizeof(GPPort));
 	C_MEM(port->pl = calloc(1, sizeof(GPPortPrivateLibrary)));
-	port->pl->vcamera = vcamera_new(CAM_CANON);
+	port->pl->vcamera = vcam_init_standard(CAM_CANON);
 	port->pl->vcamera->conf = conf;
 
 	priv_gpport = port;

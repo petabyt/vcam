@@ -40,7 +40,7 @@ struct Config {
 	}
 };
 
-int usb_get_string(struct UsbThing *ctx, int id, char buffer[127]) {
+int usb_get_string(struct UsbThing *ctx, int devn, int id, char buffer[127]) {
 	switch (id) {
 	case STRINGID_MANUFACTURER:
 		strcpy(buffer, "abcdefg");
@@ -56,8 +56,10 @@ int usb_get_device_descriptor(struct UsbThing *ctx, int devn, struct usb_device_
 	dev->bLength = sizeof(struct usb_device_descriptor);
 	dev->bDescriptorType = 1;
 	dev->bcdUSB = 0x0200;
+	dev->bcdDevice = 0;
 	dev->bDeviceClass = 0;
 	dev->bDeviceSubClass = 0;
+	dev->bDeviceProtocol = 0;
 	dev->bMaxPacketSize0 = 64;
 	dev->idVendor = 0x1234;
 	dev->idProduct = 0x5678;
@@ -69,9 +71,10 @@ int usb_get_device_descriptor(struct UsbThing *ctx, int devn, struct usb_device_
 	return 0;
 }
 
-int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, int length) {
+int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, void *data) {
 	if (i == 0) {
-		usb_data_to_host(ctx, devn, 0, &config, length);
+		memcpy(data, &config, sizeof(config));
+		return sizeof(config);
 	} else {
 		printf("config desc\n");
 		abort();
@@ -79,17 +82,25 @@ int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, int length
 	return 0;
 }
 
-int get_interface_descriptor(struct UsbThing *ctx, int devn, struct usb_interface_descriptor *desc, int i) {
+static int get_config_descriptor(struct UsbThing *ctx, int devn, struct usb_config_descriptor *desc, int i) {
+	memcpy(desc, &config.config, sizeof(config.config));
+	return 0;
+}
+
+static int get_interface_descriptor(struct UsbThing *ctx, int devn, struct usb_interface_descriptor *desc, int i) {
 	memcpy(desc, &config.interf0, sizeof(config.interf0));
 	return 0;
 }
 
 void usbt_user_init(struct UsbThing *ctx) {
 	ctx->get_string_descriptor = usb_get_string;
-	ctx->send_config_descriptor = usb_send_config_descriptor;
+	ctx->get_total_config_descriptor = usb_send_config_descriptor;
+	ctx->get_config_descriptor = get_config_descriptor;
 	ctx->get_qualifier_descriptor = usb_get_device_qualifier_descriptor;
 	ctx->get_interface_descriptor = get_interface_descriptor;
 	ctx->get_device_descriptor = usb_get_device_descriptor;
+	ctx->get_endpoint_descriptor = NULL; // writeme
+	ctx->handle_control_request = usbt_handle_control_request;
 }
 
 int main(int argc, char **argv) {

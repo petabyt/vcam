@@ -11,6 +11,7 @@
 #include <math.h>
 #include <time.h>
 #include <dirent.h>
+#include <usbthing.h>
 #include "vcam.h"
 
 void vcam_dump(void *ptr, size_t len) {
@@ -661,7 +662,7 @@ int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
 	return 1;
 }
 
-vcam *vcamera_new(void) {
+vcam *vcam_init_standard(void) {
 	vcam *cam = calloc(1, sizeof(vcam));
 	if (!cam) abort();
 
@@ -683,7 +684,7 @@ vcam *vcamera_new(void) {
 	return cam;
 }
 
-int vcam_multi_main(vcam *cam, const char *name, int argc, char **argv, enum CamBackendType backend) {
+int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, char **argv) {
 	if (fuji_init_cam(cam, name, argc, argv) == 0) {
 		if (backend == VCAM_TCP) {
 			int rc = fuji_wifi_main(cam);
@@ -695,6 +696,8 @@ int vcam_multi_main(vcam *cam, const char *name, int argc, char **argv, enum Cam
 			int rc = ptpip_generic_main(cam);
 			vcam_close(cam);
 			return rc;
+		} else {
+			return vcam_start_usbthing(cam, backend);
 		}
 	} else {
 		vcam_log("Invalid camera '%s'", name);
@@ -704,13 +707,9 @@ int vcam_multi_main(vcam *cam, const char *name, int argc, char **argv, enum Cam
 	return 0;
 }
 
-int vcam_main(const char *name, int argc, char **argv) {
-	return vcam_multi_main(vcamera_new(), name, argc, argv, 1);
-}
-
 vcam *vcam_new(const char *name) {
-	vcam *cam = vcamera_new();
-	int rc = vcam_multi_main(cam, name, 0, NULL, VCAM_LIBUSB);
+	vcam *cam = vcam_init_standard();
+	int rc = vcam_main(cam, name, VCAM_LIBUSB, 0, NULL);
 	if (rc) return NULL;
 	return cam;
 }
