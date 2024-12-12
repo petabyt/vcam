@@ -43,10 +43,10 @@ struct UsbThing {
 void usbt_init(struct UsbThing *ctx);
 
 // Start VHCI (vhci.c) server
-int usb_vhci_init(struct UsbThing *ctx);
+int usbt_vhci_init(struct UsbThing *ctx);
 
 // Start gadgetfs server over OTG port (otg.c)
-int usb_gadgetfs_init(struct UsbThing *ctx);
+int usbt_gadgetfs_init(struct UsbThing *ctx);
 
 /// @brief Entry function for ctx init for libusb fake so
 extern void usbt_user_init(struct UsbThing *ctx);
@@ -56,13 +56,10 @@ int usbt_handle_control_request(struct UsbThing *ctx, int devn, int endpoint, co
 
 /// @brief Fake hub control request handler, can be used in place of usbt_handle_control_request
 /// @todo Finish
-int usb_hub_handle_control_request(struct UsbThing *ctx, int endpoint, void *data, int length);
-
-// Device sends data to host
-//int usb_data_to_host(struct UsbThing *ctx, int devn, int endpoint, void *data, int length);
+int usbt_hub_handle_control_request(struct UsbThing *ctx, int endpoint, void *data, int length);
 
 /// @brief Optional dummy implementation for get_qualifier_descriptor
-int usb_get_device_qualifier_descriptor(struct UsbThing *ctx, int devn, struct usb_qualifier_descriptor *q);
+int usbt_get_device_qualifier_descriptor(struct UsbThing *ctx, int devn, struct usb_qualifier_descriptor *q);
 
 // usbstring.c
 int utf8_to_utf16le(const char *s, uint16_t *cp, unsigned int len);

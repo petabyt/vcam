@@ -96,7 +96,7 @@ void usbt_user_init(struct UsbThing *ctx) {
 	ctx->get_string_descriptor = usb_get_string;
 	ctx->get_total_config_descriptor = usb_send_config_descriptor;
 	ctx->get_config_descriptor = get_config_descriptor;
-	ctx->get_qualifier_descriptor = usb_get_device_qualifier_descriptor;
+	ctx->get_qualifier_descriptor = usbt_get_device_qualifier_descriptor;
 	ctx->get_interface_descriptor = get_interface_descriptor;
 	ctx->get_device_descriptor = usb_get_device_descriptor;
 	ctx->get_endpoint_descriptor = NULL; // writeme
@@ -106,5 +106,5 @@ void usbt_user_init(struct UsbThing *ctx) {
 int main(int argc, char **argv) {
 	struct UsbThing t;
 	usbt_user_init(&t);
-	return usb_vhci_init(&t);
+	return usbt_vhci_init(&t);
 }

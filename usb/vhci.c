@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <byteswap.h>
+#include <assert.h>
 #include "usbip.h"
 #include "usbthing.h"
 
@@ -30,17 +31,29 @@ static void hexdump(void *buffer, int size) {
 
 static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_header *header) {
 #if 0
-	printf("%d --> ", bswap_32(header->u.cmd_submit.transfer_buffer_length));
 	hexdump(header->u.cmd_submit.setup, 8);
 #endif
 
 	int resp_len = 0;
-	if (header->base.ep == 0) {
-		int rc = ctx->handle_control_request(ctx, 0, 0, header->u.cmd_submit.setup, 8, p->buffer);
+	uint32_t len = bswap_32(header->u.cmd_submit.transfer_buffer_length);
+	uint32_t dir = bswap_32(header->base.direction);
+	uint32_t ep = bswap_32(header->base.ep);
+	uint32_t ep_addr = (dir << 7) | ep;
+	usbt_dbg("submit ep:%d len:%d dir:%d\n", ep, len, dir);
+
+	if (ep == 0) {
+		int rc = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8, p->buffer);
 		if (rc < 0) return rc;
 		resp_len = rc;
+	} else if (dir == 1) {
+		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, p->buffer, len);
+	} else if (dir == 0) {
+		int rc = recv(p->sockfd, header->u.cmd_submit.transfer_buffer, len, 0);
+		assert(rc == len);
+		ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, header->u.cmd_submit.transfer_buffer, len);
+		resp_len = 0;
 	} else {
-		printf("TODO: ep %d not implemented yet\n", header->base.ep);
+		printf("Illegal state\n");
 		abort();
 	}
 
@@ -52,25 +65,29 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 	resp.base.ep = header->base.ep;
 
 	resp.u.ret_submit.status = bswap_32(0);
-	resp.u.ret_submit.actual_length = bswap_32(resp_len);
+	if (dir == 0) {
+		resp.u.ret_submit.actual_length = bswap_32(len);
+	} else {
+		resp.u.ret_submit.actual_length = bswap_32(resp_len);
+	}
 	resp.u.ret_submit.start_frame = bswap_32(0);
 	resp.u.ret_submit.number_of_packets = bswap_32(0);
 	resp.u.ret_submit.error_count = bswap_32(0);
 
 	send(p->sockfd, &resp, 0x30, 0);
-	send(p->sockfd, p->buffer, resp_len, 0);
+	if (resp_len)
+		send(p->sockfd, p->buffer, resp_len, 0);
 #if 0
 	printf("<-- ");
 	hexdump(&resp, 0x30);
 	printf("Sending %d bytes\n", resp_len);
 	printf("<-- ");
 	hexdump(p->buffer, resp_len);
-	printf("Completed control request\n");
 #endif
 	return 0;
 }
 
-int usb_vhci_init(struct UsbThing *ctx) {
+int usbt_vhci_init(struct UsbThing *ctx) {
 	struct Priv p = {0};
 	// TODO: Set ctx->priv_backend to NULL once this function returns
 	ctx->priv_backend = (void *)&p;

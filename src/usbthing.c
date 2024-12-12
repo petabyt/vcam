@@ -20,8 +20,7 @@ struct Config {
 	struct usb_endpoint_descriptor ep1;
 	struct usb_endpoint_descriptor ep81;
 	struct usb_endpoint_descriptor ep82;
-	struct usb_bos_descriptor bos;
-}config = {
+} __attribute__((packed)) config = {
 	.config = {
 		.bLength = sizeof(struct usb_config_descriptor),
 		.bDescriptorType = USB_DT_CONFIG,
@@ -29,50 +28,44 @@ struct Config {
 		.wTotalLength = sizeof(struct Config),
 		.bConfigurationValue = 0x1,
 		.iConfiguration = 0,
-		.bmAttributes = 0xc,
+		.bmAttributes = 0xc0,
 		.bMaxPower = 0x32,
 	},
 	.interf0 = {
 		.bLength = sizeof(struct usb_interface_descriptor),
 		.bDescriptorType = USB_DT_INTERFACE,
-		.bInterfaceProtocol = 0,
-		.bInterfaceClass = 0,
+		.bInterfaceProtocol = 1,
+		.bInterfaceClass = 6,
+		.bInterfaceSubClass = 1,
 		.bAlternateSetting = 0,
 		.bInterfaceNumber = 0,
-		.bInterfaceSubClass = 0,
-		.bNumEndpoints = 0,
+		.bNumEndpoints = 3,
 		.iInterface = 0,
 	},
 	.ep1 = {
-		.bLength = 7,
-		.bDescriptorType = USB_DT_ENDPOINT,
-		.bEndpointAddress = 0x1,
-		.bmAttributes = 2,
-		.wMaxPacketSize = 0x200,
-		.bInterval = 1,
-	},
-	.ep81 = {
-		.bLength = 7,
+		.bLength = sizeof(struct usb_endpoint_descriptor),
 		.bDescriptorType = USB_DT_ENDPOINT,
 		.bEndpointAddress = 0x81,
 		.bmAttributes = 2,
 		.wMaxPacketSize = 0x200,
-		.bInterval = 1,
+		.bInterval = 0,
+	},
+	.ep81 = {
+		.bLength = sizeof(struct usb_endpoint_descriptor),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x2,
+		.bmAttributes = 2,
+		.wMaxPacketSize = 0x200,
+		.bInterval = 0,
 	},
 	.ep82 = {
-		.bLength = 7,
+		.bLength = sizeof(struct usb_endpoint_descriptor),
 		.bDescriptorType = USB_DT_ENDPOINT,
-		.bEndpointAddress = 0x82,
+		.bEndpointAddress = 0x83,
 		.bmAttributes = 3,
-		.wMaxPacketSize = 0x18,
-		.bInterval = 4,
+		.wMaxPacketSize = 0x8,
+		.bInterval = 10,
 	},
-	.bos = {
-		.bLength = 5,
-		.bDescriptorType = USB_DT_BOS,
-		.wTotalLength = 0x16,
-		.bNumDeviceCaps = 2,
-	}
 };
 
 struct Priv {
@@ -91,6 +84,9 @@ int usb_get_string(struct UsbThing *ctx, int devn, int id, char buffer[127]) {
 		return 0;
 	case STRINGID_PRODUCT:
 		strcpy(buffer, get_cam(ctx, devn)->model);
+		return 0;
+	case STRINGID_SERIAL:
+		strcpy(buffer, "123456");
 		return 0;
 	}
 	return -1;
@@ -113,8 +109,20 @@ int usb_get_device_descriptor(struct UsbThing *ctx, int devn, struct usb_device_
 	return 0;
 }
 
+static void hexdump(void *buffer, int size) {
+	unsigned char *buf = (unsigned char *)buffer;
+	for (int i = 0; i < size; i++) {
+		printf("%02x ", buf[i]);
+		if ((i + 1) % 16 == 0) {
+			printf("\n");
+		}
+	}
+	printf("\n");
+}
+
 int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, void *data) {
 	if (i == 0) {
+		hexdump(&config, sizeof(config));
 		memcpy(data, &config, sizeof(config));
 		return sizeof(config);
 	} else {
@@ -146,13 +154,26 @@ static int handle_control(struct UsbThing *ctx, int devn, int ep, const void *da
 	return usbt_handle_control_request(ctx, devn, ep, data, len, out);
 }
 
+static int get_bos_descriptor(struct UsbThing *ctx, int devn, struct usb_bos_descriptor *desc) {
+	desc->bLength = sizeof(struct usb_bos_descriptor);
+	desc->bDescriptorType = USB_DT_BOS;
+	desc->wTotalLength = 0x16;
+	desc->bNumDeviceCaps = 2;
+	return 0;
+}
+
 static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
-	if (ep == 0x1) {
+	if (ep == 0x2) {
+		vcam_log("Passing h->d to vcam");
 		return vcam_write(get_cam(ctx, devn), ep, (const unsigned char *)data, len);
 	} else if (ep == 0x81) {
-		vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
-	} else if (ep == 0x82) {
-		printf("int not implemented\n");
+		vcam_log("Reading bulk d->h to vcam");
+		return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
+	} else if (ep == 0x83) {
+		// Nothing on interrupt endpoint
+		return 0;
+	} else {
+		vcam_log("Illegal endpoint 0x%x", ep);
 		abort();
 	}
 	return 0;
@@ -163,7 +184,7 @@ void usbt_user_init(struct UsbThing *ctx) {
 	ctx->get_string_descriptor = usb_get_string;
 	ctx->get_total_config_descriptor = usb_send_config_descriptor;
 	ctx->get_config_descriptor = get_config_descriptor;
-	ctx->get_qualifier_descriptor = usb_get_device_qualifier_descriptor;
+	ctx->get_qualifier_descriptor = usbt_get_device_qualifier_descriptor;
 	ctx->get_interface_descriptor = get_interface_descriptor;
 	ctx->get_device_descriptor = usb_get_device_descriptor;
 
@@ -184,7 +205,7 @@ int vcam_start_usbthing(vcam *cam, enum CamBackendType backend) {
 
 	usbt_user_init(&ctx);
 	if (backend == VCAM_VHCI) {
-		return usb_vhci_init(&ctx);
+		return usbt_vhci_init(&ctx);
 	}
 
 	return 0;

@@ -50,10 +50,10 @@ typedef struct vcam {
 	void *hw_priv;
 	uint16_t vendor;
 	uint16_t product;
-	char model[32];
-	char version[16];
-	char serial[16];
-	char manufac[32];
+	char model[128];
+	char version[128];
+	char serial[128];
+	char manufac[128];
 
 	/// @brief NULL to use default IP
 	char *custom_ip_addr;
