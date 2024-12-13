@@ -8,16 +8,17 @@ include pi.mak
 WIFI_DEV ?= wlp0s20f3
 
 VCAM_CORE += src/log.o src/vcamera.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fuji_server.o src/ptpip.o
-VCAM_CORE += src/canon_props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o
+VCAM_CORE += src/canon_props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o src/usbthing.o
+VCAM_CORE += usb/device.o usb/usbstring.o usb/vhci.o
 
 # include libusb-1.0 headers for .so
 SO_CFLAGS := $(shell pkg-config --cflags libusb-1.0)
-SO_FILES := $(VCAM_CORE) src/libusb.o
+SO_FILES := $(VCAM_CORE) usb/libusb.o
 
 VCAM_FILES := $(VCAM_CORE) src/main.o
 VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
 
-CFLAGS += -g -I. -Isrc/ -I../lib/ -L. -D HAVE_LIBEXIF -Wall -fPIC
+CFLAGS += -g -I. -Isrc/ -Iusb/ -L. -D HAVE_LIBEXIF -Wall -fPIC
 LDFLAGS += -L. -Wl,-rpath=.
 
 # Used to access bin/
@@ -26,19 +27,12 @@ CFLAGS += '-D PWD="$(shell pwd)"'
 # Is this actually needed by GCC?
 $(SO_FILES): CFLAGS += $(SO_CFLAGS)
 
-VCAM2_FILES := cpp/test.o cpp/vcam.o
-vcam2: $(VCAM2_FILES)
-	g++ -g -ggdb $(VCAM2_FILES) -lexif -o vcam2
-
 # generic libusb.so Canon EOS Device
 libusb-vcam.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb-vcam.so
 
 vcam: $(VCAM_FILES)
 	$(CC)  -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif 
-
-vcam-otg: $(VCAM_OTG_FILES)
-	$(CC) $(VCAM_OTG_FILES) $(CFLAGS) -o vcam-otg $(LDFLAGS) -lexif
 
 install: vcam libusb-vcam.so
 	sudo cp vcam /usr/bin/
@@ -53,7 +47,7 @@ install: vcam libusb-vcam.so
 	g++ -MMD -c $< $(CFLAGS) -o $@
 
 clean:
-	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d cpp/*.o cpp/*.d
+	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d usb/*.o usb/*.d
 	$(RM) fuji canon vcam vcam-otg vcam2
 
 ln:

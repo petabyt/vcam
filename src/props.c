@@ -221,11 +221,36 @@ int ptp_datetime_setvalue(vcam *cam, void *data, int length) {
 }
 #endif
 
+int getdesc_d406(vcam *cam, struct PtpPropDesc *desc) {
+	desc->DataType = PTP_TC_UINT16ARRAY;
+	return 0;
+}
+void *getvalue_d406(vcam *cam) {
+	return NULL;
+}
+int setvalue_d406(vcam *cam, const void *data) {
+	return 0;
+}
+
+void ptp_register_mtp_props(vcam *cam) {
+	{
+		struct PtpPropDesc desc;
+		init_prop(&desc);
+		desc.DevicePropertyCode = PTP_DPC_MTP_SessionInitiatorInfo;
+		desc.DataType = PTP_TC_STRING;
+		desc.GetSet = PTP_AC_ReadWrite;
+		ptp_write_u32(desc.factory_default_value, 0);
+		ptp_write_u32(desc.value, 0);
+		desc.FormFlag = 0x0;
+		vcam_register_prop(cam, desc.DevicePropertyCode, &desc);
+	}
+}
+
 void ptp_register_standard_props(vcam *cam) {
 	{
 		struct PtpPropDesc desc;
 		init_prop(&desc);
-		desc.DevicePropertyCode = 0x5001;
+		desc.DevicePropertyCode = PTP_DPC_BatteryLevel;
 		desc.DataType = PTP_TC_UINT8;
 		desc.GetSet = PTP_AC_ReadWrite;
 		ptp_write_u8(desc.factory_default_value, 50);
@@ -234,7 +259,7 @@ void ptp_register_standard_props(vcam *cam) {
 		ptp_write_u8(desc.form_min, 0);
 		ptp_write_u8(desc.form_max, 100);
 		ptp_write_u8(desc.form_step, 1);
-		vcam_register_prop(cam, 0x5001, &desc);
+		vcam_register_prop(cam, desc.DevicePropertyCode, &desc);
 	}
 	{
 		struct PtpPropDesc desc;
@@ -254,9 +279,8 @@ void ptp_register_standard_props(vcam *cam) {
 		d += ptp_write_string(d, "1024x768");
 		d += ptp_write_string(d, "2048x1536");
 		desc.avail_cnt = 3;
-		vcam_register_prop(cam, 0x5003, &desc);
+		vcam_register_prop(cam, desc.DevicePropertyCode, &desc);
 	}
-
 
 	//vcam_register_prop_handlers(cam, 0x5001, ptp_battery_getdesc, ptp_battery_getvalue, NULL);
 //	vcam_register_prop_handlers(cam, 0x5003, ptp_imagesize_getdesc, ptp_imagesize_getvalue, NULL);

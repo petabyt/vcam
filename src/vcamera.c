@@ -93,6 +93,7 @@ int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontain
 	return 0;
 }
 
+// TODO: Add a 'void *param' parameter that will be passed to handlers
 int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue) {
 	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 

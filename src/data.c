@@ -40,7 +40,7 @@ int ptp_get_prop_size(uint8_t *d, int type) {
 		return 1 + ((int)length8 * 2);
 	}
 
-	gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %d", type);
+	gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %x", type);
 	abort();
 	return 0;
 }

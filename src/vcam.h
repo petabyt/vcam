@@ -206,8 +206,10 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length);
 int vcam_set_prop_data(vcam *cam, int code, void *data);
 int vcam_set_prop(vcam *cam, int code, uint32_t data);
 
+void ptp_register_mtp_opcodes(vcam *cam);
 void ptp_register_standard_opcodes(vcam *cam);
 void ptp_register_standard_props(vcam *cam);
+void ptp_register_mtp_props(vcam *cam);
 
 int vcam_check_session(vcam *cam);
 int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp);

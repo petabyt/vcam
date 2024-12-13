@@ -829,12 +829,14 @@ static int put_data(unsigned char *dest, void *data, int length) {
 }
 
 int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
-	int i, x = 0;
-	unsigned char *data;
+	int x = 0;
+	unsigned char data[2000];
 
 	if (vcam_check_trans_id(cam, ptp)) return 1;
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
+
+	vcam_log("%s %04x", __func__, ptp->params[0]);
 
 	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
 	if (desc == NULL) {
@@ -842,7 +844,16 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}
-	data = malloc(2000);
+
+	if (desc->value == NULL) {
+		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
+		return 1;
+	}
+
+	if (desc->factory_default_value == NULL) {
+		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
+		return 1;
+	}
 
 	x += put_16bit_le(data + x, desc->DevicePropertyCode);
 	x += put_16bit_le(data + x, desc->DataType);
@@ -865,7 +876,6 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	ptp_senddata(cam, 0x1014, data, x);
-	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
@@ -909,6 +919,44 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
+
+	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
+	if (desc == NULL) {
+		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
+		/* we emitted the response already in _write */
+		return 1;
+	}
+
+#if 0
+	int prop_size = ptp_get_prop_size(data, desc->DataType);
+	if (len > prop_size) {
+		vcam_log("%d bytes copied over for property that is only %d bytes", len, prop_size);
+	}
+#endif
+
+	if (len == 0) {
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+
+	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data);
+	if (rc) {
+		if (rc < 0) {
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			return 1;
+		}
+		ptp_response(cam, rc, 0);
+		return 1;
+	}
+
+	ptp_response(cam, PTP_RC_OK, 0);
+	return 1;
+}
+
 int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_trans_id(cam, ptp))return 1;
 	if (vcam_check_session(cam))return 1;
@@ -928,37 +976,6 @@ int ptp_vusb_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	printf("\n");
 
-	return 1;
-}
-
-int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
-	if (vcam_check_trans_id(cam, ptp)) return 1;
-	if (vcam_check_session(cam)) return 1;
-	if (vcam_check_param_count(cam, ptp, 1)) return 1;
-
-	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
-	if (desc == NULL) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
-		/* we emitted the response already in _write */
-		return 1;
-	}
-
-	int prop_size = ptp_get_prop_size(data, desc->DataType);
-	if (len > prop_size) {
-		vcam_log("%d bytes copied over for property that is only %d bytes", len, prop_size);
-	}
-
-	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data);
-	if (rc) {
-		if (rc < 0) {
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			return 1;
-		}
-		ptp_response(cam, rc, 0);
-		return 1;
-	}
-
-	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
 
@@ -1005,4 +1022,66 @@ void ptp_register_standard_opcodes(vcam *cam) {
 	vcam_register_opcode(cam, 0x1016, ptp_setdevicepropvalue_write, 	ptp_setdevicepropvalue_write_data);
 	vcam_register_opcode(cam, 0x101B, ptp_getpartialobject_write, NULL);
 	vcam_register_opcode(cam, 0xBEEF, ptp_vusb_write, 		ptp_vusb_write_data);
+}
+
+static int ptp_mtp_obj_props_supported_write(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam , ptp, 1)) return 1;
+
+	uint8_t *list_buf[512];
+	int of = 0;
+
+	if (ptp->params[0] == PTP_OF_Association) {
+		of += ptp_write_u32(list_buf + of, 10);
+
+		uint16_t list[] = {0xdc01, 0xdc02, 0xdc03, 0xdc04, 0xdc07, 0xdc0b, 0xdc41, 0xdc44, 0xdc08, 0xdc09};
+
+		for (int i = 0; i < (sizeof(list) / sizeof(list[0])); i++) {
+			of += ptp_write_u16(list_buf + of, list[0]);
+		}
+	} else {
+		ptp_response(cam, PTP_OC_MTP_GetObjectPropsSupported, 0);
+		return 1;
+	}
+
+	ptp_senddata(cam, ptp->code, (void *)list_buf, of);
+	ptp_response(cam, PTP_RC_OK, 0);
+
+	return 1;
+}
+
+#if 0
+static int ptp_mtp_obj_props_supported_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	vcam_log("Recieved data phase for 0xBEEF: %d", len);
+
+	if (ptp->nparams != 1) {
+		vcam_log("Expected a checksum parameter");
+	}
+
+	int checksum = 0;
+	for (int i = 0; i < len; i++) {
+		checksum += data[i];
+	}
+
+	if (checksum != ptp->params[0]) {
+		vcam_log("Invalid checksum %d/%d", checksum, ptp->params[0]);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	} else {
+		vcam_log("Verified checksum %d/%d", checksum, ptp->params[0]);
+	}
+
+	ptp_response(cam, PTP_RC_OK, 0);
+
+	return 1;
+}
+#endif
+
+void ptp_register_mtp_opcodes(vcam *cam) {
+	vcam_register_opcode(cam, PTP_OC_MTP_GetObjectPropsSupported, ptp_mtp_obj_props_supported_write, NULL);
+//	vcam_register_opcode(cam, 0x9802, ptp_eos_generic, NULL);
+//	vcam_register_opcode(cam, 0x9803, ptp_eos_generic, NULL);
+//	vcam_register_opcode(cam, 0x9804, ptp_eos_generic, NULL);
+//	vcam_register_opcode(cam, 0x9805, ptp_eos_generic, NULL);
 }
