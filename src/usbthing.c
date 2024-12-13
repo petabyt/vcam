@@ -14,12 +14,21 @@ enum {
 	STRINGID_MAX
 };
 
+struct usb_endpoint_descriptor_min {
+	__u8 bLength;
+	__u8 bDescriptorType;
+	__u8 bEndpointAddress;
+	__u8 bmAttributes;
+	__le16 wMaxPacketSize;
+	__u8 bInterval;
+} __attribute__((packed));
+
 struct Config {
 	struct usb_config_descriptor config;
 	struct usb_interface_descriptor interf0;
-	struct usb_endpoint_descriptor ep1;
-	struct usb_endpoint_descriptor ep81;
-	struct usb_endpoint_descriptor ep82;
+	struct usb_endpoint_descriptor_min ep1;
+	struct usb_endpoint_descriptor_min ep81;
+	struct usb_endpoint_descriptor_min ep82;
 } __attribute__((packed)) config = {
 	.config = {
 		.bLength = sizeof(struct usb_config_descriptor),
@@ -43,7 +52,7 @@ struct Config {
 		.iInterface = 0,
 	},
 	.ep1 = {
-		.bLength = sizeof(struct usb_endpoint_descriptor),
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
 		.bDescriptorType = USB_DT_ENDPOINT,
 		.bEndpointAddress = 0x81,
 		.bmAttributes = 2,
@@ -51,7 +60,7 @@ struct Config {
 		.bInterval = 0,
 	},
 	.ep81 = {
-		.bLength = sizeof(struct usb_endpoint_descriptor),
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
 		.bDescriptorType = USB_DT_ENDPOINT,
 		.bEndpointAddress = 0x2,
 		.bmAttributes = 2,
@@ -59,7 +68,7 @@ struct Config {
 		.bInterval = 0,
 	},
 	.ep82 = {
-		.bLength = sizeof(struct usb_endpoint_descriptor),
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
 		.bDescriptorType = USB_DT_ENDPOINT,
 		.bEndpointAddress = 0x83,
 		.bmAttributes = 3,
@@ -89,6 +98,8 @@ int usb_get_string(struct UsbThing *ctx, int devn, int id, char buffer[127]) {
 		strcpy(buffer, "123456");
 		return 0;
 	}
+	strcpy(buffer, "");
+	return 0;
 	return -1;
 }
 
@@ -96,6 +107,7 @@ int usb_get_device_descriptor(struct UsbThing *ctx, int devn, struct usb_device_
 	dev->bLength = sizeof(struct usb_device_descriptor);
 	dev->bDescriptorType = 1;
 	dev->bcdUSB = 0x0200;
+	dev->bcdDevice = 2;
 	dev->bDeviceClass = 0;
 	dev->bDeviceSubClass = 0;
 	dev->bMaxPacketSize0 = 64;
@@ -142,6 +154,12 @@ int get_interface_descriptor(struct UsbThing *ctx, int devn, struct usb_interfac
 	return 0;
 }
 
+// https://www.xmos.com/download/AN00132:-USB-Image-Device-Class(2_0_2rc1).pdf
+#define STILL_IMAGE_CANCEL_REQUEST 0x64
+#define STILL_IMAGE_GET_EXT_EVENT_DATA 0x65
+#define STILL_IMAGE_DEV_RESET_REQ 0x66
+#define STILL_IMAGE_GET_DEV_STATUS 0x67
+
 // Extended function to handle additional MTP commands
 static int handle_control(struct UsbThing *ctx, int devn, int ep, const void *data, int len, void *out) {
 	const struct usb_ctrlrequest *ctrl = (const struct usb_ctrlrequest *)data;
@@ -150,6 +168,9 @@ static int handle_control(struct UsbThing *ctx, int devn, int ep, const void *da
 		return 0;
 	case MTP_REQ_GET_EXT_EVENT_DATA:
 		return 0;
+	case STILL_IMAGE_GET_DEV_STATUS:
+		memset(out, 0, len);
+		return len;
 	}
 	return usbt_handle_control_request(ctx, devn, ep, data, len, out);
 }
@@ -162,13 +183,34 @@ static int get_bos_descriptor(struct UsbThing *ctx, int devn, struct usb_bos_des
 	return 0;
 }
 
+static int urb_splitter(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
+	static uint32_t last_length = 0;
+	if (last_length == 0) {
+		vcam_read(get_cam(ctx, devn), ep, data, 4);
+		ptp_read_u32(data, &last_length);
+		int max = (int)last_length;
+		if (max > 512) max = 512;
+		if (max > len) max = len;
+		vcam_read(get_cam(ctx, devn), ep, ((unsigned char *)data) + 4, max - 4);
+		last_length -= (uint32_t)max;
+		return max;
+	} else {
+		uint32_t max = last_length;
+		if (max > 512) max = 512;
+		if (max > len) max = len;
+		vcam_read(get_cam(ctx, devn), ep, data, (int)max);
+		last_length -= max;
+		return (int)max;
+	}
+}
+
 static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
 	if (ep == 0x2) {
 		vcam_log("Passing h->d to vcam");
 		return vcam_write(get_cam(ctx, devn), ep, (const unsigned char *)data, len);
 	} else if (ep == 0x81) {
 		vcam_log("Reading bulk d->h to vcam");
-		return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
+		return urb_splitter(ctx, devn, ep, data, len);
 	} else if (ep == 0x83) {
 		// Nothing on interrupt endpoint
 		return 0;

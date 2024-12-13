@@ -33,10 +33,11 @@ int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	strcpy(cam->manufac, "Canon Inc.");
 	cam->vendor = 0x4a9;
 	if (!strcmp(name, "canon_1300d")) {
-		strcpy(cam->model, "Canon EOS Rebel T6");
+		strcpy(cam->model, "Canon EOS R666");
 		strcpy(cam->version, "3-1.2.0");
 		strcpy(cam->serial, "828af56");
 		canon_register_d4_hidden(cam);
+		cam->product = 0x32b4;
 	} else if (!strcmp(name, "eos_m")) {
 		strcpy(cam->model, "Canon EOS M");
 		strcpy(cam->version, "1.0.0");
@@ -351,7 +352,7 @@ void canon_register_base_eos(vcam *cam) {
 	vcam_register_opcode(cam, 0x9184,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9185,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9140,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, 0x9801,	ptp_eos_generic, NULL);
+	//vcam_register_opcode(cam, 0x9801,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9802,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9803,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9804,	ptp_eos_generic, NULL);

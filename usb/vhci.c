@@ -30,32 +30,12 @@ static void hexdump(void *buffer, int size) {
 }
 
 static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_header *header) {
-#if 0
-	hexdump(header->u.cmd_submit.setup, 8);
-#endif
-
 	int resp_len = 0;
 	uint32_t len = bswap_32(header->u.cmd_submit.transfer_buffer_length);
 	uint32_t dir = bswap_32(header->base.direction);
 	uint32_t ep = bswap_32(header->base.ep);
 	uint32_t ep_addr = (dir << 7) | ep;
-	usbt_dbg("submit ep:%d len:%d dir:%d\n", ep, len, dir);
-
-	if (ep == 0) {
-		int rc = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8, p->buffer);
-		if (rc < 0) return rc;
-		resp_len = rc;
-	} else if (dir == 1) {
-		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, p->buffer, len);
-	} else if (dir == 0) {
-		int rc = recv(p->sockfd, header->u.cmd_submit.transfer_buffer, len, 0);
-		assert(rc == len);
-		ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, header->u.cmd_submit.transfer_buffer, len);
-		resp_len = 0;
-	} else {
-		printf("Illegal state\n");
-		abort();
-	}
+	usbt_dbg("submit ep:%x len:%d dir:%d\n", ep_addr, len, dir);
 
 	struct usbip_header resp = {0};
 	resp.base.command = bswap_32(USBIP_RET_SUBMIT);
@@ -63,37 +43,74 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 	resp.base.devid = header->base.devid;
 	resp.base.direction = header->base.direction;
 	resp.base.ep = header->base.ep;
-
 	resp.u.ret_submit.status = bswap_32(0);
-	if (dir == 0) {
-		resp.u.ret_submit.actual_length = bswap_32(len);
-	} else {
-		resp.u.ret_submit.actual_length = bswap_32(resp_len);
-	}
 	resp.u.ret_submit.start_frame = bswap_32(0);
 	resp.u.ret_submit.number_of_packets = bswap_32(0);
 	resp.u.ret_submit.error_count = bswap_32(0);
 
+	if (ep == 0) {
+		// Handle control request payloads
+		int payload_size = 0;
+		if (dir == 0 && len != 0) {
+			int rc = recv(p->sockfd, &header->u.cmd_submit.setup[8], len, 0);
+			if (rc != len) return -1;
+			payload_size += (int)len;
+		}
+
+		int rc = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8 + payload_size, p->buffer);
+		if (rc < 0) return rc;
+		resp_len = rc;
+		if (dir == 0 && len != 0 && resp_len != 0) {
+			printf("Illegal double data phase in control request\n");
+			abort();
+		}
+		resp.u.ret_submit.actual_length = bswap_32(resp_len);
+	} else if (dir == 1) {
+		if (len > 1024) {
+			printf("Too large of a packet requested\n");
+			hexdump(header, 48);
+			abort();
+		}
+
+		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, p->buffer, (int)len);
+		resp.u.ret_submit.actual_length = bswap_32(resp_len);
+		if (ep_addr == 0x83) {
+			//printf("Responding to ");
+			//resp.u.ret_submit.status = bswap_32(-1);
+			//send(p->sockfd, &resp, 0x30, 0);
+			return 0;
+		}
+	} else if (dir == 0) {
+		if (len > 1024) {
+			printf("Too large of a packet requested\n");
+			hexdump(header, 48);
+			abort();
+		}
+
+		int rc = recv(p->sockfd, header->u.cmd_submit.transfer_buffer, len, 0);
+		if ((uint32_t)rc != len) {
+			printf("Expected %d, got %d\n", len, rc);
+			abort();
+		}
+
+		ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, header->u.cmd_submit.transfer_buffer, (int)len);
+		resp_len = 0;
+		resp.u.ret_submit.actual_length = bswap_32(len);
+	} else {
+		printf("Illegal state\n");
+		abort();
+	}
+
 	send(p->sockfd, &resp, 0x30, 0);
-	if (resp_len)
-		send(p->sockfd, p->buffer, resp_len, 0);
-#if 0
-	printf("<-- ");
-	hexdump(&resp, 0x30);
-	printf("Sending %d bytes\n", resp_len);
-	printf("<-- ");
-	hexdump(p->buffer, resp_len);
-#endif
+	send(p->sockfd, p->buffer, resp_len, 0);
 	return 0;
 }
 
 int usbt_vhci_init(struct UsbThing *ctx) {
 	struct Priv p = {0};
-	// TODO: Set ctx->priv_backend to NULL once this function returns
-	ctx->priv_backend = (void *)&p;
 
-	p.buffer = malloc(1000);
-	p.buffer_length = 1000;
+	p.buffer = malloc(5000);
+	p.buffer_length = 5000;
 
 	const char *attach_path = "/sys/devices/platform/vhci_hcd.0/attach";
 
@@ -144,23 +161,37 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 			return -1;
 		} else if (rc == 0) {
 			continue;
+		} else if (rc != sizeof(struct usbip_header)) {
+			printf("Received partial packet %d\n", rc);
+			abort();
 		}
+		printf("Received %d\n", rc);
 
 		struct usbip_header *header = (struct usbip_header *)buffer;
-		switch (bswap_32(header->base.command)) {
+		uint32_t command = bswap_32(header->base.command);
+		switch (command) {
 		case USBIP_CMD_SUBMIT:
 			rc = handle_submit(ctx, &p, header);
 			if (rc) goto exit;
 			break;
-		case USBIP_CMD_UNLINK:
+		case USBIP_CMD_UNLINK: {
 			printf("USBIP_CMD_UNLINK\n");
-			break;
+			struct usbip_header resp = {0};
+			resp.base.command = bswap_32(USBIP_RET_UNLINK);
+			resp.base.seqnum = header->base.seqnum;
+			resp.base.devid = header->base.devid;
+			resp.base.direction = header->base.direction;
+			resp.base.ep = header->base.ep;
+			resp.u.ret_unlink.status = bswap_32(0);
+			send(sockfd, &resp, 48, 0);
+			} break;
 		case USBIP_RESET_DEV:
 			printf("USBIP_RESET_DEV\n");
 			break;
 		default:
-			printf("Unknown usbip command %x\n", bswap_32(header->base.command));
-			break;
+			printf("Unknown usbip command %x\n", command);
+			hexdump(header, rc);
+			abort();
 		}
 	}
 

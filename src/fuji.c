@@ -14,10 +14,6 @@ int fuji_usb_init_cam(vcam *cam);
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
-	strcpy(cam->manufac, "Fujifilm Corp");
-	strcpy(cam->serial, "123456");
-	cam->vendor = 0x4cb;
-	cam->product = 0x2c6;
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
 		f->image_get_version = 1;
@@ -76,6 +72,11 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	} else {
 		return -1;
 	}
+
+	cam->vendor = 0x4cb;
+	cam->product = 0x2c6;
+	strcpy(cam->manufac, "Fujifilm Corp");
+	strcpy(cam->serial, "123456");
 
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;

@@ -119,7 +119,7 @@ static int get_desc(struct UsbThing *ctx, int devn, int value, int index, int le
 		return 0;
 	}
 	case USB_DT_ENDPOINT: {
-		assert(0);
+		abort();
 		return 0;
 	}
 	case USB_DT_DEBUG: {
@@ -145,6 +145,7 @@ int usbt_handle_control_request(struct UsbThing *ctx, int devn, int endpoint, co
 	}
 
 	const struct usb_ctrlrequest *ctrl = (const struct usb_ctrlrequest *)data;
+	usbt_dbg("Handling control request bRequest:%d\n", ctrl->bRequest);
 	switch (ctrl->bRequest) {
 	case USB_REQ_GET_DESCRIPTOR:
 		if (length != 8) {
@@ -165,7 +166,7 @@ int usbt_handle_control_request(struct UsbThing *ctx, int devn, int endpoint, co
 		return -1;
 	}
 	case USB_REQ_GET_STATUS: {
-		((uint8_t *)out)[0] = 0x0;
+		((uint8_t *)out)[0] = 0x1;
 		((uint8_t *)out)[1] = 0x0;
 		return 2;
 	}
