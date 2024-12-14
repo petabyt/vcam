@@ -25,7 +25,7 @@ static int ptpip_cmd_client_write(vcam *cam, void *to, int length) {
 	if (first_write) {
 		char client_name[100];
 		ptp_read_unicode_string(client_name, ((char *)to) + 28, sizeof(client_name));
-		vcam_log("Connecting to client '%s'\n", client_name);
+		vcam_log("Connecting to client '%s'", client_name);
 		first_write = 0;
 		return length;
 	}
@@ -54,11 +54,11 @@ static int tcp_receive_all(vcam *cam, int client_socket) {
 	uint32_t packet_length;
 	ssize_t size;
 	for (int i = 0; i < 10; i++) {
-		vcam_log("Receiving data from the client...\n");
+		vcam_log("Receiving data from the client...");
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 
 		if (size == 0) {
-			vcam_log("Initiator isn't sending anything, trying again\n");
+			vcam_log("Initiator isn't sending anything, trying again");
 			usleep(1000 * 500);
 			continue;
 		}
@@ -69,11 +69,11 @@ static int tcp_receive_all(vcam *cam, int client_socket) {
 		}
 
 		if (size != 4) {
-			vcam_log("Couldn't read 4 bytes, only got %d: %X\n", size, packet_length);
+			vcam_log("Couldn't read 4 bytes, only got %d: %X", size, packet_length);
 
 			size += recv(client_socket, (uint8_t *)(&packet_length) + size, sizeof(uint32_t) - size, 0);
 			if (size == sizeof(uint32_t)) {
-				vcam_log("Acting up, didn't send all of size at first: %X\n", packet_length);
+				vcam_log("Acting up, didn't send all of size at first: %X", packet_length);
 				break;
 			}
 			
@@ -94,7 +94,7 @@ static int tcp_receive_all(vcam *cam, int client_socket) {
 		perror("Error reading data from socket");
 		return -1;
 	} else if (size != packet_length) {
-		vcam_log("Couldn't read the rest of the packet, only got %d out of %d\n", size, packet_length);
+		vcam_log("Couldn't read the rest of the packet, only got %d out of %d", size, packet_length);
 		return -1;
 	}
 
@@ -112,7 +112,7 @@ static int tcp_receive_all(vcam *cam, int client_socket) {
 
 		size = recv(client_socket, &packet_length, sizeof(uint32_t), 0);
 		if (size != sizeof(uint32_t)) {
-			vcam_log("Failed to receive 4 bytes of data phase response\n");
+			vcam_log("Failed to receive 4 bytes of data phase response");
 			return -1;
 		}
 
@@ -121,18 +121,18 @@ static int tcp_receive_all(vcam *cam, int client_socket) {
 		((uint32_t *)buffer)[0] = packet_length;
 		rc = recv(client_socket, buffer + size, packet_length - size, 0);
 		if (rc != packet_length - size) {
-			vcam_log("Failed to receive data phase response\n");
+			vcam_log("Failed to receive data phase response");
 			return -1;
 		}
 
 		if (rc != packet_length - size) {
-			vcam_log("Wrote %d, wanted %d\n", rc, packet_length - size);
+			vcam_log("Wrote %d, wanted %d", rc, packet_length - size);
 			return -1;
 		}
 
 		rc = ptpip_cmd_client_write(cam, buffer, packet_length);
 		if (rc != packet_length) {
-			vcam_log("Failed to send response to vcam\n");
+			vcam_log("Failed to send response to vcam");
 			return -1;
 		}
 	}
@@ -146,7 +146,7 @@ static int tcp_send_all(vcam *cam, int client_socket) {
 	uint32_t packet_length = 0;
 	int size = ptpip_cmd_client_read(cam, &packet_length, 4);
 	if (size != 4) {
-		vcam_log("send_all: vcam failed to provide 4 bytes\n", size);
+		vcam_log("send_all: vcam failed to provide 4 bytes", size);
 		return -1;
 	}
 
@@ -156,7 +156,7 @@ static int tcp_send_all(vcam *cam, int client_socket) {
 	int rc = ptpip_cmd_client_read(cam, buffer + size, packet_length - size);
 
 	if (rc != packet_length - size) {
-		vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
+		vcam_log("Read %d, wanted %d", rc, packet_length - size);
 		return -1;
 	}
 
@@ -174,8 +174,8 @@ static int tcp_send_all(vcam *cam, int client_socket) {
 		// Read packet length
 		size = ptpip_cmd_client_read(cam, &packet_length, 4);
 		if (size != 4) {
-			vcam_log("response packet: vcam failed to provide 4 bytes: %d\n", size);
-			vcam_log("Code: %X\n", c->code);
+			vcam_log("response packet: vcam failed to provide 4 bytes: %d", size);
+			vcam_log("Code: %X", c->code);
 			return -1;
 		}
 
@@ -185,7 +185,7 @@ static int tcp_send_all(vcam *cam, int client_socket) {
 		rc = ptpip_cmd_client_read(cam, buffer + size, packet_length - size);
 
 		if (rc != packet_length - size) {
-			vcam_log("Read %d, wanted %d\n", rc, packet_length - size);
+			vcam_log("Read %d, wanted %d", rc, packet_length - size);
 			return -1;
 		}
 
@@ -231,7 +231,7 @@ static int new_ptp_tcp_socket(int port) {
 	serverAddress.sin_port = htons(port);
 
 
-	vcam_log("Binding to %s:%d\n", server_ip_address, port);
+	vcam_log("Binding to %s:%d", server_ip_address, port);
 
 	if (bind(server_socket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
 		perror("Bind failed");
@@ -245,7 +245,7 @@ static int new_ptp_tcp_socket(int port) {
 		return -1;
 	}
 
-	vcam_log("Socket listening on %s:%d...\n", server_ip_address, port);
+	vcam_log("Socket listening on %s:%d...", server_ip_address, port);
 
 	return server_socket;
 }
@@ -260,21 +260,21 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 	socklen_t client_address_length_event = sizeof(client_address_event);
 	int client_socket_event = accept(event_socket, (struct sockaddr *)&client_address_event, &client_address_length_event);
 	if (client_socket_event == -1) {
-		vcam_log("Failed to accept event socket\n");
+		vcam_log("Failed to accept event socket");
 		abort();
 	}
 
-	vcam_log("Event port connection accepted from %s:%d\n", inet_ntoa(client_address_event.sin_addr), ntohs(client_address_event.sin_port));
+	vcam_log("Event port connection accepted from %s:%d", inet_ntoa(client_address_event.sin_addr), ntohs(client_address_event.sin_port));
 
 	struct sockaddr_in client_address_video;
 	socklen_t client_address_length_video = sizeof(client_address_video);
 	int client_socket_video = accept(video_socket, (struct sockaddr *)&client_address_video, &client_address_length_video);
 	if (client_socket_video == -1) {
-		vcam_log("Failed to accept video socket\n");
+		vcam_log("Failed to accept video socket");
 		abort();
 	}
 
-	vcam_log("Video port connection accepted from %s:%d\n", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
+	vcam_log("Video port connection accepted from %s:%d", inet_ntoa(client_address_video.sin_addr), ntohs(client_address_video.sin_port));
 
 	// TODO: Do this continuously with two frames? 
 	ptp_fuji_liveview(client_socket_video);
@@ -282,7 +282,7 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 	// TODO: Break loop on sigint?
 	while (1) {
 		uint32_t temp;
-		vcam_log("Liveview/event thread sleeping... (read attempts %d %d)\n", recv(client_socket_video, &temp, 4, 0), recv(client_socket_event, &temp, 4, 0));
+		vcam_log("Liveview/event thread sleeping... (read attempts %d %d)", recv(client_socket_video, &temp, 4, 0), recv(client_socket_event, &temp, 4, 0));
 		usleep(1000000);
 	}
 
@@ -296,26 +296,26 @@ void fuji_accept_remote_ports(void) {
 		return;
 	}
 
-	vcam_log("Started new thread to accept remote ports\n");
+	vcam_log("Started new thread to accept remote ports");
 }
 
 int fuji_wifi_main(vcam *cam) {
 	struct Fuji *f = fuji(cam);
 
-	vcam_log("Fuji WiFi vcam - running '%s'\n", cam->model);
+	vcam_log("Fuji WiFi vcam - running '%s'", cam->model);
 
 	char *this_ip = malloc(32);
 	get_local_ip(this_ip);
 
 	// (Skips client datagram discovery)
 	if (f->do_tether) {
-		vcam_log("Fuji tether connect, skipping datagram\n");
+		vcam_log("Fuji tether connect, skipping datagram");
 		fuji_tether_connect("192.168.1.7", 51560);
 	}
 
 	// PC AutoSave registration
 	if (f->do_register) {
-		vcam_log("Fuji register\n");
+		vcam_log("Fuji register");
 		server_ip_address = this_ip;
 		fuji_ssdp_register(server_ip_address, "VCAM", "X-H1");
 		return 0;
@@ -323,24 +323,24 @@ int fuji_wifi_main(vcam *cam) {
 
 	// PC AutoSave
 	if (f->do_discovery) {
-		vcam_log("Fuji discovery on %s\n", this_ip);
+		vcam_log("Fuji discovery on %s", this_ip);
 		server_ip_address = this_ip;
 		fuji_ssdp_import(server_ip_address, "VCAM");
 	}
 
 	if (cam->custom_ip_addr) {
 		server_ip_address = cam->custom_ip_addr;
-		vcam_log("Fuji use local IP: %s\n", server_ip_address);
+		vcam_log("Fuji use local IP: %s", server_ip_address);
 	}
 
 	int server_socket = new_ptp_tcp_socket(FUJI_CMD_IP_PORT);
 	if (server_socket == -1) {
-		vcam_log("Error, make sure to add virtual network device\n");
+		vcam_log("Error, make sure to add virtual network device");
 		return 1;
 	}
 
 	if (cam->sig) {
-		vcam_log("Sending signal to parent %d\n", cam->sig);
+		vcam_log("Sending signal to parent %d", cam->sig);
 		kill(cam->sig, SIGUSR1);
 	}
 
@@ -354,7 +354,7 @@ int fuji_wifi_main(vcam *cam) {
 		return -1;
 	}
 
-	vcam_log("Connection accepted from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
+	vcam_log("Connection accepted from %s:%d", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
 	while (1) {
 		if (tcp_receive_all(cam, client_socket)) {
@@ -370,7 +370,7 @@ int fuji_wifi_main(vcam *cam) {
 	}
 
 	close(client_socket);
-	vcam_log("Connection closed\n");
+	vcam_log("Connection closed");
 	close(server_socket);
 
 	return 0;

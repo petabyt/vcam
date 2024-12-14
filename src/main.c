@@ -51,12 +51,12 @@ int main(int argc, char *argv[]) {
 	} else if (!strcmp(backend_str, "vhci")) {
 		backend = VCAM_VHCI;
 	} else {
-		vcam_log("Unknown backend '%s'\n", argv[0]);
+		vcam_log("Unknown backend '%s'\n", backend_str);
 		return -1;
 	}
 
 	vcam *cam = vcam_init_standard();
-	int rc = vcam_main(cam, name, backend, argc - 2, argv + 2);
+	int rc = vcam_main(cam, name, backend, argc - 3, argv + 3);
 
 	close_all_fds();
 	return rc;

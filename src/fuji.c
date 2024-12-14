@@ -78,6 +78,7 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	strcpy(cam->manufac, "Fujifilm Corp");
 	strcpy(cam->serial, "123456");
 
+	f->transport = FUJI_FEATURE_WIRELESS_COMM;
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;
 		if (!strcmp(argv[i], "--usb")) {
@@ -96,16 +97,18 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 			f->do_tether = 1;
 			f->transport = FUJI_FEATURE_WIRELESS_TETHER;
 		} else {
-			printf("Unknown option %s\n", argv[i]);
+			vcam_log("Unknown option %s", argv[i]);
 			return -1;
 		}
 	}
+
+	vcam_log("fuji registering %d", f->transport);
 
 	if (f->transport == FUJI_FEATURE_WIRELESS_COMM || f->transport == FUJI_FEATURE_WIRELESS_TETHER || f->transport == FUJI_FEATURE_AUTOSAVE) {
 		fuji_register_opcodes(cam);
 		return vcam_fuji_setup(cam);
 	} else {
-		fuji_usb_init_cam(cam);
+		return fuji_usb_init_cam(cam);
 	}
 }
 
@@ -301,9 +304,9 @@ int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 		ev->length++;
 	}
 
-	vcam_log("Sending %d events\n", ev->length);
+	vcam_log("Sending %d events", ev->length);
 	for (int i = 0; i < ev->length; i++) {
-		vcam_log("%02x -> %x\n", ev->events[i].code, ev->events[i].value);
+		vcam_log("%02x -> %x", ev->events[i].code, ev->events[i].value);
 	}
 
 	ptp_senddata(cam, ptp->code, (unsigned char *)ev, 2 + (6 * ev->length));
@@ -316,7 +319,7 @@ int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 
 int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
-	vcam_log("Get property %X\n", ptp->params[0]);
+	vcam_log("Get property %X", ptp->params[0]);
 	int data = -1;
 	switch (ptp->params[0]) {
 	case PTP_DPC_FUJI_EventsList:
@@ -373,13 +376,13 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;		
 	default:
-		vcam_log("WARN: Fuji Unknown %X\n", ptp->params[0]);
+		vcam_log("WARN: Fuji Unknown %X", ptp->params[0]);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
 
-	vcam_log("Sending prop %02x == %x\n", ptp->params[0], data);
+	vcam_log("Sending prop %02x == %x", ptp->params[0], data);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 0;
@@ -390,11 +393,11 @@ int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
 		f->internal_state = CAM_STATE_IDLE_REMOTE;
-		vcam_log("Opening remote ports\n"); // BUG: It does this twice
+		vcam_log("Opening remote ports"); // BUG: It does this twice
 		fuji_accept_remote_ports();
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
 		f->internal_state = CAM_STATE_IDLE_REMOTE;
-		vcam_log("One time sending all remote props\n");
+		vcam_log("One time sending all remote props");
 		ptp_notify_event(cam, PTP_DPC_FUJI_DeviceError, 0);
 		ptp_notify_event(cam, PTP_DPC_FlashMode, 0x800a);
 		ptp_notify_event(cam, PTP_DPC_CaptureDelay, 0);
@@ -462,10 +465,10 @@ int ptp_fuji_get_device_info(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_fuji_liveview(int socket) {
-	vcam_log("Broadcasting liveview\n");
+	vcam_log("Broadcasting liveview");
 	FILE *file = fopen(FUJI_DUMMY_LV_JPEG, "rb");
 	if (file == NULL) {
-		vcam_log("File %s not found\n", FUJI_DUMMY_LV_JPEG);
+		vcam_log("File %s not found", FUJI_DUMMY_LV_JPEG);
 		exit(-1);
 	}
 
@@ -504,13 +507,13 @@ void fuji_downloaded_object(vcam *cam) {
 	// the second object, once a partialtransfer or object is completely downloaded.
 	// It seems we get this notification once GetPartialObject calls reach the end of an object.
 	if (f->camera_state == FUJI_MULTIPLE_TRANSFER) {
-		printf("Dirent %s\n", cam->first_dirent->next->fsname);
+		vcam_log("Dirent %s", cam->first_dirent->next->fsname);
 		struct ptp_dirent *next = cam->first_dirent->next;
 		next->id = 1;
 		cam->first_dirent = next;
 
 		if (f->sent_images == 3) {
-			vcam_log("Enough images send %d, killing connection\n", f->sent_images);
+			vcam_log("Enough images send %d, killing connection", f->sent_images);
 			cam->next_cmd_kills_connection = 1;
 		}
 
@@ -535,7 +538,7 @@ void fuji_register_opcodes(vcam *cam) {
 
 	// We have completely custom implementations of these, override standard implementations
 	vcam_register_opcode(cam, PTP_OC_SetDevicePropValue, ptp_fuji_setdevicepropvalue_write, ptp_fuji_setdevicepropvalue_write_data);
-	vcam_register_opcode(cam, PTP_OC_GetDevicePropValue, ptp_getdevicepropvalue_write, 	NULL);
+	vcam_register_opcode(cam, PTP_OC_GetDevicePropValue, ptp_fuji_getdevicepropvalue_write, 	NULL);
 	vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_getpartialobject_write, NULL);
 
 	struct Fuji *f = fuji(cam);
