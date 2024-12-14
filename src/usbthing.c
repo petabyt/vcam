@@ -227,8 +227,9 @@ static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int l
 }
 
 void usbt_user_init(struct UsbThing *ctx) {
-	ctx->priv_impl = malloc(sizeof(struct Priv));
+	// Add devices for libusb mode
 	if (ctx->n_devices == 0) {
+		ctx->priv_impl = malloc(sizeof(struct Priv));
 		((struct Priv *)ctx->priv_impl)->cam[0] = vcam_new("canon_1300d");
 		ctx->n_devices = 1;
 	}
