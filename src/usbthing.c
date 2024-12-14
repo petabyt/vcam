@@ -31,7 +31,7 @@ struct Config {
 	struct usb_endpoint_descriptor_min ep82;
 } __attribute__((packed)) config = {
 	.config = {
-		.bLength = sizeof(struct usb_config_descriptor),
+		.bLength = USB_DT_CONFIG_SIZE,
 		.bDescriptorType = USB_DT_CONFIG,
 		.bNumInterfaces = 0x1,
 		.wTotalLength = sizeof(struct Config),
@@ -41,7 +41,7 @@ struct Config {
 		.bMaxPower = 0x32,
 	},
 	.interf0 = {
-		.bLength = sizeof(struct usb_interface_descriptor),
+		.bLength = USB_DT_INTERFACE_SIZE,
 		.bDescriptorType = USB_DT_INTERFACE,
 		.bInterfaceProtocol = 1,
 		.bInterfaceClass = 6,
@@ -134,7 +134,6 @@ static void hexdump(void *buffer, int size) {
 
 int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, void *data) {
 	if (i == 0) {
-		hexdump(&config, sizeof(config));
 		memcpy(data, &config, sizeof(config));
 		return sizeof(config);
 	} else {
@@ -169,8 +168,12 @@ static int handle_control(struct UsbThing *ctx, int devn, int ep, const void *da
 	case MTP_REQ_GET_EXT_EVENT_DATA:
 		return 0;
 	case STILL_IMAGE_GET_DEV_STATUS:
-		memset(out, 0, len);
-		return len;
+		ptp_write_u16((uint8_t *)out + 0, 0x0);
+		ptp_write_u16((uint8_t *)out + 2, PTP_RC_OK);
+		return 4;
+	case STILL_IMAGE_DEV_RESET_REQ:
+		usbt_dbg("STILL_IMAGE_DEV_RESET_REQ\n");
+		return 0;
 	}
 	return usbt_handle_control_request(ctx, devn, ep, data, len, out);
 }
@@ -183,6 +186,7 @@ static int get_bos_descriptor(struct UsbThing *ctx, int devn, struct usb_bos_des
 	return 0;
 }
 
+// Force separate bulk transfers for each PTP phase
 static int urb_splitter(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
 	static uint32_t last_length = 0;
 	if (last_length == 0) {
@@ -211,6 +215,7 @@ static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int l
 	} else if (ep == 0x81) {
 		vcam_log("Reading bulk d->h to vcam");
 		return urb_splitter(ctx, devn, ep, data, len);
+		//return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
 	} else if (ep == 0x83) {
 		// Nothing on interrupt endpoint
 		return 0;
@@ -222,7 +227,11 @@ static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int l
 }
 
 void usbt_user_init(struct UsbThing *ctx) {
-	ctx->priv_backend = malloc(sizeof(struct Priv));
+	ctx->priv_impl = malloc(sizeof(struct Priv));
+	if (ctx->n_devices == 0) {
+		((struct Priv *)ctx->priv_impl)->cam[0] = vcam_new("canon_1300d");
+		ctx->n_devices = 1;
+	}
 	ctx->get_string_descriptor = usb_get_string;
 	ctx->get_total_config_descriptor = usb_send_config_descriptor;
 	ctx->get_config_descriptor = get_config_descriptor;

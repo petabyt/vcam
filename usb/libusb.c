@@ -82,40 +82,94 @@ int libusb_get_config_descriptor(libusb_device *dev, uint8_t config_index, struc
 	(*config)->bNumInterfaces = 1;
 
 	struct libusb_interface *interface = malloc(sizeof(struct libusb_interface));
-	interface->num_altsetting = 1;
+	interface->altsetting = NULL;
+	interface->num_altsetting = 0;
 	(*config)->interface = interface;
 
-	struct libusb_interface_descriptor *altsetting = malloc(sizeof(struct libusb_interface_descriptor));
-	altsetting->bInterfaceClass = LIBUSB_CLASS_IMAGE;
-	interface->altsetting = altsetting;
+	uint8_t buffer[4096];
+	struct usb_config_descriptor *config_desc = (struct usb_config_descriptor *)buffer;
+	dev->usb->get_total_config_descriptor(dev->usb, dev->devn, config_index, config_desc);
+	(*config)->bLength = config_desc->bLength;
+	(*config)->bNumInterfaces = config_desc->bNumInterfaces;
+	// ...
 
-	struct usb_interface_descriptor desc;
-	dev->usb->get_interface_descriptor(dev->usb, dev->devn, &desc, 0);
+	struct libusb_interface_descriptor *altsetting = NULL;
+	struct libusb_endpoint_descriptor *endpoints = NULL;
+	int n_eps = 0;
 
-	altsetting->bNumEndpoints = desc.bNumEndpoints;
-	struct libusb_endpoint_descriptor *ep = malloc(sizeof(struct libusb_endpoint_descriptor) * 3);
-	altsetting->endpoint = ep;
+	int of = config_desc->bLength;
+	while (of < config_desc->wTotalLength) {
+		uint8_t bLength = buffer[of + 0];
+		uint8_t bDescriptorType = buffer[of + 1];
+		if (bDescriptorType == USB_DT_INTERFACE) {
+			if (altsetting != NULL) {
+				usbt_dbg("More than one interface not implemented right now\n");
+				return -1;
+			}
+			struct usb_interface_descriptor *desc = (struct usb_interface_descriptor *) &buffer[of];
 
-	ep[0].bmAttributes = LIBUSB_ENDPOINT_TRANSFER_TYPE_BULK;
-	ep[0].bEndpointAddress = 0x81;
+			altsetting = malloc(sizeof(struct libusb_interface_descriptor));
+			altsetting->bLength = desc->bLength;
+			altsetting->bDescriptorType = desc->bDescriptorType;
+			altsetting->bInterfaceNumber = desc->bInterfaceNumber;
+			altsetting->bAlternateSetting = desc->bAlternateSetting;
+			altsetting->bNumEndpoints = desc->bNumEndpoints;
+			altsetting->bInterfaceClass = desc->bInterfaceClass;
+			altsetting->bInterfaceSubClass = desc->bInterfaceSubClass;
+			altsetting->bInterfaceProtocol = desc->bInterfaceProtocol;
+			altsetting->iInterface = desc->iInterface;
+			altsetting->endpoint = NULL;
+			interface->altsetting = altsetting;
+			interface->num_altsetting++;
+		} else if (bDescriptorType == USB_DT_ENDPOINT) {
+			if (altsetting == NULL) {
+				usbt_dbg("Please have interface descriptor before endpoint descriptor\n");
+				return -1;
+			}
+			struct usb_endpoint_descriptor *desc = (struct usb_endpoint_descriptor *)&buffer[of];
 
-	ep[1].bmAttributes = LIBUSB_ENDPOINT_TRANSFER_TYPE_BULK;
-	ep[1].bEndpointAddress = 0x02;
+			if (endpoints == NULL) {
+				endpoints = malloc(sizeof(struct libusb_endpoint_descriptor));
+			} else {
+				endpoints = realloc(endpoints, sizeof(struct libusb_endpoint_descriptor) * (n_eps + 1));
+			}
+			struct libusb_endpoint_descriptor *ep = &endpoints[n_eps];
+			ep->bLength = desc->bLength;
+			ep->bDescriptorType = desc->bDescriptorType;
+			ep->bEndpointAddress = desc->bEndpointAddress;
+			ep->bmAttributes = desc->bmAttributes;
+			ep->wMaxPacketSize = desc->wMaxPacketSize;
+			ep->bInterval = desc->bInterval;
+			ep->bRefresh = desc->bRefresh;
+			ep->bSynchAddress = desc->bSynchAddress;
+			n_eps++;
+		} else {
+			usbt_dbg("libusb: Unhandled descriptor type %d\n", bDescriptorType);
+		}
+		of += bLength;
+	}
 
-	ep[2].bmAttributes = LIBUSB_ENDPOINT_TRANSFER_TYPE_INTERRUPT;
-	ep[2].bEndpointAddress = 0x82;
+	if (altsetting) {
+		if (endpoints) {
+			altsetting->endpoint = endpoints;
+		}
+		interface->altsetting = altsetting;
+	}
 
 	return 0;
 }
 
 void libusb_free_config_descriptor(struct libusb_config_descriptor *config) {
+	free((void *)config->interface->altsetting->endpoint);
+	free((void *)config->interface->altsetting);
+	free((void *)config->interface);
 	free(config);
-	// TODO: free memory
 }
 
 int libusb_open(libusb_device *dev, libusb_device_handle **dev_handle) {
 	*dev_handle = (libusb_device_handle *)malloc(sizeof(struct libusb_device_handle));
 	(*dev_handle)->usb = dev->usb;
+	(*dev_handle)->devn = dev->devn;
 	return 0;
 }
 

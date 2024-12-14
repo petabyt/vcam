@@ -197,6 +197,7 @@ int vcam_set_prop_avail(vcam *cam, int code, void *list, int cnt) {
 	prop->desc.FormFlag = PTP_EnumerationForm; // Should this function set it or check it?
 	int size = ptp_prop_list_size(prop->desc.DataType, list, cnt);
 	free(prop->desc.avail);
+	if (size == 0) abort();
 	prop->desc.avail = malloc(size);
 	memcpy(prop->desc.avail, list, size);
 	prop->desc.avail_cnt = cnt;
