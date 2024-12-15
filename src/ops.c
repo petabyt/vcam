@@ -18,7 +18,7 @@ int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if ((ptp->params[0] != 0) && (ptp->params[0] != 1)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "controlmode must not be 0 or 1, is %d", ptp->params[0]);
+		vcam_log_func(__func__, "controlmode must not be 0 or 1, is %d", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
@@ -30,12 +30,12 @@ int ptp_opensession_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (ptp->params[0] == 0) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session must not be 0, is %d", ptp->params[0]);
+		vcam_log_func(__func__, "session must not be 0, is %d", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
 	if (cam->session) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is already open");
+		vcam_log_func(__func__, "session is already open");
 		ptp_response(cam, PTP_RC_SessionAlreadyOpened, 0);
 		return 1;
 	}
@@ -50,7 +50,7 @@ int ptp_closesession_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_trans_id(cam, ptp))return 1;
 
 	if (!cam->session) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open");
+		vcam_log_func(__func__, "session is not open");
 		ptp_response(cam, PTP_RC_SessionAlreadyOpened, 0);
 		return 1;
 	}
@@ -73,7 +73,7 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	/* Getdeviceinfo is special. it can be called with transid 0 outside of the session. */
 	if ((ptp->seqnr != 0) && (ptp->seqnr != cam->seqnr)) {
 		/* not clear if normal cameras react like this */
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr);
+		vcam_log_func(__func__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		return 1;
 	}
@@ -136,18 +136,18 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 
 	if (ptp->nparams < 1) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
+		vcam_log_func(__func__, "parameter count %d", ptp->nparams);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
 	if ((ptp->params[0] != 0xffffffff) && (ptp->params[0] != 0x00010001)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "storage id 0x%08x unknown", ptp->params[0]);
+		vcam_log_func(__func__, "storage id 0x%08x unknown", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidStorageId, 0);
 		return 1;
 	}
 	if (ptp->nparams >= 2) {
 		if (ptp->params[1] != 0) {
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "currently can not handle OFC selection (0x%04x)", ptp->params[1]);
+			vcam_log_func(__func__, "currently can not handle OFC selection (0x%04x)", ptp->params[1]);
 			ptp_response(cam, PTP_RC_SpecByFormatUnsupported, 0);
 			return 1;
 		}
@@ -162,12 +162,12 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 				cur = cur->next;
 			}
 			if (!cur) {
-				gp_log(GP_LOG_ERROR, __FUNCTION__, "requested subtree of (0x%08x), but no such handle", mode);
+				vcam_log_func(__func__, "requested subtree of (0x%08x), but no such handle", mode);
 				ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 				return 1;
 			}
 			if (!S_ISDIR(cur->stbuf.st_mode)) {
-				gp_log(GP_LOG_ERROR, __FUNCTION__, "requested subtree of (0x%08x), but this is no asssocation", mode);
+				vcam_log_func(__func__, "requested subtree of (0x%08x), but this is no asssocation", mode);
 				ptp_response(cam, PTP_RC_InvalidParentObject, 0);
 				return 1;
 			}
@@ -209,18 +209,18 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 
 	if (ptp->nparams < 1) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
+		vcam_log_func(__func__, "parameter count %d", ptp->nparams);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
 	if ((ptp->params[0] != 0xffffffff) && (ptp->params[0] != 0x00010001)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "storage id 0x%08x unknown", ptp->params[0]);
+		vcam_log_func(__func__, "storage id 0x%08x unknown", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidStorageId, 0);
 		return 1;
 	}
 	if (ptp->nparams >= 2) {
 		if (ptp->params[1] != 0) {
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "currently can not handle OFC selection (0x%04x)", ptp->params[1]);
+			vcam_log_func(__func__, "currently can not handle OFC selection (0x%04x)", ptp->params[1]);
 			ptp_response(cam, PTP_RC_SpecByFormatUnsupported, 0);
 			return 1;
 		}
@@ -235,12 +235,12 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 				cur = cur->next;
 			}
 			if (!cur) {
-				gp_log(GP_LOG_ERROR, __FUNCTION__, "requested subtree of (0x%08x), but no such handle", mode);
+				vcam_log_func(__func__, "requested subtree of (0x%08x), but no such handle", mode);
 				ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 				return 1;
 			}
 			if (!S_ISDIR(cur->stbuf.st_mode)) {
-				gp_log(GP_LOG_ERROR, __FUNCTION__, "requested subtree of (0x%08x), but this is no asssocation", mode);
+				vcam_log_func(__func__, "requested subtree of (0x%08x), but this is no asssocation", mode);
 				ptp_response(cam, PTP_RC_InvalidParentObject, 0);
 				return 1;
 			}
@@ -324,7 +324,7 @@ int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
 	if (ptp->params[0] != 0x00010001) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid storage id 0x%08x", ptp->params[0]);
+		vcam_log_func(__func__, "invalid storage id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidStorageId, 0);
 		return 1;
 	}
@@ -360,7 +360,7 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	if (!cur) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+		vcam_log_func(__func__, "invalid object id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 		return 1;
 	}
@@ -435,7 +435,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 			cur = cur->next;
 		}
 		if (!cur) {
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+			vcam_log_func(__func__, "invalid object id 0x%08x", ptp->params[0]);
 			ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 			return 1;
 		}
@@ -490,7 +490,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 			}
 			e = exif_data_get_entry(ed, EXIF_TAG_PIXEL_X_DIMENSION);
 			if (e) {
-				gp_log(GP_LOG_DEBUG, __FUNCTION__, "pixel x dim format is %d", e->format);
+				vcam_log_func(__func__, "pixel x dim format is %d", e->format);
 				if (e->format == EXIF_FORMAT_SHORT) {
 					imagewidth = exif_get_short(e->data, exif_data_get_byte_order(ed));
 				} else if (e->format == EXIF_FORMAT_LONG) {
@@ -499,7 +499,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 			}
 			e = exif_data_get_entry(ed, EXIF_TAG_PIXEL_Y_DIMENSION);
 			if (e) {
-				gp_log(GP_LOG_DEBUG, __FUNCTION__, "pixel y dim format is %d", e->format);
+				vcam_log_func(__func__, "pixel y dim format is %d", e->format);
 				if (e->format == EXIF_FORMAT_SHORT) {
 					imageheight = exif_get_short(e->data, exif_data_get_byte_order(ed));
 				} else if (e->format == EXIF_FORMAT_LONG) {
@@ -584,7 +584,7 @@ int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 		cur = cur->next;
 	}
 	if (!cur) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+		vcam_log_func(__func__, "invalid object id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 		return 1;
 	}
@@ -616,7 +616,7 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
-	gp_log_("Processing thumbnail call for %d\n", ptp->params[0]);
+	vcam_log("Processing thumbnail call for %d\n", ptp->params[0]);
 
 	cur = cam->first_dirent;
 	while (cur) {
@@ -625,7 +625,7 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 		cur = cur->next;
 	}
 	if (!cur) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+		vcam_log_func(__func__, "invalid object id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 		return 1;
 	}
@@ -638,13 +638,13 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 #ifdef HAVE_LIBEXIF
 	ed = exif_data_new_from_data((unsigned char *)data, cur->stbuf.st_size);
 	if (!ed) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "Could not parse EXIF data");
+		vcam_log_func(__func__, "Could not parse EXIF data");
 		free(data);
 		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
 		return 1;
 	}
 	if (!ed->data) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "EXIF data does not contain a thumbnail");
+		vcam_log_func(__func__, "EXIF data does not contain a thumbnail");
 		free(data);
 		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
 		exif_data_unref(ed);
@@ -659,11 +659,11 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 
 	ptp_response(cam, PTP_RC_OK, 0);
 #else
-	gp_log(GP_LOG_ERROR, __FUNCTION__, "Cannot get thumbnail without libexif, lying about missing thumbnail");
+	vcam_log_func(__func__, "Cannot get thumbnail without libexif, lying about missing thumbnail");
 	ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
 #endif
 
-	gp_log_("Done processing thumbnail call\n");
+	vcam_log("Done processing thumbnail call\n");
 
 	free(data);
 	return 1;
@@ -679,17 +679,17 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 2))return 1;
 
 	if ((ptp->params[0] != 0) && (ptp->params[0] != 0x00010001)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid storage id 0x%08x", ptp->params[0]);
+		vcam_log_func(__func__, "invalid storage id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_StoreNotAvailable, 0);
 		return 1;
 	}
 	if ((ptp->params[1] != 0) && (ptp->params[1] != 0x3801)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid objectformat code id 0x%04x", ptp->params[1]);
+		vcam_log_func(__func__, "invalid objectformat code id 0x%04x", ptp->params[1]);
 		ptp_response(cam, PTP_RC_InvalidObjectFormatCode, 0);
 		return 1;
 	}
 	if (capcnt > 150) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "Declaring store full at picture 151");
+		vcam_log_func(__func__, "Declaring store full at picture 151");
 		ptp_response(cam, PTP_RC_StoreFull, 0);
 		return 1;
 	}
@@ -702,7 +702,7 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 		cur = cur->next;
 	}
 	if (!cur) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "I do not have a JPG file in the store, can not proceed");
+		vcam_log_func(__func__, "I do not have a JPG file in the store, can not proceed");
 		ptp_response(cam, PTP_RC_StoreNotAvailable, 0);
 		return 1;
 	}
@@ -764,12 +764,12 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 
 	if (ptp->nparams < 1) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "parameter count %d", ptp->nparams);
+		vcam_log_func(__func__, "parameter count %d", ptp->nparams);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
 	if (ptp->params[0] == 0xffffffff) { /* delete all mode */
-		gp_log(GP_LOG_DEBUG, __FUNCTION__, "delete all");
+		vcam_log_func(__func__, "delete all");
 		cur = cam->first_dirent;
 
 		while (cur) {
@@ -783,7 +783,7 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	if ((ptp->nparams == 2) && (ptp->params[1] != 0)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "single object delete, but ofc is 0x%08x", ptp->params[1]);
+		vcam_log_func(__func__, "single object delete, but ofc is 0x%08x", ptp->params[1]);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
@@ -796,12 +796,12 @@ int ptp_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 		cur = cur->next;
 	}
 	if (!cur) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "invalid object id 0x%08x", ptp->params[0]);
+		vcam_log_func(__func__, "invalid object id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 		return 1;
 	}
 	if (S_ISDIR(cur->stbuf.st_mode)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "FIXME: not yet deleting directories");
+		vcam_log_func(__func__, "FIXME: not yet deleting directories");
 		ptp_response(cam, PTP_RC_ObjectWriteProtected, 0);
 		return 1;
 	}
@@ -840,7 +840,7 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 
 	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
 	if (desc == NULL) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
+		vcam_log_func(__func__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}
@@ -888,7 +888,7 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int length = 0;
 	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
 	if (prop_data == NULL) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
+		vcam_log_func(__func__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}
@@ -911,7 +911,7 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 			break;
 	}
 	if (i == cam->props->length) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
+		vcam_log_func(__func__, "deviceprop 0x%04x not found", ptp->params[0]);
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}
@@ -926,7 +926,7 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 
 	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
 	if (desc == NULL) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);
+		vcam_log_func(__func__, "deviceprop 0x%04x not found", ptp->params[0]);
 		/* we emitted the response already in _write */
 		return 1;
 	}

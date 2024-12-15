@@ -30,13 +30,13 @@ int canon_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 	p->calls_to_liveview = 0;
 
 	strcpy(cam->manufac, "Canon Inc.");
-	cam->vendor = 0x4a9;
+	cam->vendor_id = 0x4a9;
 	if (!strcmp(name, "canon_1300d")) {
 		strcpy(cam->model, "Canon EOS Rebel T6");
 		strcpy(cam->version, "3-1.2.0");
 		strcpy(cam->serial, "828af56");
 		canon_register_d4_hidden(cam);
-		cam->product = 0x32b4;
+		cam->product_id = 0x32b4;
 	} else if (!strcmp(name, "eos_m")) {
 		strcpy(cam->model, "Canon EOS M");
 		strcpy(cam->version, "1.0.0");

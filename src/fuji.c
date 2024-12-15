@@ -22,13 +22,13 @@ vcam *vcam_fuji_new(const char *name, const char *arg) {
 int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
-	cam->vendor = 0x4cb;
+	cam->vendor_id = 0x4cb;
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
 		f->image_get_version = 1;
 		f->get_object_version = 2;
 		f->remote_version = 0;
-		cam->product = 0x2c6;
+		cam->product_id = 0x2c6;
 	} else if (!strcmp(name, "fuji_x_t20")) {
 		strcpy(cam->model, "X-T20");
 		f->image_get_version = 3;
@@ -61,7 +61,7 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 		f->get_object_version = 4;
 		f->remote_version = 0x00020006; // fuji sets to 2000C
 		f->remote_get_object_version = 4;
-		cam->product = 0x2d7;
+		cam->product_id = 0x2d7;
 	} else if (!strcmp(name, "fuji_x_dev")) {
 		strcpy(cam->model, "X-DEV");
 		f->image_get_version = 3;
@@ -84,8 +84,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 		return -1;
 	}
 
-	cam->vendor = 0x4cb;
-	cam->product = 0x2c6;
+	cam->vendor_id = 0x4cb;
+	cam->product_id = 0x2c6;
 	strcpy(cam->manufac, "Fujifilm Corp");
 	strcpy(cam->serial, "123456");
 
@@ -535,7 +535,7 @@ void fuji_downloaded_object(vcam *cam) {
 }
 
 int ptp_fuji_discovery_getthumb_write(vcam *cam, ptpcontainer *ptp) {
-	gp_log_("%s: Returning nothing for discovery mode", __func__);
+	vcam_log("%s: Returning nothing for discovery mode", __func__);
 	ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
 	return 1;
 }

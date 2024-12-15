@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <vcam.h>
 
-int ptp_panic(char *x) {abort();}
+#define ptp_panic vcam_panic
 
 int ptp_get_prop_size(uint8_t *d, int type) {
 	uint32_t length32;
@@ -40,7 +40,7 @@ int ptp_get_prop_size(uint8_t *d, int type) {
 		return 1 + ((int)length8 * 2);
 	}
 
-	gp_log(GP_LOG_ERROR, __FUNCTION__, "unhandled datatype %x", type);
+	vcam_log_func(__func__, "unhandled datatype %x", type);
 	abort();
 	return 0;
 }

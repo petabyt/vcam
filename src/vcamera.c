@@ -22,7 +22,7 @@ void vcam_dump(void *ptr, size_t len) {
 
 int vcam_check_session(vcam *cam) {
 	if (!cam->session) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "session is not open");
+		vcam_log_func(__func__, "session is not open");
 		ptp_response(cam, PTP_RC_SessionNotOpen, 0);
 		return 1;
 	}
@@ -40,7 +40,7 @@ int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp) {
 
 int vcam_check_param_count(vcam *cam, ptpcontainer *ptp, int n) {
 	if (ptp->nparams != n) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "%X: params should be %d, but is %d", ptp->code, n, ptp->nparams);
+		vcam_log_func(__func__, "%X: params should be %d, but is %d", ptp->code, n, ptp->nparams);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		return 1;
 	}
@@ -251,16 +251,16 @@ void ptp_response(vcam *cam, uint16_t code, int nparams, ...) {
 void *read_file(struct ptp_dirent *cur) {
 	FILE *file = fopen(cur->fsname, "rb");
 	if (!file) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "could not open %s", cur->fsname);
+		vcam_log_func(__func__, "could not open %s", cur->fsname);
 		return NULL;
 	}
 	void *data = malloc(cur->stbuf.st_size);
 	if (!data) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "could not allocate data for %s", cur->fsname);
+		vcam_log_func(__func__, "could not allocate data for %s", cur->fsname);
 		return NULL;
 	}
 	if (!fread(data, cur->stbuf.st_size, 1, file)) {
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "could not read data of %s", cur->fsname);
+		vcam_log_func(__func__, "could not read data of %s", cur->fsname);
 		free(data);
 		data = NULL;
 	}
@@ -368,11 +368,11 @@ void read_tree(vcam *cam, const char *path) {
 }
 
 int vcam_init(vcam *cam) {
-	return GP_OK;
+	return 0;
 }
 
 int vcam_exit(vcam *cam) {
-	return GP_OK;
+	return 0;
 }
 
 int vcam_close(vcam *cam) {
@@ -380,7 +380,7 @@ int vcam_close(vcam *cam) {
 	free(cam->outbulk);
 	free(cam->props);
 	free(cam->opcodes);
-	return GP_OK;
+	return 0;
 }
 
 static long get_ms(void) {
@@ -406,7 +406,7 @@ void vcam_process_output(vcam *cam) {
 	int i, j;
 
 	if (cam->next_cmd_kills_connection) {
-		gp_log_("Killing connection\n");
+		vcam_log("Killing connection\n");
 		exit(0);
 	}
 
@@ -423,7 +423,7 @@ void vcam_process_output(vcam *cam) {
 
 	if (ptp.size < 12) { /* No ptp command can be less than 12 bytes */
 		/* not clear if normal cameras react like this */
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "input size was %d, minimum is 12", ptp.size);
+		vcam_log_func(__func__, "input size was %d, minimum is 12", ptp.size);
 
 		//hexdump(cam->outbulk, ptp.size);
 
@@ -442,7 +442,7 @@ void vcam_process_output(vcam *cam) {
 	/* We want either CMD or DATA phase. */
 	if ((ptp.type != PTP_PACKET_TYPE_COMMAND) && (ptp.type != PTP_PACKET_TYPE_DATA)) {
 		/* not clear if normal cameras react like this */
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "expected CMD or DATA, but type was %d", ptp.type);
+		vcam_log_func(__func__, "expected CMD or DATA, but type was %d", ptp.type);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
 		cam->nroutbulk -= ptp.size;
@@ -452,7 +452,7 @@ void vcam_process_output(vcam *cam) {
 	// Allow our special BEEF code for testing
 	if ((ptp.code & 0x7000) != 0x1000 && ptp.code != 0xBEEF) {
 		/* not clear if normal cameras react like this */
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "OPCODE 0x%04x does not start with 0x1 or 0x9", ptp.code);
+		vcam_log_func(__func__, "OPCODE 0x%04x does not start with 0x1 or 0x9", ptp.code);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
 		cam->nroutbulk -= ptp.size;
@@ -462,7 +462,7 @@ void vcam_process_output(vcam *cam) {
 	if (ptp.type == PTP_PACKET_TYPE_COMMAND) {
 		if ((ptp.size - 12) % 4) {
 			/* not clear if normal cameras react like this */
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "SIZE-12 is not divisible by 4, but is %d", ptp.size - 12);
+			vcam_log_func(__func__, "SIZE-12 is not divisible by 4, but is %d", ptp.size - 12);
 			ptp_response(cam, PTP_RC_GeneralError, 0);
 			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
 			cam->nroutbulk -= ptp.size;
@@ -471,7 +471,7 @@ void vcam_process_output(vcam *cam) {
 
 		if ((ptp.size - 12) / 4 >= 6) {
 			/* not clear if normal cameras react like this */
-			gp_log(GP_LOG_ERROR, __FUNCTION__, "(SIZE-12)/4 is %d, exceeds maximum arguments", (ptp.size - 12) / 4);
+			vcam_log_func(__func__, "(SIZE-12)/4 is %d, exceeds maximum arguments", (ptp.size - 12) / 4);
 			ptp_response(cam, PTP_RC_GeneralError, 0);
 			memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
 			cam->nroutbulk -= ptp.size;
@@ -483,8 +483,8 @@ void vcam_process_output(vcam *cam) {
 			ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
 		}
 
-		gp_log_("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
-		gp_log_("Time since last command: %dms\n", milis_since_last / 1000);
+		vcam_log("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
+		vcam_log("Time since last command: %dms\n", milis_since_last / 1000);
 	}
 
 	// We have read the first packet, discard it
@@ -499,7 +499,7 @@ void vcam_process_output(vcam *cam) {
 				memcpy(&cam->ptpcmd, &ptp, sizeof(ptp));
 			} else {
 				if (h->write_data == NULL) {
-					gp_log(GP_LOG_ERROR, __FUNCTION__, "opcode 0x%04x received with dataphase, but no dataphase expected", ptp.code);
+					vcam_log_func(__func__, "opcode 0x%04x received with dataphase, but no dataphase expected", ptp.code);
 					ptp_response(cam, PTP_RC_GeneralError, 0);
 				} else {
 					h->write_data(cam, &cam->ptpcmd, cam->outbulk + 12, ptp.size - 12);
@@ -509,7 +509,7 @@ void vcam_process_output(vcam *cam) {
 		}
 	}
 
-	gp_log(GP_LOG_ERROR, __FUNCTION__, "received an unsupported opcode 0x%04x", ptp.code);
+	vcam_log_func(__func__, "received an unsupported opcode 0x%04x", ptp.code);
 	ptp_response(cam, PTP_RC_OperationNotSupported, 0);
 }
 
@@ -549,7 +549,7 @@ int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32
 	unsigned char *data;
 	int x = 0;
 
-	gp_log(GP_LOG_DEBUG, __FUNCTION__, "generate interrupt 0x%04x, %d params, param1 0x%08x, timeout=%d", code, nparams, param1, when);
+	vcam_log_func(__func__, "generate interrupt 0x%04x, %d params, param1 0x%08x, timeout=%d", code, nparams, param1, when);
 
 	gettimeofday(&now, NULL);
 	now.tv_usec += (when % 1000) * 1000;
@@ -633,7 +633,7 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	}
 	newtimeout = (cam->first_interrupt->triggertime.tv_sec - now.tv_sec) * 1000 + (cam->first_interrupt->triggertime.tv_usec - now.tv_usec) / 1000;
 	if (newtimeout > timeout)
-		gp_log(GP_LOG_ERROR, __FUNCTION__, "miscalculated? %d vs %d", timeout, newtimeout);
+		vcam_log_func(__func__, "miscalculated? %d vs %d", timeout, newtimeout);
 	tocopy = cam->first_interrupt->size;
 	if (tocopy > bytes)
 		tocopy = bytes;

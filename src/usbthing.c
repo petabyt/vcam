@@ -111,8 +111,8 @@ int usb_get_device_descriptor(struct UsbThing *ctx, int devn, struct usb_device_
 	dev->bDeviceClass = 0;
 	dev->bDeviceSubClass = 0;
 	dev->bMaxPacketSize0 = 64;
-	dev->idVendor = get_cam(ctx, devn)->vendor;
-	dev->idProduct = get_cam(ctx, devn)->product;
+	dev->idVendor = get_cam(ctx, devn)->vendor_id;
+	dev->idProduct = get_cam(ctx, devn)->product_id;
 
 	dev->iManufacturer = STRINGID_MANUFACTURER;
 	dev->iProduct = STRINGID_PRODUCT;

@@ -11,16 +11,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define GP_OK 0
-#define GP_ERROR -1
-#define GP_ERROR_TIMEOUT -10
-
-typedef enum {
-	GP_LOG_ERROR = 0,	/**< \brief Log message is an error information. */
-	GP_LOG_VERBOSE = 1,	/**< \brief Log message is an verbose debug information. */
-	GP_LOG_DEBUG = 2,	/**< \brief Log message is an debug information. */
-	GP_LOG_DATA = 3		/**< \brief Log message is a data hex dump. */
-} GPLogLevel;
+enum CamErrors {
+	GP_ERROR_TIMEOUT = -20,
+};
 
 enum CamBackendType {
 	VCAM_LIBUSB,
@@ -29,10 +22,9 @@ enum CamBackendType {
 	VCAM_GADGETFS,
 };
 
-//#define gp_log(lvl, func, fmt, ...) vcam_log("%s: " fmt, "x" __VA_ARGS__)
-void gp_log(GPLogLevel level, const char *domain, const char *format, ...);
-#define gp_log_ vcam_log
+void vcam_log_func(const char *func, const char *format, ...);
 void vcam_log(const char *format, ...);
+void vcam_panic(const char *format, ...);
 
 typedef struct ptpcontainer {
 	unsigned int size;
@@ -49,8 +41,8 @@ typedef struct vcam {
 	void *priv;
 	/// @brief Priv pointer for hardware layer (TCP/IP)
 	void *hw_priv;
-	uint16_t vendor;
-	uint16_t product;
+	uint16_t vendor_id;
+	uint16_t product_id;
 	char model[128];
 	char version[128];
 	char serial[128];

@@ -1,6 +1,6 @@
 /** \file */
 // This file describes Picture Transfer Protocol (ISO 15740)
-// And many vendor opcodes, property codes, and event codes.
+// And many vendor_id opcodes, property codes, and event codes.
 
 #ifndef PTP_H
 #define PTP_H
