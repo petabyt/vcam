@@ -645,7 +645,7 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	return tocopy;
 }
 
-int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
+int vcam_parse_args(vcam *cam, int argc, const char **argv, int *i) {
 	if (!strcmp(argv[(*i)], "--ip")) {
 		(*i)++;
 		cam->custom_ip_addr = strdup(argv[(*i)]);
@@ -686,7 +686,7 @@ vcam *vcam_init_standard(void) {
 	return cam;
 }
 
-int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, char **argv) {
+int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, const char **argv) {
 	if (fuji_init_cam(cam, name, argc, argv) == 0) {
 		if (backend == VCAM_TCP) {
 			int rc = fuji_wifi_main(cam);

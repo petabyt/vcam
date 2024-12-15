@@ -5,19 +5,19 @@
 #define usbt_dbg(...) printf(__VA_ARGS__)
 
 struct UsbThing {
-	// Backend private pointer
+	/// @brief Private pointer for backend
 	void *priv_backend;
-	// Private pointer for device/hub implementation
+	/// @brief Private pointer for device implementation
 	void *priv_impl;
 
 	/// @brief Called by backend to handle control requests/setup packets
 	/// @param out Response buffer - is at least 65535 bytes long.
 	/// @param out_length Is set to zero by caller
-	/// @returns -1 for error or number of bytes written to out
+	/// @returns bytes written, -1 for error
 	int (*handle_control_request)(struct UsbThing *ctx, int devn, int endpoint, const void *data, int length, void *out);
 	/// @brief Handle bulk transfers IN/OUT
 	/// @param data Buffer for reading/writing, will be at least the size of maxPacketSize for this endpoint
-	/// @returns -1 for error
+	/// @returns bytes read/written, -1 for no response
 	int (*handle_bulk_transfer)(struct UsbThing *ctx, int devn, int endpoint, void *data, int length);
 
 	/// @returns nonzero for error

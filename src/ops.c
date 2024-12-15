@@ -66,7 +66,7 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	uint16_t imageformats[1];
 	uint16_t events[5];
 
-	if (vcam_check_param_count(cam, ptp, 0))return 1;
+	if (vcam_check_param_count(cam, ptp, 0)) return 1;
 
 	/* Session does not need to be open for GetDeviceInfo */
 
@@ -403,9 +403,9 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 	time_t xtime;
 	char xdate[40];
 
-	if (vcam_check_trans_id(cam, ptp))return 1;
-	if (vcam_check_session(cam))return 1;
-	if (vcam_check_param_count(cam, ptp, 1))return 1;
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
 	time_t time1;
 	time(&time1);
@@ -885,7 +885,7 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
-	int length;
+	int length = 0;
 	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
 	if (prop_data == NULL) {
 		gp_log(GP_LOG_ERROR, __FUNCTION__, "deviceprop 0x%04x not found", ptp->params[0]);

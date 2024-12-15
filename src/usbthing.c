@@ -217,8 +217,8 @@ static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int l
 		return urb_splitter(ctx, devn, ep, data, len);
 		//return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
 	} else if (ep == 0x83) {
-		// Nothing on interrupt endpoint
-		return 0;
+		// Don't respond to interrupt polling
+		return -1;
 	} else {
 		vcam_log("Illegal endpoint 0x%x", ep);
 		abort();
@@ -230,8 +230,10 @@ void usbt_user_init(struct UsbThing *ctx) {
 	// Add devices for libusb mode
 	if (ctx->n_devices == 0) {
 		ctx->priv_impl = malloc(sizeof(struct Priv));
-		((struct Priv *)ctx->priv_impl)->cam[0] = vcam_new("canon_1300d");
-		ctx->n_devices = 1;
+		struct Priv *priv = (struct Priv *)ctx->priv_impl;
+		priv->cam[0] = vcam_new("canon_1300d");
+		priv->cam[1] = vcam_fuji_new("fuji_x_a2", "--rawconv");
+		ctx->n_devices = 2;
 	}
 	ctx->get_string_descriptor = usb_get_string;
 	ctx->get_total_config_descriptor = usb_send_config_descriptor;

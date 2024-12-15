@@ -21,7 +21,7 @@ static inline struct CanonBase *priv(vcam *cam) {
 #define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos_events.bin"
 
-int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
+int canon_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 	cam->priv = malloc(sizeof(struct CanonBase));
 	struct CanonBase *p = priv(cam);
 
@@ -399,5 +399,5 @@ void canon_register_base_eos(vcam *cam) {
 	vcam_register_opcode(cam, 0x91f6,	ptp_eos_generic, NULL);
 	vcam_register_opcode(cam, 0x9053,	ptp_eos_generic, NULL); // TODO: special handling for 9053
 	//vcam_register_opcode(cam, PTP_OC_CHDK,	ptp_eos_generic, NULL);
-	vcam_register_opcode(cam, PTP_OC_MagicLantern, 	ptp_eos_generic, NULL);
+	//vcam_register_opcode(cam, PTP_OC_MagicLantern, 	ptp_eos_generic, NULL);
 }

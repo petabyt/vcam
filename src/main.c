@@ -28,7 +28,7 @@ void sigint_handler(int x) {
 	exit(0);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char *argv[]) {
 	signal(SIGINT, sigint_handler);
 
 	if (argc < 3) {

@@ -73,13 +73,10 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 		}
 
 		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, p->buffer, (int)len);
-		resp.u.ret_submit.actual_length = bswap_32(resp_len);
-		if (ep_addr == 0x83) {
-			//printf("Responding to ");
-			//resp.u.ret_submit.status = bswap_32(-1);
-			//send(p->sockfd, &resp, 0x30, 0);
+		if (resp_len == -1) {
 			return 0;
 		}
+		resp.u.ret_submit.actual_length = bswap_32(resp_len);
 	} else if (dir == 0) {
 		if (len > 1024) {
 			printf("Too large of a packet requested\n");
@@ -109,7 +106,9 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 int usbt_vhci_init(struct UsbThing *ctx) {
 	struct Priv p = {0};
 
-	p.buffer = malloc(5000);
+	// Should be the max size of a usb3 control packet
+	uint8_t buffer[5000];
+	p.buffer = buffer;
 	p.buffer_length = 5000;
 
 	const char *attach_path = "/sys/devices/platform/vhci_hcd.0/attach";
@@ -154,8 +153,8 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 	p.sockfd = sockfd;
 
 	while (1) {
-		char buffer[512] = {0};
-		int rc = recv(sockfd, buffer, sizeof(struct usbip_header), 0);
+		char packet[512] = {0};
+		int rc = recv(sockfd, packet, sizeof(struct usbip_header), 0);
 		if (rc < 0) {
 			printf("Failed to receive data %d\n", errno);
 			return -1;
@@ -167,7 +166,7 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 		}
 		printf("Received %d\n", rc);
 
-		struct usbip_header *header = (struct usbip_header *)buffer;
+		struct usbip_header *header = (struct usbip_header *)packet;
 		uint32_t command = bswap_32(header->base.command);
 		switch (command) {
 		case USBIP_CMD_SUBMIT:

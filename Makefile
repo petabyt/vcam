@@ -18,7 +18,7 @@ SO_FILES := $(VCAM_CORE) usb/libusb.o
 VCAM_FILES := $(VCAM_CORE) src/main.o
 VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
 
-CFLAGS += -g -I. -Isrc/ -Iusb/ -L. -D HAVE_LIBEXIF -Wall -fPIC
+CFLAGS += -g -I. -Isrc/ -Iusb/ -L. -D HAVE_LIBEXIF -Wall -fPIC -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3
 LDFLAGS += -L. -Wl,-rpath=.
 
 # Used to access bin/

@@ -239,7 +239,7 @@ enum FujiStates {
 #define PTP_DPC_FUJI_BCRAppendDelimiter			0xD162
 #define PTP_DPC_FUJI_CommentEx				0xD167
 #define PTP_DPC_FUJI_VideoOutOnOff			0xD168
-// value is 5 when in tether shoot mode, 6 in raw conv mode
+/// @brief value is 5 when in tether shoot mode, 6 in raw conv mode
 #define PTP_DPC_FUJI_USBMode				0xd16e
 #define PTP_DPC_FUJI_CropMode				0xD16F
 #define PTP_DPC_FUJI_LensZoomPos			0xD170

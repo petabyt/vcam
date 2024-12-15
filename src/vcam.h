@@ -29,9 +29,10 @@ enum CamBackendType {
 	VCAM_GADGETFS,
 };
 
+//#define gp_log(lvl, func, fmt, ...) vcam_log("%s: " fmt, "x" __VA_ARGS__)
 void gp_log(GPLogLevel level, const char *domain, const char *format, ...);
+#define gp_log_ vcam_log
 void vcam_log(const char *format, ...);
-void gp_log_(const char *format, ...);
 
 typedef struct ptpcontainer {
 	unsigned int size;
@@ -65,7 +66,7 @@ typedef struct vcam {
 	struct ptp_dirent *first_dirent;
 	uint32_t ptp_objectid;
 
-	char *vcamera_filesystem;
+	const char *vcamera_filesystem;
 
 	unsigned char *inbulk;
 	int	nrinbulk;
@@ -89,16 +90,28 @@ typedef struct vcam {
 	uint8_t battery;
 }vcam;
 
+/// @brief Initialize vcam with standard properties and opcodes
 vcam *vcam_init_standard(void);
-int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, char **argv);
+
+/// @brief Invoke main command line interpreter
+int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, const char **argv);
+
+/// @brief Calls vcam_init_standard and inits camera from name
 vcam *vcam_new(const char *name);
-int vcam_parse_args(vcam *cam, int argc, char **argv, int *i);
+
+/// @brief Called by variant CLI parser to handle generic vcam parameters
+int vcam_parse_args(vcam *cam, int argc, const char **argv, int *i);
+
+
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
 int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes);
 int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
-int vcam_open(vcam *cam, const char *port);
+
+/// @brief Register an opcode
+/// If the opcode is already registered, the old handlers will be replaced
 int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontainer *ptp), int (*write_data)(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int size));
 
+/// @brief
 int vcam_start_usbthing(vcam *cam, enum CamBackendType backend);
 
 int get_local_ip(char buffer[64]);
@@ -106,15 +119,14 @@ int get_local_ip(char buffer[64]);
 __attribute__((deprecated))
 int ptp_get_object_count(vcam *cam);
 
-// Temporary function to help with unimplemented data structures
+/// @brief Helper function to send files in place of packing data structures
 int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp);
 
+/// @brief Send a data packet to initiator
 void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes);
-void ptp_response(vcam *cam, uint16_t code, int nparams, ...);
 
-int vcam_set_prop(vcam *cam, int code, uint32_t value);
-int vcam_set_prop_data(vcam *cam, int code, void *data);
-int vcam_set_prop_avail(vcam *cam, int code, void *list, int cnt);
+/// @brief Send a response packet to initiator
+void ptp_response(vcam *cam, uint16_t code, int nparams, ...);
 
 struct PtpOpcodeList {
 	int length;
@@ -199,17 +211,37 @@ struct PtpPropList {
 	}handlers[];
 };
 
+/// @brief Register a property with handlers
+/// @note Handlers must not use static data since vcam can run with concurrent cameras
+/// @note Property info should be handled by the device implementation
 int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue);
+
+/// @brief Register a property from description struct
 int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc);
+
+/// Return the property description for a prop
+/// @note This does not allocate memory, it returns data from a runtime list
 struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code);
+
+/// @brief Get current value for a prop
+/// @note Returned value is not allocated
 void *vcam_get_prop_data(vcam *cam, int code, int *length);
+
+/// @brief Set current value for prop
+/// @note Assumes length of data through the data type of said prop
 int vcam_set_prop_data(vcam *cam, int code, void *data);
+
+/// @brief Set the value of a property - up to 32 bits
 int vcam_set_prop(vcam *cam, int code, uint32_t data);
 
+/// @brief Set the enumeration list for a property
+/// @note Assumes data type based on said prop
+int vcam_set_prop_avail(vcam *cam, int code, void *list, int cnt);
+
 void ptp_register_mtp_opcodes(vcam *cam);
+void ptp_register_mtp_props(vcam *cam);
 void ptp_register_standard_opcodes(vcam *cam);
 void ptp_register_standard_props(vcam *cam);
-void ptp_register_mtp_props(vcam *cam);
 
 int vcam_check_session(vcam *cam);
 int vcam_check_trans_id(vcam *cam, ptpcontainer *ptp);
@@ -241,9 +273,9 @@ void free_dirent(struct ptp_dirent *ent);
 // Deletes the first object from the list
 void vcam_virtual_pop_object(int id);
 
+/// @brief Inject an interrupt into the general purpose event list
 int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
-//#pragma pack(push, 1)
 struct GenericEvent {
 	uint32_t size;
 	uint16_t x;
@@ -251,15 +283,17 @@ struct GenericEvent {
 	uint32_t transaction;
 	uint32_t value;
 };
-//#pragma pack(pop)
 
+/// @brief Shortcut for ptp_inject_interrupt
 int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 
+/// @brief Pop event from the interrupt list, FIFO
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
 void fuji_register_opcodes(vcam *cam);
-int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv);
-int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);
+int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv);
+vcam *vcam_fuji_new(const char *name, const char *arg);
+int canon_init_cam(vcam *cam, const char *name, int argc, const char **argv);
 
 int fuji_wifi_main(vcam *cam);
 int ptpip_generic_main(vcam *cam);

@@ -11,14 +11,24 @@
 
 int fuji_usb_init_cam(vcam *cam);
 
-int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
+vcam *vcam_fuji_new(const char *name, const char *arg) {
+	vcam *cam = vcam_init_standard();
+	const char *args[] = {arg};
+	int rc = fuji_init_cam(cam, name, 1, args);
+	if (rc) return NULL;
+	return cam;
+}
+
+int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
+	cam->vendor = 0x4cb;
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
 		f->image_get_version = 1;
 		f->get_object_version = 2;
 		f->remote_version = 0;
+		cam->product = 0x2c6;
 	} else if (!strcmp(name, "fuji_x_t20")) {
 		strcpy(cam->model, "X-T20");
 		f->image_get_version = 3;
@@ -51,6 +61,7 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->get_object_version = 4;
 		f->remote_version = 0x00020006; // fuji sets to 2000C
 		f->remote_get_object_version = 4;
+		cam->product = 0x2d7;
 	} else if (!strcmp(name, "fuji_x_dev")) {
 		strcpy(cam->model, "X-DEV");
 		f->image_get_version = 3;
@@ -101,8 +112,6 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 			return -1;
 		}
 	}
-
-	vcam_log("fuji registering %d", f->transport);
 
 	if (f->transport == FUJI_FEATURE_WIRELESS_COMM || f->transport == FUJI_FEATURE_WIRELESS_TETHER || f->transport == FUJI_FEATURE_AUTOSAVE) {
 		fuji_register_opcodes(cam);
