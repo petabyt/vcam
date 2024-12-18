@@ -21,6 +21,6 @@ usbthing currently supports 3 different backends:
 - [x] libusb-v1.0
 - [ ] gadgetfs (WIP)
 - [x] Bulk endpoints
-- [x] Handle interrupt endpoint polling
+- [ ] Handle interrupt endpoint polling
 - [ ] Virtual hub (if possible)
-- [ ] Stable API/ABI
+- [ ] Stable API and ABI
