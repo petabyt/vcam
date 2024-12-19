@@ -133,8 +133,6 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 	int ir = socketpair(AF_UNIX, SOCK_STREAM, 0, sockets);
 	if (ir == -1) return -1;
 
-	//int sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-
 	int port = 0;
 	int devid = 1;
 	int speed = 2;

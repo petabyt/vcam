@@ -219,6 +219,7 @@ int libusb_control_transfer(libusb_device_handle *dev, uint8_t bmRequestType, ui
 		return dev->usb->handle_control_request(dev->usb, dev->devn, 0, &ctrl, 8, data);
 	} else {
 		// Host to device
+		// TODO: In current api this doesn't pass the payload
 		return dev->usb->handle_control_request(dev->usb, dev->devn, 0, &ctrl, 8 + wLength, data);
 	}
 }

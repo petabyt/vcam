@@ -86,8 +86,10 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 
 	cam->vendor_id = 0x4cb;
 	cam->product_id = 0x2c6;
-	strcpy(cam->manufac, "Fujifilm Corp");
-	strcpy(cam->serial, "123456");
+	strcpy(cam->manufac, "FUJIFILM");
+	strcpy(cam->extension, "fujifilm.co.jp: 1.0; ");
+	strcpy(cam->version, "1.30");
+	strcpy(cam->serial, "xxxxxxxxxxxxxxxxxxxxxxxx");
 
 	f->transport = FUJI_FEATURE_WIRELESS_COMM;
 	for (int i = 0; i < argc; i++) {

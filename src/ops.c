@@ -79,10 +79,11 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	data = malloc(2000);
 
+	// TODO: Allow cameras to customize these
 	x += put_16bit_le(data + x, 0x64); /* StandardVersion */
 	x += put_32bit_le(data + x, 0x6); /* VendorExtensionID */
 	x += put_16bit_le(data + x, 0x64); /* VendorExtensionVersion */
-	x += put_string(data + x, "G-V: 1.0;"); /* VendorExtensionDesc */
+	x += put_string(data + x, cam->extension); /* VendorExtensionDesc */
 	x += put_16bit_le(data + x, 0);		/* FunctionalMode */
 
 	opcodes = malloc(cam->opcodes->length * sizeof(uint16_t));

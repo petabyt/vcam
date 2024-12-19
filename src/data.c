@@ -237,7 +237,7 @@ int put_8bit_le(unsigned char *data, uint8_t x) {
 	return 1;
 }
 
-int put_string(unsigned char *data, char *str) {
+int put_string(unsigned char *data, const char *str) {
 	int i;
 
 	if (!str) { /* empty string, just has length 0 */
@@ -285,3 +285,4 @@ int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt) {
 		x += put_32bit_le(data + x, arr[i]);
 	return x;
 }
+

@@ -406,7 +406,7 @@ void vcam_process_output(vcam *cam) {
 	int i, j;
 
 	if (cam->next_cmd_kills_connection) {
-		vcam_log("Killing connection\n");
+		vcam_log("Killing connection");
 		exit(0);
 	}
 
@@ -483,8 +483,8 @@ void vcam_process_output(vcam *cam) {
 			ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
 		}
 
-		vcam_log("Processing call for opcode 0x%X (%d params)\n", ptp.code, ptp.nparams);
-		vcam_log("Time since last command: %dms\n", milis_since_last / 1000);
+		vcam_log("Processing call for opcode 0x%X (%d params)", ptp.code, ptp.nparams);
+		vcam_log("Time since last command: %dms", milis_since_last / 1000);
 	}
 
 	// We have read the first packet, discard it

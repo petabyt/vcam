@@ -47,6 +47,7 @@ typedef struct vcam {
 	char version[128];
 	char serial[128];
 	char manufac[128];
+	char extension[128];
 
 	/// @brief NULL to use default IP
 	char *custom_ip_addr;
@@ -148,7 +149,7 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp);
 int ptp_vusb_write(vcam *cam, ptpcontainer *ptp);
 int ptp_vusb_write_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
-int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp);
+//int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp);
 int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp);
 
 // GetPropertyValue stubs

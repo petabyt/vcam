@@ -7,6 +7,7 @@
 #include <cl_data.h>
 #include "fuji.h"
 
+
 static void add_prop_u32(vcam *cam, int code, uint32_t value) {
 	struct PtpPropDesc desc;
 	memset(&desc, 0, sizeof(desc));
