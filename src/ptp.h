@@ -295,6 +295,7 @@ struct PtpIpInitPacket {
 #define PTP_OF_MPEG				0x300B
 #define PTP_OF_ASF				0x300C
 #define PTP_OF_MOV				0x300D
+#define PTP_OF_IMAGE			0x3800
 #define PTP_OF_JPEG				0x3801
 #define PTP_OF_TIFF_EP			0x3802
 #define PTP_OF_FlashPix			0x3803
@@ -659,6 +660,8 @@ struct PtpIpInitPacket {
 #define PTP_AC_ReadWrite	0x0
 #define PTP_AC_Read			0x1
 #define PTP_AC_ReadDelete	0x2
+// Extension for camera to PTP_RC_DevicePropNotSupported to request for a prop
+#define PTP_AC_Invisible	0x3
 
 // Device type codes
 #define PTP_TC_UNDEF	0x0

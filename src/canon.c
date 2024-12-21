@@ -69,7 +69,7 @@ static int ptp_eos_viewfinder_data(vcam *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 
-	vcam_generic_send_file(EOS_LV_JPEG, cam, ptp);
+	vcam_generic_send_file(EOS_LV_JPEG, cam, 0, ptp);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

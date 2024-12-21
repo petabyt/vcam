@@ -22,7 +22,6 @@ vcam *vcam_fuji_new(const char *name, const char *arg) {
 int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
-	cam->vendor_id = 0x4cb;
 	if (!strcmp(name, "fuji_x_a2")) {
 		strcpy(cam->model, "X-A2");
 		f->image_get_version = 1;
@@ -85,7 +84,6 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 	}
 
 	cam->vendor_id = 0x4cb;
-	cam->product_id = 0x2c6;
 	strcpy(cam->manufac, "FUJIFILM");
 	strcpy(cam->extension, "fujifilm.co.jp: 1.0; ");
 	strcpy(cam->version, "1.30");

@@ -15,7 +15,7 @@
 #include <linux/usb/gadgetfs.h>
 #include <poll.h>
 #include <signal.h>
-#include <vcam.h>
+#include "usbthing.h"
 
 #define MTP_REQ_CANCEL              0x64
 #define MTP_REQ_GET_EXT_EVENT_DATA  0x65
@@ -432,129 +432,56 @@ void *kill_thread(void *arg) {
 	}
 }
 
-int main(int argc, char **argv)
-{
+int usbt_gadgetfs_init(struct UsbThing *ctx) {
+
 	signal(SIGINT, kill_sig);
 	pthread_t killtd;
 	pthread_create(&killtd, NULL, kill_thread, NULL);
 
-	start_vcam(argc, argv);
+	int fd = -1, ret, err = -1;
+	struct usb_config_descriptor config;
+	struct usb_config_descriptor config_hs;
+	struct usb_device_descriptor device_descriptor;
+	struct usb_interface_descriptor if_descriptor;
+	uint8_t init_config[2048];
 
-    int fd = -1, ret, err = -1;
-    uint32_t send_size;
-    struct usb_config_descriptor config;
-    struct usb_config_descriptor config_hs;
-    struct usb_device_descriptor device_descriptor;
-    struct usb_interface_descriptor if_descriptor;
-    uint8_t init_config[2048];
-    uint8_t* cp;
+	int devn = 0;
 
-    fd = open(USB_DEV, O_RDWR | O_SYNC);
+	fd = open(USB_DEV, O_RDWR | O_SYNC);
 	gadget_fd = fd;
 
-    if (fd <= 0)
-    {
-        printf("Unable to open %s (%m)\n", USB_DEV);
-        return 1;
-    }
+	if (fd <= 0)
+	{
+		printf("Unable to open %s (%m)\n", USB_DEV);
+		return 1;
+	}
 
-    *(uint32_t*)init_config = 0;
-    cp = &init_config[4];
+	int of = 0;
+	*(uint32_t *)init_config = 0;
+	of += 4;
 
-    device_descriptor.bLength = USB_DT_DEVICE_SIZE;
-    device_descriptor.bDescriptorType = USB_DT_DEVICE;
-    device_descriptor.bDeviceClass = 0;
-    device_descriptor.bDeviceSubClass = 0;
-    device_descriptor.bDeviceProtocol = 0;
-    device_descriptor.idVendor = 0x4a9; // My own id
-    device_descriptor.idProduct = 0x32b4; // My own id
-    device_descriptor.bcdDevice = 0x0200; // Version
-    // Strings
-    device_descriptor.iManufacturer = STRINGID_MANUFACTURER;
-    device_descriptor.iProduct = STRINGID_PRODUCT;
-    device_descriptor.iSerialNumber = 0;
-    device_descriptor.bNumConfigurations = 1; // Only one configuration
+	of += ctx->get_total_config_descriptor(ctx, devn, 0, init_config + of);
 
-    ep_descriptor_in.bLength = USB_DT_ENDPOINT_SIZE;
-    ep_descriptor_in.bDescriptorType = USB_DT_ENDPOINT;
-    ep_descriptor_in.bEndpointAddress = USB_DIR_IN | 1;
-    ep_descriptor_in.bmAttributes = USB_ENDPOINT_XFER_BULK;
-    ep_descriptor_in.wMaxPacketSize = 512; // HS size
+	ctx->get_device_descriptor(ctx, devn, &device_descriptor);
+	memcpy(init_config + of, &device_descriptor, sizeof(device_descriptor));
+	of += sizeof(device_descriptor);
 
-    ep_descriptor_out.bLength = USB_DT_ENDPOINT_SIZE;
-    ep_descriptor_out.bDescriptorType = USB_DT_ENDPOINT;
-    ep_descriptor_out.bEndpointAddress = USB_DIR_OUT | 2;
-    ep_descriptor_out.bmAttributes = USB_ENDPOINT_XFER_BULK;
-    ep_descriptor_out.wMaxPacketSize = 512; // HS size
+	ret = write(fd, init_config, of);
 
-    ep_descriptor_int.bLength = USB_DT_ENDPOINT_SIZE;
-    ep_descriptor_int.bDescriptorType = USB_DT_ENDPOINT;
-    ep_descriptor_int.bEndpointAddress = USB_DIR_IN | 3;
-    ep_descriptor_int.bmAttributes = USB_ENDPOINT_XFER_INT;
-    ep_descriptor_int.wMaxPacketSize = 28; // HS size
-	ep_descriptor_int.bInterval = 6;
+	if (ret != of)
+	{
+		printf("Write error %d (%m)\n", ret);
+		goto end;
+	}
 
-    if_descriptor.bLength = sizeof(if_descriptor);
-    if_descriptor.bDescriptorType = USB_DT_INTERFACE;
-    if_descriptor.bInterfaceNumber = 0;
-    if_descriptor.bAlternateSetting = 0;
-    if_descriptor.bNumEndpoints = 3;
-	if_descriptor.iInterface = STRINGID_INTERFACE;
-    if_descriptor.bInterfaceClass = 6; // Imaging	
-    if_descriptor.bInterfaceSubClass = 1; // Still image capture
-    if_descriptor.bInterfaceProtocol = 1; // PTP
-    if_descriptor.iInterface = STRINGID_INTERFACE;
+	printf("ep0 configured\n");
 
-    config_hs.bLength = sizeof(config_hs);
-    config_hs.bDescriptorType = USB_DT_CONFIG;
-    config_hs.wTotalLength = config_hs.bLength +
-        if_descriptor.bLength + ep_descriptor_in.bLength + ep_descriptor_out.bLength + ep_descriptor_int.bLength;
-    config_hs.bNumInterfaces = 1;
-    config_hs.bConfigurationValue = CONFIG_VALUE;
-    config_hs.iConfiguration = STRINGID_CONFIG_HS;
-    config_hs.bmAttributes = USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER;
-    config_hs.bMaxPower = 1;
+	handle_ep0(fd);
 
-    config.bLength = sizeof(config);
-    config.bDescriptorType = USB_DT_CONFIG;
-    config.wTotalLength = config.bLength +
-        if_descriptor.bLength + ep_descriptor_in.bLength + ep_descriptor_out.bLength + ep_descriptor_int.bLength;
-    config.bNumInterfaces = 1;
-    config.bConfigurationValue = CONFIG_VALUE;
-    config.iConfiguration = STRINGID_CONFIG_LS;
-    config.bmAttributes = USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER;
-    config.bMaxPower = 1;
+	end:
+	if (fd != -1) close(fd);
 
-    FETCH(config);
-    FETCH(if_descriptor);
-    FETCH(ep_descriptor_in);
-    FETCH(ep_descriptor_out);
-    FETCH(ep_descriptor_int);
+	return err;
 
-    FETCH(config_hs);
-    FETCH(if_descriptor);
-    FETCH(ep_descriptor_in);
-    FETCH(ep_descriptor_out);
-    FETCH(ep_descriptor_int);
-
-    FETCH(device_descriptor);
-
-    // Configure ep0
-    send_size = (uint32_t)cp - (uint32_t)init_config;
-    ret = write(fd, init_config, send_size);
-
-    if (ret != send_size)
-    {
-        printf("Write error %d (%m)\n", ret);
-        goto end;
-    }
-
-    printf("ep0 configured\n");
-
-    handle_ep0(fd);
-
-end:
-    if (fd != -1) close(fd);
-
-    return err;
+	return 0;
 }

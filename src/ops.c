@@ -893,6 +893,15 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
+	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
+	if (desc != NULL) {
+		if (desc->GetSet == PTP_AC_Invisible) {
+			vcam_log_func(__func__, "deviceprop 0x%04x is invisible", ptp->params[0]);
+			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
+			return 1;
+		}
+	}
+
 	int length = 0;
 	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
 	if (prop_data == NULL) {
@@ -910,9 +919,18 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int i;
 
-	if (vcam_check_trans_id(cam, ptp))return 1;
-	if (vcam_check_session(cam))return 1;
-	if (vcam_check_param_count(cam, ptp, 1))return 1;
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
+
+	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
+	if (desc != NULL) {
+		if (desc->GetSet == PTP_AC_Invisible) {
+			vcam_log_func(__func__, "deviceprop 0x%04x is invisible", ptp->params[0]);
+			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
+			return 1;
+		}
+	}
 
 	for (i = 0; i < cam->props->length; i++) {
 		if (cam->props->handlers[i].code == ptp->params[0])
@@ -936,6 +954,10 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 	if (desc == NULL) {
 		vcam_log_func(__func__, "deviceprop 0x%04x not found", ptp->params[0]);
 		/* we emitted the response already in _write */
+		return 1;
+	}
+
+	if (desc->GetSet == PTP_AC_Invisible) {
 		return 1;
 	}
 
@@ -1029,24 +1051,31 @@ void ptp_register_standard_opcodes(vcam *cam) {
 	vcam_register_opcode(cam, 0xBEEF, ptp_vusb_write, 		ptp_vusb_write_data);
 }
 
+static int ptp_write_uint16_array(uint8_t *d, uint16_t *list, int memb_n) {
+	int of = 0;
+	of += ptp_write_u32(d + of, (uint32_t)memb_n);
+	for (int i = 0; i < memb_n; i++) {
+		of += ptp_write_u16(d + of, list[0]);
+	}
+	return of;
+}
+
 static int ptp_mtp_obj_props_supported_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_trans_id(cam, ptp)) return 1;
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam , ptp, 1)) return 1;
 
-	uint8_t *list_buf[512];
+	uint8_t list_buf[512];
 	int of = 0;
 
 	if (ptp->params[0] == PTP_OF_Association) {
-		of += ptp_write_u32(list_buf + of, 10);
-
 		uint16_t list[] = {0xdc01, 0xdc02, 0xdc03, 0xdc04, 0xdc07, 0xdc0b, 0xdc41, 0xdc44, 0xdc08, 0xdc09};
-
-		for (int i = 0; i < (sizeof(list) / sizeof(list[0])); i++) {
-			of += ptp_write_u16(list_buf + of, list[0]);
-		}
+		of += ptp_write_uint16_array(list_buf + of, list, 10);
+	} else if (ptp->params[0] == PTP_OF_JPEG || ptp->params[0] == PTP_OF_IMAGE || ptp->params[0] == PTP_OF_RAW) {
+		uint16_t list[] = {0xdc01, 0xdc02, 0xdc03, 0xdc04, 0xdc07, 0xdc08, 0xdc0b, 0xdc41, 0xdc44, 0xdc87, 0xdc88, 0xdcd3};
+		of += ptp_write_uint16_array(list_buf + of, list, 10);
 	} else {
-		ptp_response(cam, PTP_OC_MTP_GetObjectPropsSupported, 0);
+		ptp_response(cam, PTP_RC_InvalidObjectFormatCode, 0);
 		return 1;
 	}
 

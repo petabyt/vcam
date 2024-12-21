@@ -223,7 +223,7 @@ int ptp_datetime_setvalue(vcam *cam, void *data, int length) {
 
 void ptp_register_mtp_props(vcam *cam) {
 	{
-		// This will be set by client, so we don't need to bother setting a value
+		// Note: This will be set by client
 		struct PtpPropDesc desc;
 		init_prop(&desc);
 		desc.DevicePropertyCode = PTP_DPC_MTP_SessionInitiatorInfo;
@@ -231,6 +231,17 @@ void ptp_register_mtp_props(vcam *cam) {
 		desc.GetSet = PTP_AC_ReadWrite;
 		ptp_write_u32(desc.factory_default_value, 0);
 		ptp_write_u32(desc.value, 0);
+		desc.FormFlag = 0x0;
+		vcam_register_prop(cam, desc.DevicePropertyCode, &desc);
+	}
+	{
+		struct PtpPropDesc desc;
+		init_prop(&desc);
+		desc.DevicePropertyCode = PTP_DPC_MTP_PerceivedDeviceType;
+		desc.DataType = PTP_TC_UINT32;
+		desc.GetSet = PTP_AC_Read;
+		ptp_write_u32(desc.factory_default_value, 1);
+		ptp_write_u32(desc.value, 1); // still image/video camera
 		desc.FormFlag = 0x0;
 		vcam_register_prop(cam, desc.DevicePropertyCode, &desc);
 	}

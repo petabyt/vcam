@@ -62,6 +62,8 @@ typedef struct vcam {
 	/// @brief Optional PID of parent process, will signal it once PTP/IP is listening for connections
 	pid_t sig;
 
+	FILE *comm_dump;
+
 	struct ptp_interrupt *first_interrupt;
 	struct ptp_dirent *first_dirent;
 
@@ -126,7 +128,7 @@ __attribute__((deprecated))
 int ptp_get_object_count(vcam *cam);
 
 /// @brief Helper function to send files in place of packing data structures
-int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp);
+int vcam_generic_send_file(char *path, vcam *cam, int file_of, ptpcontainer *ptp);
 
 /// @brief Send a data packet to initiator
 void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes);

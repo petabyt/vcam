@@ -36,6 +36,10 @@ int main(int argc, const char *argv[]) {
 			"Usage: vcam <model> <backend> ... flags ...\n"
 			"Example:\n"
 			"vcam canon_1300d tcp\n"
+			"--local-ip\tUse IP address of this machine\n"
+			"--fs <path>\tSpecify path to scan for PTP filesystem\n"
+			"--sig <pid>\tSpecify process to signal when TCP server is listening\n"
+			"--dump\tDump all communication data to COMM_DUMP\n"
 		);
 		return -1;
 	}

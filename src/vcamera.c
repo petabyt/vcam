@@ -47,7 +47,7 @@ int vcam_check_param_count(vcam *cam, ptpcontainer *ptp, int n) {
 	return 0;
 }
 
-int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
+int vcam_generic_send_file(char *path, vcam *cam, int file_of, ptpcontainer *ptp) {
 	char new[64];
 	sprintf(new, "%s/%s", PWD, path);
 	FILE *file = fopen(new, "rb");
@@ -57,7 +57,7 @@ int vcam_generic_send_file(char *path, vcam *cam, ptpcontainer *ptp) {
 
 	fseek(file, 0, SEEK_END);
 	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
+	fseek(file, file_of, SEEK_SET);
 
 	char *buffer = malloc(file_size);
 	fread(buffer, 1, file_size, file);
@@ -109,9 +109,17 @@ int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, 
 }
 
 int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc) {
-	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
+	struct PtpProp *prop = NULL;
+	for (int i = 0; i < cam->props->length; i++) {
+		prop = &cam->props->handlers[i];
+		if (prop->code == code) break;
+		prop = NULL;
+	}
+	if (prop == NULL) {
+		cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
+		prop = &cam->props->handlers[cam->props->length];
+	}
 
-	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
 	memset(prop, 0, sizeof(struct PtpProp));
 	prop->code = code;
 	prop->getdesc = NULL;
@@ -155,11 +163,10 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
 		prop = NULL;
 	}
 	if (prop == NULL) return NULL;
-	if (prop->getvalue) {
-		struct PtpPropDesc *desc = malloc(sizeof(struct PtpPropDesc));
-		prop->getdesc(cam, desc);
-		return desc;
+	if (prop->getdesc) {
+		prop->getdesc(cam, &prop->desc);
 	}
+	// TODO: This will be blank for handlers-only implementation if getdesc is NULL
 	return &prop->desc;
 }
 
@@ -487,8 +494,15 @@ void vcam_process_output(vcam *cam) {
 		for (i = 0; i < ptp.nparams; i++) {
 			ptp.params[i] = get_32bit_le(cam->outbulk + 12 + i * 4);
 		}
-
-		vcam_log("Processing call for opcode 0x%X (%d params)", ptp.code, ptp.nparams);
+		if (ptp.nparams == 0) {
+			vcam_log("Request phase 0x%X (0 params)", ptp.code);
+		} else if (ptp.nparams == 1) {
+			vcam_log("Request phase 0x%X (%x)", ptp.code, ptp.params[0]);
+		} else if (ptp.nparams == 2) {
+			vcam_log("Request phase 0x%X (%x, %x)", ptp.code, ptp.params[0], ptp.params[1]);
+		} else {
+			vcam_log("Request phase 0x%X (%d params)", ptp.code, ptp.nparams);
+		}
 		vcam_log("Time since last command: %dms", milis_since_last / 1000);
 	}
 
@@ -519,10 +533,17 @@ void vcam_process_output(vcam *cam) {
 }
 
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes) {
+	(void)ep;
 	int toread = bytes;
 
 	if (toread > cam->nrinbulk)
 		toread = cam->nrinbulk;
+
+	if (cam->comm_dump) {
+		fwrite(cam->inbulk, 1, toread, cam->comm_dump);
+		fflush(cam->comm_dump);
+	}
+
 
 	memcpy(data, cam->inbulk, toread);
 	memmove(cam->inbulk, cam->inbulk + toread, (cam->nrinbulk - toread));
@@ -531,6 +552,12 @@ int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes) {
 }
 
 int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes) {
+	(void)ep;
+	if (cam->comm_dump) {
+		fwrite(data, 1, bytes, cam->comm_dump);
+		fflush(cam->comm_dump);
+	}
+
 	if (!cam->outbulk) {
 		cam->outbulk = malloc(bytes);
 	} else {
@@ -660,6 +687,8 @@ int vcam_parse_args(vcam *cam, int argc, const char **argv, int *i) {
 	} else if (!strcmp(argv[(*i)], "--fs")) {
 		cam->vcamera_filesystem = argv[(*i) + 1];
 		(*i)++;
+	} else if (!strcmp(argv[(*i)], "--dump")) {
+		cam->comm_dump = fopen("COMM_DUMP", "wb");
 	} else if (!strcmp(argv[(*i)], "--sig")) {
 		(*i)++;
 		cam->sig = atoi(argv[(*i)]);

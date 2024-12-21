@@ -30,6 +30,7 @@ struct UsbThing {
 	/// @returns nonzero for error
 	int (*get_config_descriptor)(struct UsbThing *ctx, int devn, struct usb_config_descriptor *desc, int i);
 	/// @brief Write `length` bytes of the total config descriptor to `data`
+	/// @returns number of bytes written
 	int (*get_total_config_descriptor)(struct UsbThing *ctx, int devn, int i, void *data);
 	/// @returns nonzero for error
 	int (*get_interface_descriptor)(struct UsbThing *ctx, int devn, struct usb_interface_descriptor *desc, int i);
