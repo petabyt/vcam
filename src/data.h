@@ -11,8 +11,8 @@ int put_32bit_le(unsigned char *data, uint32_t x);
 int put_64bit_le(unsigned char *data, uint64_t x);
 int8_t get_i8bit_le(unsigned char *data);
 uint8_t get_8bit_le(unsigned char *data);
-uint16_t get_16bit_le(unsigned char *data);
-uint32_t get_32bit_le(unsigned char *data);
+uint16_t get_16bit_le(const unsigned char *data);
+uint32_t get_32bit_le(const unsigned char *data);
 
 // structure api inherited from camlib
 int ptp_write_unicode_string(char *dat, const char *string);

@@ -115,6 +115,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 		}
 	}
 
+	f->prop_buffer = malloc(10000);
+
 	if (f->transport == FUJI_FEATURE_WIRELESS_COMM || f->transport == FUJI_FEATURE_WIRELESS_TETHER || f->transport == FUJI_FEATURE_AUTOSAVE) {
 		fuji_register_opcodes(cam);
 		return vcam_fuji_setup(cam);
@@ -328,6 +330,27 @@ int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
+static void *d212_getvalue(vcam *cam, int *optional_length) {
+	uint8_t *buf = fuji(cam)->prop_buffer;
+	struct PtpFujiEvents *ev = (struct PtpFujiEvents *)buf;
+
+	// Pop all events and pack into fuji event structure
+	struct GenericEvent ev_info;
+	while (!ptp_pop_event(cam, &ev_info)) {
+		ev->events[ev->length].code = ev_info.code;
+		ev->events[ev->length].value = ev_info.value;
+		ev->length++;
+	}
+
+	(*optional_length) = 2 + (ev->length * 6);
+
+	return buf;
+}
+
+void fuji_register_d212(vcam *cam) {
+	vcam_register_prop_handlers(cam, PTP_DPC_FUJI_EventsList, NULL, d212_getvalue, NULL);
+}
+
 int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	vcam_log("Get property %X", ptp->params[0]);
@@ -399,7 +422,8 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-void fuji_accept_remote_ports(void);
+void fuji_accept_remote_ports(void); // fuji-server.c
+
 int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
@@ -435,6 +459,11 @@ int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	ptp_response(cam, PTP_RC_OK, 0);
 
 	return 0;
+}
+
+void cam_fuji_register_remote_props(vcam *cam) {
+	// PTP_DPC_FUJI_FilmSimulation
+	// ...
 }
 
 static int devinfo_add_prop(char *data, int length, int code, uint8_t *payload) {

@@ -27,27 +27,30 @@ int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_opensession_write(vcam *cam, ptpcontainer *ptp) {
-	if (vcam_check_param_count(cam, ptp, 1))return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
 	if (ptp->params[0] == 0) {
 		vcam_log_func(__func__, "session must not be 0, is %d", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
+
+	// If client is somehow abruptly handed connection from a host, it has no way of knowing previous transaction ID
+	cam->seqnr = ptp->seqnr; // transaction ID is chosen by initiator
+	cam->session = ptp->params[0];
+
 	if (cam->session) {
 		vcam_log_func(__func__, "session is already open");
 		ptp_response(cam, PTP_RC_SessionAlreadyOpened, 0);
 		return 1;
 	}
-	cam->seqnr = 0;
-	cam->session = ptp->params[0];
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
 
 int ptp_closesession_write(vcam *cam, ptpcontainer *ptp) {
-	if (vcam_check_param_count(cam, ptp, 0))return 1;
-	if (vcam_check_trans_id(cam, ptp))return 1;
+	if (vcam_check_param_count(cam, ptp, 0)) return 1;
+	if (vcam_check_trans_id(cam, ptp)) return 1;
 
 	if (!cam->session) {
 		vcam_log_func(__func__, "session is not open");
@@ -56,6 +59,10 @@ int ptp_closesession_write(vcam *cam, ptpcontainer *ptp) {
 	}
 	cam->session = 0;
 	ptp_response(cam, PTP_RC_OK, 0);
+
+	// TODO: Reset other per-session state here
+	cam->seqnr = 1;
+
 	return 1;
 }
 
@@ -932,12 +939,9 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 		return 1;
 	}
 
-#if 0
-	int prop_size = ptp_get_prop_size(data, desc->DataType);
-	if (len > prop_size) {
-		vcam_log("%d bytes copied over for property that is only %d bytes", len, prop_size);
-	}
-#endif
+	// TODO: Expand on these warnings
+	if (desc->DataType == PTP_TC_UINT32 && len != 4) vcam_log("BUG: Incorrect data sent for uint32");
+	if (desc->DataType == PTP_TC_UINT16 && len != 2) vcam_log("BUG: Incorrect data sent for uint16");
 
 	if (len == 0) {
 		ptp_response(cam, PTP_RC_GeneralError, 0);

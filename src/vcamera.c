@@ -172,13 +172,18 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length) {
 	}
 	if (prop == NULL) return NULL;
 	void *data;
+	int optional_len = -1;
 	if (prop->getvalue) {
-		data = prop->getvalue(cam);
+		data = prop->getvalue(cam, &optional_len);
 	} else {
 		data = prop->desc.value;
 	}
 	if (length != NULL) {
-		(*length) = ptp_get_prop_size(data, prop->desc.DataType);
+		if (optional_len != -1) {
+			(*length) = optional_len;
+		} else {
+			(*length) = ptp_get_prop_size(data, prop->desc.DataType);
+		}
 	}
 	return data;
 }
@@ -445,7 +450,7 @@ void vcam_process_output(vcam *cam) {
 		vcam_log_func(__func__, "expected CMD or DATA, but type was %d", ptp.type);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-		cam->nroutbulk -= ptp.size;
+		cam->nroutbulk -= (int)ptp.size;
 		return;
 	}
 
@@ -455,7 +460,7 @@ void vcam_process_output(vcam *cam) {
 		vcam_log_func(__func__, "OPCODE 0x%04x does not start with 0x1 or 0x9", ptp.code);
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		memmove(cam->outbulk, cam->outbulk + ptp.size, cam->nroutbulk - ptp.size);
-		cam->nroutbulk -= ptp.size;
+		cam->nroutbulk -= (int)ptp.size;
 		return;
 	}
 
@@ -678,7 +683,9 @@ vcam *vcam_init_standard(void) {
 
 	cam->last_cmd_timestamp = 0;
 
+	// blah blah
 	cam->battery = 50;
+	cam->exposurebias = 123;
 
 	ptp_register_standard_opcodes(cam);
 	ptp_register_standard_props(cam);
@@ -698,15 +705,21 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 			int rc = ptpip_generic_main(cam);
 			vcam_close(cam);
 			return rc;
-		} else {
-			return vcam_start_usbthing(cam, backend);
 		}
 	} else {
 		vcam_log("Invalid camera '%s'", name);
 		return -1;
 	}
 
-	return 0;
+	if (backend == VCAM_VHCI) {
+		return vcam_start_usbthing(cam, backend);
+	} else if (backend == VCAM_LIBUSB) {
+		return 0;
+	}
+
+	vcam_log("Unsupported backend");
+
+	return -1;
 }
 
 vcam *vcam_new(const char *name) {

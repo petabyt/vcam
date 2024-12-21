@@ -27,6 +27,8 @@ struct Fuji {
 	uint8_t internal_state;
 	/// @brief Number of images currently sent through the SEND MULTIPLE feature
 	int sent_images;
+
+	void *prop_buffer;
 };
 static inline struct Fuji *fuji(vcam *cam) { return cam->priv; }
 
@@ -62,5 +64,7 @@ int fuji_tether_connect(const char *ip, int port);
 void fuji_accept_remote_ports(void);
 
 int vcam_fuji_setup(vcam *cam);
+
+void fuji_register_d212(vcam *cam);
 
 #endif

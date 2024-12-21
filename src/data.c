@@ -190,11 +190,11 @@ int ptp_read_unicode_string(char *buffer, char *dat, int max) {
 
 // gPhoto2 API
 
-uint32_t get_32bit_le(unsigned char *data) {
+uint32_t get_32bit_le(const unsigned char *data) {
 	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
 }
 
-uint16_t get_16bit_le(unsigned char *data) {
+uint16_t get_16bit_le(const unsigned char *data) {
 	return data[0] | (data[1] << 8);
 }
 
@@ -263,7 +263,7 @@ char *get_string(unsigned char *data) {
 	x[len] = 0;
 
 	for (i = 0; i < len; i++)
-		x[i] = get_16bit_le(data + 1 + 2 * i);
+		x[i] = (char)get_16bit_le(data + 1 + 2 * i);
 
 	return x;
 }

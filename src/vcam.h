@@ -41,15 +41,22 @@ typedef struct vcam {
 	void *priv;
 	/// @brief Priv pointer for hardware layer (TCP/IP)
 	void *hw_priv;
+	/// @brief USB vid, ignored for tcp
 	uint16_t vendor_id;
+	/// @brief USB pid, ignored for tcp
 	uint16_t product_id;
+	/// @brief DeviceInfo.Model
 	char model[128];
+	/// @brief DeviceInfo.DeviceVersion
 	char version[128];
+	/// @brief DeviceInfo.SerialNumber
 	char serial[128];
+	/// @brief DeviceInfo.Manufacturer
 	char manufac[128];
+	/// @brief DeviceInfo.VendorExtensionDesc
 	char extension[128];
 
-	/// @brief NULL to use default IP
+	/// @brief Custom IP address for TCP, NULL to use default IP
 	char *custom_ip_addr;
 
 	/// @brief Optional PID of parent process, will signal it once PTP/IP is listening for connections
@@ -57,8 +64,11 @@ typedef struct vcam {
 
 	struct ptp_interrupt *first_interrupt;
 	struct ptp_dirent *first_dirent;
+
+	/// @note Internal counter for object list builder
 	uint32_t ptp_objectid;
 
+	/// @brief Path to folder to scan for object list
 	const char *vcamera_filesystem;
 
 	unsigned char *inbulk;
@@ -73,8 +83,9 @@ typedef struct vcam {
 	struct PtpOpcodeList *opcodes;
 	struct PtpPropList *props;
 
-	// Runtime data vars
+	/// @brief Device implementation can set to 1 to force backend to safely kill the connection
 	int next_cmd_kills_connection;
+
 	int exposurebias;
 	unsigned int shutterspeed;
 	unsigned int fnumber;
@@ -95,9 +106,11 @@ vcam *vcam_new(const char *name);
 /// @brief Called by variant CLI parser to handle generic vcam parameters
 int vcam_parse_args(vcam *cam, int argc, const char **argv, int *i);
 
-
+/// @brief Read bytes from internal buffer (R->I)
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
+/// @brief Write bytes into internal buffer for processing (I->R)
 int vcam_write(vcam *cam, int ep, const unsigned char *data, int bytes);
+/// @brief Poll interrupt endpoint
 int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout);
 
 /// @brief Register an opcode
@@ -170,22 +183,31 @@ struct PtpPropDesc {
 	uint16_t DevicePropertyCode;
 	uint16_t DataType;
 	uint8_t GetSet;
+	/// @note If NULL, data of size 0 will be assumed
 	void *factory_default_value;
+	/// @note If NULL, data of size 0 will be assumed
 	void *value;
 
+	/// @note If NULL, data of size 0 will be assumed
 	void *avail;
 	int avail_cnt;
 
 	uint8_t FormFlag;
+	/// @note If NULL, data of size 0 will be assumed
 	void *form_min;
+	/// @note If NULL, data of size 0 will be assumed
 	void *form_max;
+	/// @note If NULL, data of size 0 will be assumed
 	void *form_step;
 };
 
-// TODO: This should be refactored to be on_getdesc/etc. There is no need to allocate an entire structure every single time
-// GetDevicePropDesc is called.
-typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *);
-typedef void *ptp_prop_getvalue(vcam *cam);
+/// @brief Set the prop description entries.
+/// If handlers are used, then the `value` field is not read. DefaultValue will be though.
+typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *desc);
+/// @brief Returns pointer to property data, the caller will assume length based on DataType
+/// @param optional_length Set to -1 by caller, caller assumes custom property value length if not -1 on return
+typedef void *ptp_prop_getvalue(vcam *cam, int *optional_length);
+/// @brief Implementation must assume data length from data type
 typedef int ptp_prop_setvalue(vcam *cam, const void *data);
 
 struct PtpPropList {

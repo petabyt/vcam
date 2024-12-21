@@ -221,19 +221,9 @@ int ptp_datetime_setvalue(vcam *cam, void *data, int length) {
 }
 #endif
 
-int getdesc_d406(vcam *cam, struct PtpPropDesc *desc) {
-	desc->DataType = PTP_TC_UINT16ARRAY;
-	return 0;
-}
-void *getvalue_d406(vcam *cam) {
-	return NULL;
-}
-int setvalue_d406(vcam *cam, const void *data) {
-	return 0;
-}
-
 void ptp_register_mtp_props(vcam *cam) {
 	{
+		// This will be set by client, so we don't need to bother setting a value
 		struct PtpPropDesc desc;
 		init_prop(&desc);
 		desc.DevicePropertyCode = PTP_DPC_MTP_SessionInitiatorInfo;
