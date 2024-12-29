@@ -239,7 +239,7 @@ void ptp_register_mtp_props(vcam *cam) {
 		init_prop(&desc);
 		desc.DevicePropertyCode = PTP_DPC_MTP_PerceivedDeviceType;
 		desc.DataType = PTP_TC_UINT32;
-		desc.GetSet = PTP_AC_Read;
+		desc.GetSet = PTP_AC_ReadWrite;
 		ptp_write_u32(desc.factory_default_value, 1);
 		ptp_write_u32(desc.value, 1); // still image/video camera
 		desc.FormFlag = 0x0;

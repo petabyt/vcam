@@ -7,8 +7,8 @@ include pi.mak
 # WiFi hardware for spoofing (requires AP support)
 WIFI_DEV ?= wlp0s20f3
 
-VCAM_CORE += src/log.o src/vcamera.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fuji_server.o src/ptpip.o
-VCAM_CORE += src/canon_props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o src/usbthing.o
+VCAM_CORE += src/log.o src/vcamera.o src/pack.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fuji_server.o src/ptpip.o
+VCAM_CORE += src/canon_props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o src/fuji_fs.o src/usbthing.o
 VCAM_CORE += usb/device.o usb/usbstring.o usb/vhci.o
 
 # include libusb-1.0 headers for .so
@@ -39,7 +39,7 @@ install: vcam libusb-vcam.so
 	sudo cp libusb-vcam.so /usr/lib/
 
 -include src/*.d
--include cpp/*.d
+-include usb/*.d
 %.o: %.c $(H)
 	$(CC) -MMD -c $< $(CFLAGS) -o $@
 
@@ -47,12 +47,8 @@ install: vcam libusb-vcam.so
 	g++ -MMD -c $< $(CFLAGS) -o $@
 
 clean:
-	$(RM) main *.o *.so libgphoto2_port/*.o gphoto2/*.o *.out src/*.o tcp libgphoto2_port/*.o src/*.d usb/*.o usb/*.d
-	$(RM) fuji canon vcam vcam-otg vcam2
-
-ln:
-	ln ../camlib/src/ptp.h src/ptp.h
-	ln ../camlib/src/cl_data.h src/cl_data.h
+	$(RM) *.so *.out fuji canon vcam vcam-otg vcam2 temp
+	$(RM) $(VCAM_CORE:.o=.d) $(SO_FILES:.o=.d) $(VCAM_CORE) $(SO_FILES)
 
 # Wireless AP networking Hacks
 

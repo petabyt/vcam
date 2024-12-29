@@ -13,7 +13,6 @@
 
 struct Priv {
 	int sockfd;
-
 	uint8_t *buffer;
 	size_t buffer_length;
 };
@@ -29,7 +28,7 @@ static void hexdump(void *buffer, int size) {
 	printf("\n");
 }
 
-static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_header *header) {
+static int handle_submit(struct UsbThing *ctx, int sockfd, struct usbip_header *header) {
 	int resp_len = 0;
 	uint32_t len = bswap_32(header->u.cmd_submit.transfer_buffer_length);
 	uint32_t dir = bswap_32(header->base.direction);
@@ -48,16 +47,19 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 	resp.u.ret_submit.number_of_packets = bswap_32(0);
 	resp.u.ret_submit.error_count = bswap_32(0);
 
+	uint8_t *buffer = NULL;
+
 	if (ep == 0) {
+		buffer = malloc(65535);
 		// Handle control request payloads
 		int payload_size = 0;
 		if (dir == 0 && len != 0) {
-			int rc = recv(p->sockfd, &header->u.cmd_submit.setup[8], len, 0);
+			int rc = recv(sockfd, &header->u.cmd_submit.setup[8], len, 0);
 			if (rc != len) return -1;
 			payload_size += (int)len;
 		}
 
-		int rc = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8 + payload_size, p->buffer);
+		int rc = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8 + payload_size, buffer);
 		if (rc < 0) return rc;
 		resp_len = rc;
 		if (dir == 0 && len != 0 && resp_len != 0) {
@@ -66,31 +68,29 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 		}
 		resp.u.ret_submit.actual_length = bswap_32(resp_len);
 	} else if (dir == 1) {
-		if (len > 1024) {
-			printf("Too large of a packet requested\n");
-			hexdump(header, 48);
-			abort();
-		}
+		buffer = malloc(len);
+		assert(buffer != NULL);
 
-		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, p->buffer, (int)len);
+		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, buffer, (int)len);
 		if (resp_len == -1) {
 			return 0;
 		}
 		resp.u.ret_submit.actual_length = bswap_32(resp_len);
 	} else if (dir == 0) {
-		if (len > 1024) {
-			printf("Too large of a packet requested\n");
-			hexdump(header, 48);
-			abort();
-		}
+		buffer = malloc(len);
+		assert(buffer != NULL);
 
-		int rc = recv(p->sockfd, header->u.cmd_submit.transfer_buffer, len, 0);
-		if ((uint32_t)rc != len) {
-			printf("Expected %d, got %d\n", len, rc);
-			abort();
+		int read = 0;
+		for (int i = 0; i < 10; i++) {
+			printf("Read loop");
+			int rc = recv(sockfd, buffer + read, len - read, 0);
+			assert(rc >= 0);
+			read += rc;
+			if (read == len) break;
 		}
+		assert(read == len);
 
-		ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, header->u.cmd_submit.transfer_buffer, (int)len);
+		ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, buffer, (int)len);
 		resp_len = 0;
 		resp.u.ret_submit.actual_length = bswap_32(len);
 	} else {
@@ -98,19 +98,17 @@ static int handle_submit(struct UsbThing *ctx, struct Priv *p, struct usbip_head
 		abort();
 	}
 
-	send(p->sockfd, &resp, 0x30, 0);
-	send(p->sockfd, p->buffer, resp_len, 0);
+	send(sockfd, &resp, 0x30, 0);
+	if (resp_len && buffer != NULL)
+		send(sockfd, buffer, resp_len, 0);
+
+	if (buffer != NULL)
+		free(buffer);
+
 	return 0;
 }
 
 int usbt_vhci_init(struct UsbThing *ctx) {
-	struct Priv p = {0};
-
-	// Should be the max size of a usb3 control packet
-	uint8_t buffer[5000];
-	p.buffer = buffer;
-	p.buffer_length = 5000;
-
 	const char *attach_path = "/sys/devices/platform/vhci_hcd.0/attach";
 
 	int fd = open(attach_path, O_WRONLY);
@@ -148,7 +146,6 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 	close(sockets[1]);
 
 	int sockfd = sockets[0];
-	p.sockfd = sockfd;
 
 	while (1) {
 		char packet[512] = {0};
@@ -168,7 +165,7 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 		uint32_t command = bswap_32(header->base.command);
 		switch (command) {
 		case USBIP_CMD_SUBMIT:
-			rc = handle_submit(ctx, &p, header);
+			rc = handle_submit(ctx, sockfd, header);
 			if (rc) goto exit;
 			break;
 		case USBIP_CMD_UNLINK: {

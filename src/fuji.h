@@ -12,7 +12,6 @@ struct Fuji {
 	int remote_version;
 	int remote_get_object_version;
 
-	// === Fujifilm runtime vars ===
 	/// @brief Current value for PTP_PC_FUJI_ClientState
 	int client_state;
 	/// @brief Current value for PTP_PC_FUJI_CameraState
@@ -24,11 +23,17 @@ struct Fuji {
 	int compress_small;
 	int no_compressed;
 	/// @brief Internal enum for what the camera is currently doing
-	uint8_t internal_state;
+	int internal_state;
 	/// @brief Number of images currently sent through the SEND MULTIPLE feature
 	int sent_images;
 
-	void *prop_buffer;
+	int rawconv_jpeg_handle;
+	struct PtpObjectInfo *rawconv_jpeg_object_info;
+	char *rawconv_jpeg_path;
+
+	char *settings_file_path;
+
+	char *rawconv_raf_path;
 };
 static inline struct Fuji *fuji(vcam *cam) { return cam->priv; }
 
@@ -66,5 +71,7 @@ void fuji_accept_remote_ports(void);
 int vcam_fuji_setup(vcam *cam);
 
 void fuji_register_d212(vcam *cam);
+
+int vcam_fuji_register_rawconv_fs(vcam *cam);
 
 #endif

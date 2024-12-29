@@ -36,14 +36,16 @@ int ptp_opensession_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	// If client is somehow abruptly handed connection from a host, it has no way of knowing previous transaction ID
-	cam->seqnr = ptp->seqnr; // transaction ID is chosen by initiator
-	cam->session = ptp->params[0];
+	cam->seqnr = ptp->seqnr; // transaction ID is chosen by initiator as per spec
 
 	if (cam->session) {
-		vcam_log_func(__func__, "session is already open");
+		vcam_log_func(__func__, "session is already open %d", cam->session);
 		ptp_response(cam, PTP_RC_SessionAlreadyOpened, 0);
 		return 1;
 	}
+
+	cam->session = ptp->params[0];
+
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
@@ -81,8 +83,10 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	if ((ptp->seqnr != 0) && (ptp->seqnr != cam->seqnr)) {
 		/* not clear if normal cameras react like this */
 		vcam_log_func(__func__, "seqnr %d was sent, expected was %d", ptp->seqnr, cam->seqnr);
+#if 0
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		return 1;
+#endif
 	}
 	data = malloc(2000);
 
@@ -906,6 +910,7 @@ int ptp_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	void *prop_data = vcam_get_prop_data(cam, (int)ptp->params[0], &length);
 	if (prop_data == NULL) {
 		vcam_log_func(__func__, "deviceprop 0x%04x not found", ptp->params[0]);
+		//ptp_senddata(cam, ptp->code, NULL, 0); // for fuji hack
 		ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
 		return 1;
 	}

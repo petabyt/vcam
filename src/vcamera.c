@@ -52,7 +52,7 @@ int vcam_generic_send_file(char *path, vcam *cam, int file_of, ptpcontainer *ptp
 	sprintf(new, "%s/%s", PWD, path);
 	FILE *file = fopen(new, "rb");
 	if (file == NULL) {
-		vcam_log("vcam_generic_send_file: File %s not found", path);
+		vcam_panic("vcam_generic_send_file: File %s not found", path);
 	}
 
 	fseek(file, 0, SEEK_END);
@@ -94,13 +94,13 @@ int vcam_register_opcode(vcam *cam, int code, int (*write)(vcam *cam, ptpcontain
 }
 
 // TODO: Add a 'void *param' parameter that will be passed to handlers
-int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue) {
+int vcam_register_prop_handlers(vcam *cam, int code, struct PtpPropDesc *desc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue) {
 	cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 
 	struct PtpProp *prop = &cam->props->handlers[cam->props->length];
 	memset(prop, 0, sizeof(struct PtpProp));
 	prop->code = code;
-	prop->getdesc = getdesc;
+	memcpy(&prop->desc, desc, sizeof(struct PtpPropDesc));
 	prop->getvalue = getvalue;
 	prop->setvalue = setvalue;
 
@@ -141,7 +141,7 @@ int vcam_set_prop_data(vcam *cam, int code, void *data) {
 	}
 	if (prop == NULL) return -1;
 	if (prop->setvalue) {
-		return prop->setvalue(cam, data);
+		return prop->setvalue(cam, &prop->desc, data);
 	}
 	if (prop->desc.value != NULL)
 		free(prop->desc.value);
@@ -166,7 +166,6 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
 	if (prop->getdesc) {
 		prop->getdesc(cam, &prop->desc);
 	}
-	// TODO: This will be blank for handlers-only implementation if getdesc is NULL
 	return &prop->desc;
 }
 
@@ -178,21 +177,18 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length) {
 		prop = NULL;
 	}
 	if (prop == NULL) return NULL;
-	void *data;
 	int optional_len = -1;
 	if (prop->getvalue) {
-		data = prop->getvalue(cam, &optional_len);
-	} else {
-		data = prop->desc.value;
+		prop->getvalue(cam, &prop->desc, &optional_len);
 	}
 	if (length != NULL) {
 		if (optional_len != -1) {
 			(*length) = optional_len;
 		} else {
-			(*length) = ptp_get_prop_size(data, prop->desc.DataType);
+			(*length) = ptp_get_prop_size(prop->desc.value, prop->desc.DataType);
 		}
 	}
-	return data;
+	return prop->desc.value;
 }
 
 int vcam_set_prop_avail(vcam *cam, int code, void *list, int cnt) {
@@ -232,7 +228,8 @@ void ptp_senddata(vcam *cam, uint16_t code, unsigned char *data, int bytes) {
 	put_16bit_le(offset + 4, 0x2);
 	put_16bit_le(offset + 6, code);
 	put_32bit_le(offset + 8, cam->seqnr);
-	memcpy(offset + 12, data, bytes);
+	if (bytes)
+		memcpy(offset + 12, data, bytes);
 }
 
 void ptp_response(vcam *cam, uint16_t code, int nparams, ...) {

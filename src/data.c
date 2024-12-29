@@ -138,12 +138,14 @@ int ptp_write_string(uint8_t *dat, const char *string) {
 	int of = 0;
 
 	uint32_t length = strlen(string);
-	of += ptp_write_u8(dat + of, length);
+	of += ptp_write_u8(dat + of, length + 1);
 
 	for (int i = 0; i < length; i++) {
 		of += ptp_write_u8(dat + of, string[i]);
 		of += ptp_write_u8(dat + of, '\0');
 	}
+
+	of += ptp_write_u16(dat + of, 0x0);
 
 	return of;
 }

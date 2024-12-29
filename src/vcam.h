@@ -203,14 +203,14 @@ struct PtpPropDesc {
 	void *form_step;
 };
 
-/// @brief Set the prop description entries.
-/// If handlers are used, then the `value` field is not read. DefaultValue will be though.
+/// @brief Optional function to call on a getdevpropdesc request
 typedef int ptp_prop_getdesc(vcam *cam, struct PtpPropDesc *desc);
-/// @brief Returns pointer to property data, the caller will assume length based on DataType
+/// @brief Updates The data in desc->value on a getdevpropvalue request
 /// @param optional_length Set to -1 by caller, caller assumes custom property value length if not -1 on return
-typedef void *ptp_prop_getvalue(vcam *cam, int *optional_length);
-/// @brief Implementation must assume data length from data type
-typedef int ptp_prop_setvalue(vcam *cam, const void *data);
+typedef int ptp_prop_getvalue(vcam *cam, struct PtpPropDesc *desc, int *optional_length);
+/// @brief Ran on a setdevpropvalue request, impl can either write new data to desc->value or do nothing
+/// @note Implementation must assume data length from data type
+typedef int ptp_prop_setvalue(vcam *cam, struct PtpPropDesc *desc, const void *data);
 
 struct PtpPropList {
 	int length;
@@ -231,7 +231,7 @@ struct PtpPropList {
 /// @brief Register a property with handlers
 /// @note Handlers must not use static data since vcam can run with concurrent cameras
 /// @note Property info should be handled by the device implementation
-int vcam_register_prop_handlers(vcam *cam, int code, ptp_prop_getdesc *getdesc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue);
+int vcam_register_prop_handlers(vcam *cam, int code, struct PtpPropDesc *desc, ptp_prop_getvalue *getvalue, ptp_prop_setvalue *setvalue);
 
 /// @brief Register a property from description struct
 int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc);

@@ -258,7 +258,9 @@ enum FujiStates {
 #define PTP_DPC_FUJI_FocusLength			0xD17D
 #define PTP_DPC_FUJI_CropAreaFrameInfo			0xD17E
 #define PTP_DPC_FUJI_ResetSetting			0xD17F /* also clean sensor? */
+#define PTP_DPC_FUJI_UnknownD183			0xD183
 #define PTP_DPC_FUJI_IOPCode				0xD184
+#define PTP_DPC_FUJI_RawConvProfile			0xD185
 #define PTP_DPC_FUJI_TetherRawConditionCode		0xD186
 #define PTP_DPC_FUJI_TetherRawCompatibilityCode		0xD187
 #define PTP_DPC_FUJI_LightTune				0xD200

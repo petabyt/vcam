@@ -69,8 +69,6 @@ struct usbip_header_cmd_submit {
 
 	/* set setup packet data for a CTRL request */
 	uint8_t	setup[8];
-
-	uint8_t transfer_buffer[0];
 };
 
 /*

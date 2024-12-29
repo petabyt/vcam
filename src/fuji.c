@@ -61,6 +61,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 		f->remote_version = 0x00020006; // fuji sets to 2000C
 		f->remote_get_object_version = 4;
 		cam->product_id = 0x2d7;
+		static char *path = "bin/fuji/backups/FUJIFILM_X-H1_20240327_2218.DAT";
+		f->settings_file_path = path;
 	} else if (!strcmp(name, "fuji_x_dev")) {
 		strcpy(cam->model, "X-DEV");
 		f->image_get_version = 3;
@@ -112,8 +114,6 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 			return -1;
 		}
 	}
-
-	f->prop_buffer = malloc(10000);
 
 	if (f->transport == FUJI_FEATURE_WIRELESS_COMM || f->transport == FUJI_FEATURE_WIRELESS_TETHER || f->transport == FUJI_FEATURE_AUTOSAVE) {
 		fuji_register_opcodes(cam);
@@ -328,12 +328,13 @@ int fuji_send_events(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-static void *d212_getvalue(vcam *cam, int *optional_length) {
-	uint8_t *buf = fuji(cam)->prop_buffer;
+int d212_getvalue(vcam *cam, struct PtpPropDesc *desc, int *optional_length) {
+	uint8_t *buf = desc->value;
 	struct PtpFujiEvents *ev = (struct PtpFujiEvents *)buf;
 
 	// Pop all events and pack into fuji event structure
 	struct GenericEvent ev_info;
+	ev->length = 0;
 	while (!ptp_pop_event(cam, &ev_info)) {
 		ev->events[ev->length].code = ev_info.code;
 		ev->events[ev->length].value = ev_info.value;
@@ -342,11 +343,15 @@ static void *d212_getvalue(vcam *cam, int *optional_length) {
 
 	(*optional_length) = 2 + (ev->length * 6);
 
-	return buf;
+	return 0;
 }
 
 void fuji_register_d212(vcam *cam) {
-	vcam_register_prop_handlers(cam, PTP_DPC_FUJI_EventsList, NULL, d212_getvalue, NULL);
+	struct PtpPropDesc desc = {0};
+	desc.DataType = PTP_TC_STRING; // Nonstandard
+	desc.GetSet = PTP_AC_Read;
+	desc.value = malloc(512);
+	vcam_register_prop_handlers(cam, PTP_DPC_FUJI_EventsList, &desc, d212_getvalue, NULL);
 }
 
 int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
