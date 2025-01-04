@@ -4,35 +4,24 @@ all: libusb-vcam.so vcam
 
 include pi.mak
 
-# WiFi hardware for spoofing (requires AP support)
-WIFI_DEV ?= wlp0s20f3
-
-VCAM_CORE += src/log.o src/vcamera.o src/pack.o src/packet.o src/ops.o src/canon/canon.o src/fuji.o src/fuji_server.o src/ptpip.o
-VCAM_CORE += src/canon/props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o src/fuji_fs.o src/usbthing.o
+VCAM_CORE += src/log.o src/vcamera.o src/pack.o src/packet.o src/ops.o src/canon/canon.o src/fuji/fuji.o src/fuji/server.o src/ptpip.o
+VCAM_CORE += src/canon/props.o src/data.o src/props.o src/fuji/ssdp.o src/socket.o src/fuji/usb.o src/fuji/fs.o src/usbthing.o
 VCAM_CORE += usb/device.o usb/usbstring.o usb/vhci.o
 
-# include libusb-1.0 headers for .so
-SO_CFLAGS := $(shell pkg-config --cflags libusb-1.0)
 SO_FILES := $(VCAM_CORE) usb/libusb.o
-
 VCAM_FILES := $(VCAM_CORE) src/main.o
-VCAM_OTG_FILES := $(VCAM_CORE) src/otg.o
 
-CFLAGS += -g -I. -Isrc/ -Iusb/ -L. -D HAVE_LIBEXIF -Wall -fPIC -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3
+CFLAGS := $(shell pkg-config --cflags libusb-1.0)
+CFLAGS += -g -I. -Isrc/ -Iusb/ -Isrc/fuji/ -Isrc/canon/ -L. -D HAVE_LIBEXIF -Wall -fPIC -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3
 LDFLAGS += -L. -Wl,-rpath=.
-
 # Used to access bin/
 CFLAGS += '-D PWD="$(shell pwd)"'
 
-# Is this actually needed by GCC?
-$(SO_FILES): CFLAGS += $(SO_CFLAGS)
-
-# generic libusb.so Canon EOS Device
 libusb-vcam.so: $(SO_FILES)
-	$(CC) -g -ggdb $(SO_FILES) $(SO_CFLAGS) -lexif -shared -o libusb-vcam.so
+	$(CC) -g -ggdb $(SO_FILES) -lexif -shared -o libusb-vcam.so
 
 vcam: $(VCAM_FILES)
-	$(CC)  -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif 
+	$(CC) -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif 
 
 install: vcam libusb-vcam.so
 	cp vcam /usr/bin/
@@ -40,17 +29,22 @@ install: vcam libusb-vcam.so
 
 -include src/*.d
 -include usb/*.d
-%.o: %.c $(H)
+-include fuji/*.d
+-include canon/*.d
+%.o: %.c 
 	$(CC) -MMD -c $< $(CFLAGS) -o $@
 
-%.o: %.cpp $(H)
+%.o: %.cpp
 	g++ -MMD -c $< $(CFLAGS) -o $@
 
 clean:
-	$(RM) *.so *.out fuji canon vcam vcam-otg vcam2 temp
+	$(RM) *.so *.out vcam temp
 	$(RM) $(VCAM_CORE:.o=.d) $(SO_FILES:.o=.d) $(VCAM_CORE) $(SO_FILES)
 
 # Wireless AP networking Hacks
+
+# WiFi hardware for spoofing (requires AP support)
+WIFI_DEV ?= wlp0s20f3
 
 SSID ?= FUJIFILM-X30-ABCD
 
