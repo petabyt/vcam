@@ -92,9 +92,6 @@ int prop_d18c_getvalue(vcam *cam, struct PtpPropDesc *desc, int *optional_length
 
 int fuji_usb_init_cam(vcam *cam) {
 	struct Fuji *f = fuji(cam);
-	f->rawconv_raf_path = "temp/raw.raf";
-
-	mkdir("temp", 775);
 
 	ptp_register_mtp_props(cam);
 	ptp_register_mtp_opcodes(cam);
@@ -160,8 +157,6 @@ int fuji_usb_init_cam(vcam *cam) {
 		add_prop_u32(cam, PTP_DPC_FUJI_USBMode, 6);
 		{
 			uint8_t *d = malloc(100);
-
-			// FF129506 is image processor?
 
 			ptp_write_string(d, "FF129506,FA129506");
 			struct PtpPropDesc desc = {0};

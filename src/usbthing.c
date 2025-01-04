@@ -210,7 +210,7 @@ static int urb_splitter(struct UsbThing *ctx, int devn, int ep, void *data, int 
 
 static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
 	if (ep == 0x2) {
-		vcam_log("Passing h->d to vcam");
+		//vcam_log("Passing h->d to vcam %d", len);
 		return vcam_write(get_cam(ctx, devn), ep, (const unsigned char *)data, len);
 	} else if (ep == 0x81) {
 		vcam_log("Reading bulk d->h to vcam");
@@ -232,7 +232,7 @@ void usbt_user_init(struct UsbThing *ctx) {
 		ctx->priv_impl = malloc(sizeof(struct Priv));
 		struct Priv *priv = (struct Priv *)ctx->priv_impl;
 		priv->cam[0] = vcam_new("canon_1300d");
-		priv->cam[1] = vcam_fuji_new("fuji_x_a2", "--rawconv");
+		priv->cam[1] = vcam_fuji_new("fuji_x_h1", "--rawconv");
 		ctx->n_devices = 2;
 	}
 	ctx->get_string_descriptor = usb_get_string;

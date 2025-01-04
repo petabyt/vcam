@@ -132,7 +132,7 @@ int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc) {
 	return 0;
 }
 
-int vcam_set_prop_data(vcam *cam, int code, void *data) {
+int vcam_set_prop_data(vcam *cam, int code, void *data, int length) {
 	struct PtpProp *prop = NULL;
 	for (int i = 0; i < cam->props->length; i++) {
 		prop = &cam->props->handlers[i];
@@ -145,14 +145,27 @@ int vcam_set_prop_data(vcam *cam, int code, void *data) {
 	}
 	if (prop->desc.value != NULL)
 		free(prop->desc.value);
-	int size = ptp_get_prop_size(data, prop->desc.DataType);
-	prop->desc.value = malloc(size);
-	memcpy(prop->desc.value, data, size);
+	prop->desc.value = malloc(length);
+	memcpy(prop->desc.value, data, length);
 	return 0;
 }
 
 int vcam_set_prop(vcam *cam, int code, uint32_t data) {
-	return vcam_set_prop_data(cam, code, &data);
+	return vcam_set_prop_data(cam, code, &data, 4);
+}
+
+int vcam_get_prop_size(vcam *cam, int code) {
+	struct PtpProp *prop = NULL;
+	for (int i = 0; i < cam->props->length; i++) {
+		prop = &cam->props->handlers[i];
+		if (prop->code == code) break;
+		prop = NULL;
+	}
+	if (prop == NULL) return -1;
+	if (prop->desc.DataType == PTP_TC_UNDEF) {
+		return prop->desc.value_length;
+	}
+	return ptp_get_prop_size(prop->desc.value, prop->desc.DataType);
 }
 
 struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code) {
@@ -185,7 +198,11 @@ void *vcam_get_prop_data(vcam *cam, int code, int *length) {
 		if (optional_len != -1) {
 			(*length) = optional_len;
 		} else {
-			(*length) = ptp_get_prop_size(prop->desc.value, prop->desc.DataType);
+			if (prop->desc.DataType == PTP_TC_UNDEF) {
+				(*length) = prop->desc.value_length;
+			} else {
+				(*length) = ptp_get_prop_size(prop->desc.value, prop->desc.DataType);
+			}
 		}
 	}
 	return prop->desc.value;

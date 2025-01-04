@@ -181,14 +181,19 @@ union PtpPropValue {
 	int64_t i64;
 };
 
+/// @todo field for optional override value length
 struct PtpPropDesc {
 	uint16_t DevicePropertyCode;
 	uint16_t DataType;
 	uint8_t GetSet;
+
 	/// @note If NULL, data of size 0 will be assumed
 	void *factory_default_value;
 	/// @note If NULL, data of size 0 will be assumed
 	void *value;
+
+	/// @brief Length used for value if DataType is PTP_TC_UNDEF
+	int value_length;
 
 	/// @note If NULL, data of size 0 will be assumed
 	void *avail;
@@ -244,9 +249,10 @@ struct PtpPropDesc *vcam_get_prop_desc(vcam *cam, int code);
 /// @note Returned value is not allocated
 void *vcam_get_prop_data(vcam *cam, int code, int *length);
 
+int vcam_get_prop_size(vcam *cam, int code);
+
 /// @brief Set current value for prop
-/// @note Assumes length of data through the data type of said prop
-int vcam_set_prop_data(vcam *cam, int code, void *data);
+int vcam_set_prop_data(vcam *cam, int code, void *data, int length);
 
 /// @brief Set the value of a property - up to 32 bits
 int vcam_set_prop(vcam *cam, int code, uint32_t data);

@@ -29,11 +29,13 @@ struct Fuji {
 
 	int rawconv_jpeg_handle;
 	struct PtpObjectInfo *rawconv_jpeg_object_info;
-	char *rawconv_jpeg_path;
+	void *rawconv_jpeg_buffer;
+	size_t rawconv_jpeg_length;
+
+	void *rawconv_raf_buffer;
+	size_t rawconv_raf_length;
 
 	char *settings_file_path;
-
-	char *rawconv_raf_path;
 };
 static inline struct Fuji *fuji(vcam *cam) { return cam->priv; }
 

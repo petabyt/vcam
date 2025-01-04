@@ -1,0 +1,3 @@
+[submodule "src/fp"]
+	path = src/fp
+	url = git@github.com:petabyt/fp.git

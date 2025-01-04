@@ -975,7 +975,7 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 		return 1;
 	}
 
-	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data);
+	int rc = vcam_set_prop_data(cam, (int)ptp->params[0], data, (int)len);
 	if (rc) {
 		if (rc < 0) {
 			ptp_response(cam, PTP_RC_GeneralError, 0);

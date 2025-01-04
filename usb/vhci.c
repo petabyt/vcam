@@ -82,7 +82,7 @@ static int handle_submit(struct UsbThing *ctx, int sockfd, struct usbip_header *
 
 		int read = 0;
 		for (int i = 0; i < 10; i++) {
-			printf("Read loop");
+			printf("Trying again...\n");
 			int rc = recv(sockfd, buffer + read, len - read, 0);
 			assert(rc >= 0);
 			read += rc;

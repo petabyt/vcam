@@ -7,8 +7,8 @@ include pi.mak
 # WiFi hardware for spoofing (requires AP support)
 WIFI_DEV ?= wlp0s20f3
 
-VCAM_CORE += src/log.o src/vcamera.o src/pack.o src/packet.o src/ops.o src/canon.o src/fuji.o src/fuji_server.o src/ptpip.o
-VCAM_CORE += src/canon_props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o src/fuji_fs.o src/usbthing.o
+VCAM_CORE += src/log.o src/vcamera.o src/pack.o src/packet.o src/ops.o src/canon/canon.o src/fuji.o src/fuji_server.o src/ptpip.o
+VCAM_CORE += src/canon/props.o src/data.o src/props.o src/fujissdp.o src/socket.o src/fuji_usb.o src/fuji_fs.o src/usbthing.o
 VCAM_CORE += usb/device.o usb/usbstring.o usb/vhci.o
 
 # include libusb-1.0 headers for .so
@@ -35,8 +35,8 @@ vcam: $(VCAM_FILES)
 	$(CC)  -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif 
 
 install: vcam libusb-vcam.so
-	sudo cp vcam /usr/bin/
-	sudo cp libusb-vcam.so /usr/lib/
+	cp vcam /usr/bin/
+	cp libusb-vcam.so /usr/lib/
 
 -include src/*.d
 -include usb/*.d

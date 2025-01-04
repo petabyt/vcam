@@ -192,7 +192,7 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 		cnt += ptp_write_u32(buf + cnt, 16);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_PropValueChanged);
 		cnt += ptp_write_u32(buf + cnt, p->code);
-		int prop_size = ptp_get_prop_size(p->desc.value, p->desc.DataType);
+		int prop_size = vcam_get_prop_size(cam, p->code);
 		memcpy(buf + cnt, p->desc.value, prop_size);
 		cnt += prop_size;
 	}
