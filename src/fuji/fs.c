@@ -49,6 +49,7 @@ static int add_rawconv_jpeg(struct Fuji *f) {
 
 	f->rawconv_jpeg_handle = 5;
 	f->rawconv_jpeg_object_info = oi;
+	f->rawconv_jpeg_path = "bin/fuji/jpeg-compressed.jpg";
 
 	return 0;
 }
@@ -156,6 +157,12 @@ static int ptp_fuji_getobject_write(vcam *cam, ptpcontainer *ptp) {
 
 	if (ptp->params[0] == 0) {
 		vcam_generic_send_file(fuji(cam)->settings_file_path, cam, 0, ptp);
+	} else if (ptp->params[0] == fuji(cam)->rawconv_jpeg_handle) {
+		assert(fuji(cam)->rawconv_jpeg_path);
+		vcam_generic_send_file(fuji(cam)->rawconv_jpeg_path, cam, 0, ptp);
+	} else {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
 	}
 
 	ptp_response(cam, PTP_RC_OK, 0);
@@ -245,7 +252,7 @@ static int ptp_fuji_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 	int handle = (int)ptp->params[0];
 
 	struct Fuji *f = fuji(cam);
-	if (f->rawconv_jpeg_handle == handle) {
+	if (handle == f->rawconv_jpeg_handle) {
 		f->rawconv_jpeg_handle = 0;
 		f->rawconv_jpeg_object_info = NULL;
 	} else {
@@ -267,8 +274,28 @@ int vcam_fuji_register_rawconv_fs(vcam *cam) {
 	vcam_register_opcode(cam, PTP_OC_SendObject, ptp_fuji_sendobject_write, ptp_fuji_sendobject_write_data);
 	vcam_register_opcode(cam, PTP_OC_DeleteObject, ptp_fuji_deleteobject_write, NULL);
 
+	{
+		struct PtpPropDesc desc = {0};
+		FILE *file = fopen(PWD "/bin/fuji/xh1_d185_initial.bin", "rb");
+		if (file == NULL) {
+			vcam_panic("File not found");
+		}
+
+		fseek(file, 0, SEEK_END);
+		long file_size = ftell(file);
+		fseek(file, 0, SEEK_SET);
+
+		char *buffer = malloc(file_size);
+		fread(buffer, 1, file_size, file);
+		fclose(file);
+
+		desc.DataType = PTP_TC_UNDEF;
+		desc.value = buffer;
+		desc.value_length = file_size;
+		vcam_register_prop(cam, 0xd185, &desc);
+	}
 	struct PtpPropDesc desc = {0};
-	vcam_register_prop_handlers(cam, 0xd185, &desc, prop_d185_getvalue, prop_d185_setvalue);
+	//vcam_register_prop_handlers(cam, 0xd185, &desc, prop_d185_getvalue, prop_d185_setvalue);
 	vcam_register_prop_handlers(cam, 0xd183, &desc, NULL, prop_d183_setvalue);
 
 	// These have been around since 2011

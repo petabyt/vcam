@@ -188,19 +188,26 @@ static int get_bos_descriptor(struct UsbThing *ctx, int devn, struct usb_bos_des
 
 // Force separate bulk transfers for each PTP phase
 static int urb_splitter(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
+	int max_packet = 512;
+
+	if (len > 512) {
+		// Windows 11 seems to want this
+		max_packet = len;
+	}
+
 	static uint32_t last_length = 0;
 	if (last_length == 0) {
 		vcam_read(get_cam(ctx, devn), ep, data, 4);
 		ptp_read_u32(data, &last_length);
 		int max = (int)last_length;
-		if (max > 512) max = 512;
+		if (max > max_packet) max = max_packet;
 		if (max > len) max = len;
 		vcam_read(get_cam(ctx, devn), ep, ((unsigned char *)data) + 4, max - 4);
 		last_length -= (uint32_t)max;
 		return max;
 	} else {
 		uint32_t max = last_length;
-		if (max > 512) max = 512;
+		if (max > max_packet) max = max_packet;
 		if (max > len) max = len;
 		vcam_read(get_cam(ctx, devn), ep, data, (int)max);
 		last_length -= max;
@@ -210,11 +217,12 @@ static int urb_splitter(struct UsbThing *ctx, int devn, int ep, void *data, int 
 
 static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
 	if (ep == 0x2) {
-		//vcam_log("Passing h->d to vcam %d", len);
+		vcam_log("Passing h->d to vcam %d", len);
 		return vcam_write(get_cam(ctx, devn), ep, (const unsigned char *)data, len);
 	} else if (ep == 0x81) {
-		vcam_log("Reading bulk d->h to vcam");
-		return urb_splitter(ctx, devn, ep, data, len);
+		int rc = urb_splitter(ctx, devn, ep, data, len);
+		vcam_log("Reading bulk d->h to vcam (%d)", rc);
+		return rc;
 		//return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
 	} else if (ep == 0x83) {
 		// Don't respond to interrupt polling

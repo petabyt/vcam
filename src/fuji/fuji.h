@@ -29,8 +29,9 @@ struct Fuji {
 
 	int rawconv_jpeg_handle;
 	struct PtpObjectInfo *rawconv_jpeg_object_info;
-	void *rawconv_jpeg_buffer;
-	size_t rawconv_jpeg_length;
+//	void *rawconv_jpeg_buffer;
+//	size_t rawconv_jpeg_length;
+	char *rawconv_jpeg_path;
 
 	void *rawconv_raf_buffer;
 	size_t rawconv_raf_length;

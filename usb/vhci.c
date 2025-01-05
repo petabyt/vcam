@@ -159,7 +159,7 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 			printf("Received partial packet %d\n", rc);
 			abort();
 		}
-		printf("Received %d\n", rc);
+		//printf("Received %d\n", rc);
 
 		struct usbip_header *header = (struct usbip_header *)packet;
 		uint32_t command = bswap_32(header->base.command);
