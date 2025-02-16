@@ -43,7 +43,7 @@ make vcam
 This will connects the camera to your Linux PC through a virtual host controller:
 ```
 sudo modprobe vhci-hcd
-sudo ./vcam vhci canon_1300d
+sudo ./vcam canon_1300d vhci
 ```
 
 ## libusb backend

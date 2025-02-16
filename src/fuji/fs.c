@@ -14,25 +14,57 @@ unsigned int get_compressed_size(const char *filename) {
 }
 
 int prop_d185_getvalue(vcam *cam, struct PtpPropDesc *desc, int *optional_length) {
-	FILE *file = fopen(PWD "/bin/fuji/xh1_d185_initial.bin", "rb");
-	if (file == NULL) {
-		vcam_panic("File not found");
-	}
-
-	fseek(file, 0, SEEK_END);
-	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	char *buffer = malloc(file_size);
-	fread(buffer, 1, file_size, file);
-	desc->value = buffer;
-	(*optional_length) = file_size;
-	fclose(file);
-
+	desc->value = fuji(cam)->profile_buffer;
+	(*optional_length) = (int)fuji(cam)->profile_buffer_length;
 	return 0;
 }
 int prop_d185_setvalue(vcam *cam, struct PtpPropDesc *desc, const void *data) {
-	vcam_log("New value for d185");
+	struct Fuji *f = fuji(cam);
+
+	fprintf(f->log, "-- d185 is set --\n");
+	fflush(f->log);
+
+	const uint8_t *d = data;
+	const uint8_t *d2 = f->profile_buffer;
+	int of = 0;
+
+	uint16_t len;
+	ptp_read_u16(d + of, &len);
+
+	uint16_t len2;
+	ptp_read_u16(d2 + of, &len2);
+
+	of = 0x201;
+
+	int max_len = len2;
+	if (len > len2) max_len = len;
+
+	for (int i = 0; i < max_len; i++) {
+		uint32_t bit = 0;
+		uint32_t bit2 = 0;
+		if (len >= i) {
+			ptp_read_u32(d + of, &bit);
+		} else {
+			ptp_read_u32(d2 + of, &bit2);
+			fprintf(f->log, "new u32 at offset %d, %08x\n", of, bit2);
+			fflush(f->log);
+		}
+		if (len2 >= i) {
+			ptp_read_u32(d2 + of, &bit2);
+		} else {
+			ptp_read_u32(d + of, &bit);
+			fprintf(f->log, "deleted u32 at offset %d, %08x\n", of, bit);
+			fflush(f->log);
+		}
+
+		if (bit != bit2) {
+			fprintf(f->log, "u32 at offset %d changed from %08x to %08x\n", (of - 0x201) / 4, bit2, bit);
+			fflush(f->log);
+		}
+
+		of += 4;
+	}
+
 	return 0;
 }
 
@@ -265,6 +297,7 @@ static int ptp_fuji_deleteobject_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int vcam_fuji_register_rawconv_fs(vcam *cam) {
+	struct Fuji *f = fuji(cam);
 	// Override entire filesystem API
 	// TODO: getstorageids, getstorageinfo
 	vcam_register_opcode(cam, PTP_OC_GetObjectHandles, ptp_fuji_getobjecthandles_write, NULL);
@@ -274,8 +307,29 @@ int vcam_fuji_register_rawconv_fs(vcam *cam) {
 	vcam_register_opcode(cam, PTP_OC_SendObject, ptp_fuji_sendobject_write, ptp_fuji_sendobject_write_data);
 	vcam_register_opcode(cam, PTP_OC_DeleteObject, ptp_fuji_deleteobject_write, NULL);
 
+//	{
+//		struct PtpPropDesc desc = {0};
+//		FILE *file = fopen(PWD "/bin/fuji/xh1_d185_initial.bin", "rb");
+//		if (file == NULL) {
+//			vcam_panic("File not found");
+//		}
+//
+//		fseek(file, 0, SEEK_END);
+//		long file_size = ftell(file);
+//		fseek(file, 0, SEEK_SET);
+//
+//		char *buffer = malloc(file_size);
+//		fread(buffer, 1, file_size, file);
+//		fclose(file);
+//
+//		desc.DataType = PTP_TC_UNDEF;
+//		desc.value = buffer;
+//		desc.value_length = file_size;
+//		vcam_register_prop(cam, 0xd185, &desc);
+//	}
+	struct PtpPropDesc desc = {0};
+
 	{
-		struct PtpPropDesc desc = {0};
 		FILE *file = fopen(PWD "/bin/fuji/xh1_d185_initial.bin", "rb");
 		if (file == NULL) {
 			vcam_panic("File not found");
@@ -288,19 +342,19 @@ int vcam_fuji_register_rawconv_fs(vcam *cam) {
 		char *buffer = malloc(file_size);
 		fread(buffer, 1, file_size, file);
 		fclose(file);
-
-		desc.DataType = PTP_TC_UNDEF;
-		desc.value = buffer;
-		desc.value_length = file_size;
-		vcam_register_prop(cam, 0xd185, &desc);
+		f->profile_buffer = buffer;
+		f->profile_buffer_length = file_size;
+		vcam_register_prop_handlers(cam, 0xd185, &desc, prop_d185_getvalue, prop_d185_setvalue);
 	}
-	struct PtpPropDesc desc = {0};
-	//vcam_register_prop_handlers(cam, 0xd185, &desc, prop_d185_getvalue, prop_d185_setvalue);
+
 	vcam_register_prop_handlers(cam, 0xd183, &desc, NULL, prop_d183_setvalue);
 
 	// These have been around since 2011
 	vcam_register_opcode(cam, 0x900c, ptp_fuji_900c_write, ptp_fuji_900c_write_data);
 	vcam_register_opcode(cam, 0x900d, ptp_fuji_900d_write, ptp_fuji_900d_write_data);
+
+	f->log = fopen("fuji.txt", "w");
+	assert(f->log);
 
 	return 0;
 }

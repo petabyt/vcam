@@ -359,11 +359,12 @@ void free_dirent(struct ptp_dirent *ent) {
 	free(ent);
 }
 
-void read_tree(vcam *cam, const char *path) {
+static void read_tree(vcam *cam, const char *path) {
 	struct ptp_dirent *root = NULL, *dir, *dcim = NULL;
 
-	if (cam->first_dirent)
-		return;
+	if (cam->first_dirent) {
+		vcam_log("read_tree called twice, memory leaked");
+	}
 
 	cam->first_dirent = malloc(sizeof(struct ptp_dirent));
 	cam->first_dirent->name = strdup("");
@@ -450,8 +451,7 @@ void vcam_process_output(vcam *cam) {
 	if (ptp.size < 12) { /* No ptp command can be less than 12 bytes */
 		/* not clear if normal cameras react like this */
 		vcam_log_func(__func__, "input size was %d, minimum is 12", ptp.size);
-
-		//hexdump(cam->outbulk, ptp.size);
+		hexdump(cam->outbulk, ptp.size);
 
 		// Does this work on PTP/IP?
 		ptp_response(cam, PTP_RC_GeneralError, 0);
@@ -701,6 +701,7 @@ int vcam_parse_args(vcam *cam, int argc, const char **argv, int *i) {
 	} else if (!strcmp(argv[(*i)], "--fs")) {
 		cam->vcamera_filesystem = argv[(*i) + 1];
 		(*i)++;
+		read_tree(cam, cam->vcamera_filesystem);
 	} else if (!strcmp(argv[(*i)], "--dump")) {
 		cam->comm_dump = fopen("COMM_DUMP", "wb");
 	} else if (!strcmp(argv[(*i)], "--sig")) {

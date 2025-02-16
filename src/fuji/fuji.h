@@ -27,11 +27,16 @@ struct Fuji {
 	/// @brief Number of images currently sent through the SEND MULTIPLE feature
 	int sent_images;
 
+	FILE *log;
+
 	int rawconv_jpeg_handle;
 	struct PtpObjectInfo *rawconv_jpeg_object_info;
 //	void *rawconv_jpeg_buffer;
 //	size_t rawconv_jpeg_length;
 	char *rawconv_jpeg_path;
+
+	void *profile_buffer;
+	size_t profile_buffer_length;
 
 	void *rawconv_raf_buffer;
 	size_t rawconv_raf_length;

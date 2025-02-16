@@ -14,8 +14,7 @@ VCAM_FILES := $(VCAM_CORE) src/main.o
 CFLAGS := $(shell pkg-config --cflags libusb-1.0)
 CFLAGS += -g -I. -Isrc/ -Iusb/ -Isrc/fuji/ -Isrc/canon/ -L. -D HAVE_LIBEXIF -Wall -fPIC -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3
 LDFLAGS += -L. -Wl,-rpath=.
-# Used to access bin/
-CFLAGS += '-D PWD="$(shell pwd)"'
+CFLAGS += '-D PWD="$(shell pwd)"' # Used to access bin/
 
 libusb-vcam.so: $(SO_FILES)
 	$(CC) -g -ggdb $(SO_FILES) -lexif -shared -o libusb-vcam.so
@@ -24,8 +23,8 @@ vcam: $(VCAM_FILES)
 	$(CC) -g -ggdb $(VCAM_FILES) $(CFLAGS) -o vcam $(LDFLAGS) -lexif 
 
 install: vcam libusb-vcam.so
-	cp vcam /usr/bin/
-	cp libusb-vcam.so /usr/lib/
+	install -D -m 755 vcam /usr/local/bin/vcam
+	install -D -m 644 libusb-vcam.so /usr/local/lib/libusb-vcam.so
 
 -include src/*.d
 -include usb/*.d
