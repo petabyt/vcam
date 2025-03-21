@@ -1,7 +1,6 @@
 *.o
 *.out
 config.mak
-*.bin
 *.elf
 DUMP
 *.d
