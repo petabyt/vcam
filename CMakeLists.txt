@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+pkg_check_modules(LIBEXIF REQUIRED libexif)
 
 include_directories(${LIBUSB_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR} src usb src/fuji src/canon)
 
@@ -42,7 +43,8 @@ set(VCAM_COMMON_FLAGS -g -Wall -fPIC -Wshadow -Wcast-qual -Wpedantic -Werror=inc
 set(VCAM_COMMON_DEFINITIONS PWD="${VCAM_PWD}")
 
 add_library(usb-vcam SHARED ${VCAM_SO_FILES})
-target_link_libraries(usb-vcam ${LIBUSB_LIBRARIES} -lexif)
+target_link_libraries(usb-vcam ${LIBEXIF_LIBRARIES})
+target_include_directories(usb-vcam PRIVATE ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(usb-vcam PRIVATE ${VCAM_COMMON_FLAGS})
 target_compile_definitions(usb-vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
 
