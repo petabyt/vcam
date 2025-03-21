@@ -3,7 +3,6 @@
 config.mak
 *.bin
 *.elf
-*.txt
 DUMP
 *.d
 compile_commands.json
