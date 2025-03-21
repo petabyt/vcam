@@ -8,7 +8,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 pkg_check_modules(LIBEXIF REQUIRED libexif)
 
-include_directories(${LIBUSB_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR} src usb src/fuji src/canon)
+include_directories(${LIBUSB_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR} src usb src/fuji src/canon)
 
 set(VCAM_CORE 
     src/log.c
@@ -34,7 +34,8 @@ set(VCAM_CORE
     usb/vhci.c
 )
 
-get_filename_component(VCAM_PWD "${CMAKE_SOURCE_DIR}" ABSOLUTE)
+
+get_filename_component(VCAM_PWD "${PROJECT_SOURCE_DIR}" ABSOLUTE)
 
 set(VCAM_COMMON_FLAGS -g -Wall -fPIC -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3)
 set(VCAM_COMMON_DEFINITIONS PWD="${VCAM_PWD}")
