@@ -1,0 +1,91 @@
+lsusb -v -d 04a9:02c6
+
+It appears that when reading data packet and response packet for PtpGetDeviceInfo, Windows 11 does 3 different bulk IN transfers:
+512 IN
+512 IN
+512 IN
+
+My stock camera returns 512 for the first and 11 for the second (the data packet is 523 bytes long).
+Then windows expects the third transfer to return 12 for the response packet.
+
+vcam returns the response packet in the second IN transfer and returns 0 for the third transfer.
+After this Windows sends MTP_REQ_CANCEL and then spams an obscure control request about 50 times (STILL_IMAGE_GET_DEV_STATUS)
+before it does an IN bulk transfer for 262144/0x40000 bytes.
+
+Bus 001 Device 004: ID 04a9:32b4 Canon, Inc. EOS Rebel T6
+Device Descriptor:
+  bLength                18
+  bDescriptorType         1
+  bcdUSB               2.00
+  bDeviceClass            0 [unknown]
+  bDeviceSubClass         0 [unknown]
+  bDeviceProtocol         0 
+  bMaxPacketSize0        64
+  idVendor           0x04a9 Canon, Inc.
+  idProduct          0x32b4 EOS Rebel T6
+  bcdDevice            0.02
+  iManufacturer           1 Canon Inc.
+  iProduct                2 Canon Digital Camera
+  iSerial                 0 
+  bNumConfigurations      1
+  Configuration Descriptor:
+    bLength                 9
+    bDescriptorType         2
+    wTotalLength       0x0027
+    bNumInterfaces          1
+    bConfigurationValue     1
+    iConfiguration          0 
+    bmAttributes         0xc0
+      Self Powered
+    MaxPower                2mA
+    Interface Descriptor:
+      bLength                 9
+      bDescriptorType         4
+      bInterfaceNumber        0
+      bAlternateSetting       0
+      bNumEndpoints           3
+      bInterfaceClass         6 Imaging
+      bInterfaceSubClass      1 Still Image Capture
+      bInterfaceProtocol      1 Picture Transfer Protocol (PIMA 15470)
+      iInterface              0 
+      Endpoint Descriptor:
+        bLength                 7
+        bDescriptorType         5
+        bEndpointAddress     0x81  EP 1 IN
+        bmAttributes            2
+          Transfer Type            Bulk
+          Synch Type               None
+          Usage Type               Data
+        wMaxPacketSize     0x0200  1x 512 bytes
+        bInterval               0
+      Endpoint Descriptor:
+        bLength                 7
+        bDescriptorType         5
+        bEndpointAddress     0x02  EP 2 OUT
+        bmAttributes            2
+          Transfer Type            Bulk
+          Synch Type               None
+          Usage Type               Data
+        wMaxPacketSize     0x0200  1x 512 bytes
+        bInterval               0
+      Endpoint Descriptor:
+        bLength                 7
+        bDescriptorType         5
+        bEndpointAddress     0x83  EP 3 IN
+        bmAttributes            3
+          Transfer Type            Interrupt
+          Synch Type               None
+          Usage Type               Data
+        wMaxPacketSize     0x0008  1x 8 bytes
+        bInterval              10
+Device Qualifier (for other device speed):
+  bLength                10
+  bDescriptorType         6
+  bcdUSB               2.00
+  bDeviceClass            0 [unknown]
+  bDeviceSubClass         0 [unknown]
+  bDeviceProtocol         0 
+  bMaxPacketSize0        64
+  bNumConfigurations      1
+Device Status:     0x0001
+  Self Powered

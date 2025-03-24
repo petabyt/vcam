@@ -6,13 +6,13 @@ include pi.mak
 
 VCAM_CORE += src/log.o src/vcamera.o src/pack.o src/packet.o src/ops.o src/canon/canon.o src/fuji/fuji.o src/fuji/server.o src/ptpip.o
 VCAM_CORE += src/canon/props.o src/data.o src/props.o src/fuji/ssdp.o src/socket.o src/fuji/usb.o src/fuji/fs.o src/usbthing.o
-VCAM_CORE += usb/device.o usb/usbstring.o usb/vhci.o
+VCAM_CORE += usbthing/device.o usbthing/usbstring.o usbthing/vhci.o
 
-SO_FILES := $(VCAM_CORE) usb/libusb.o
+SO_FILES := $(VCAM_CORE) usbthing/libusb.o
 VCAM_FILES := $(VCAM_CORE) src/main.o
 
 CFLAGS := $(shell pkg-config --cflags libusb-1.0)
-CFLAGS += -g -I. -Isrc/ -Iusb/ -Isrc/fuji/ -Isrc/canon/ -L. -D HAVE_LIBEXIF -Wall -fPIC -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3
+CFLAGS += -g -I. -Isrc/ -Iusbthing/ -Isrc/fuji/ -Isrc/canon/ -L. -D HAVE_LIBEXIF -Wall -fPIC -Wall -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3
 LDFLAGS += -L. -Wl,-rpath=.
 CFLAGS += '-D PWD="$(shell pwd)"' # Used to access bin/
 
@@ -27,7 +27,7 @@ install: vcam libusb-vcam.so
 	install -D -m 644 libusb-vcam.so /usr/local/lib/libusb-vcam.so
 
 -include src/*.d
--include usb/*.d
+-include usbthing/*.d
 -include fuji/*.d
 -include canon/*.d
 %.o: %.c 

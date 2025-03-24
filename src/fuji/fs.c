@@ -332,7 +332,7 @@ int vcam_fuji_register_rawconv_fs(vcam *cam) {
 	{
 		FILE *file = fopen(PWD "/bin/fuji/xh1_d185_initial.bin", "rb");
 		if (file == NULL) {
-			vcam_panic("File not found");
+			vcam_panic("File not found %s", PWD "/bin/fuji/xh1_d185_initial.bin");
 		}
 
 		fseek(file, 0, SEEK_END);
