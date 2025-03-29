@@ -36,7 +36,7 @@ get_filename_component(VCAM_PWD "${PROJECT_SOURCE_DIR}" ABSOLUTE)
 
 set(VCAM_COMMON_FLAGS -g -Wall -fPIC -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3)
 set(VCAM_COMMON_DEFINITIONS PWD="${VCAM_PWD}")
-set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src usb src/fuji src/canon)
+set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src usbthing src/fuji src/canon)
 
 add_library(usb-vcam SHARED ${VCAM_CORE} usbthing/libusb.c)
 target_link_libraries(usb-vcam ${LIBEXIF_LIBRARIES})
