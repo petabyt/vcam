@@ -81,6 +81,12 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
 		f->get_object_version = 3; // 2016 fuji sets to 4
 		f->remote_version = 0x00020002; // 2024 fuji sets to 2000C
 		f->remote_get_object_version = 1;
+	} else if (!strcmp(name, "fuji_x_t30")) {
+		strcpy(cam->model, "X-T30");
+		f->image_get_version = 0xdead;
+		f->get_object_version = 0xdead;
+		f->remote_version = 0xdead;
+		f->remote_get_object_version = 0xdead;
 	} else {
 		return -1;
 	}
