@@ -49,3 +49,7 @@ target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES})
 target_include_directories(vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(vcam PRIVATE ${VCAM_COMMON_FLAGS})
 target_compile_definitions(vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
+
+install(
+    TARGETS vcam usb-vcam
+)
