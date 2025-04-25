@@ -8,11 +8,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
-#include "vcam.h"
-
-#ifdef HAVE_LIBEXIF
 #include <libexif/exif-data.h>
-#endif
+#include "vcam.h"
 
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
@@ -481,7 +478,6 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 			ofc = 0x300B;
 	}
 
-#ifdef HAVE_LIBEXIF
 	if (ofc == 0x3801) { /* We are jpeg ... look into the exif data */
 		ExifData *ed;
 		ExifEntry *e;
@@ -524,11 +520,10 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 		exif_data_unref(ed);
 		free(filedata);
 	}
-#endif
 
 	uint32_t compressed_size = cur->stbuf.st_size;
 
-#warning "TODO compressed_size = 0x19000 if fuji is in wifi mode"
+#warning "TODO: compressed_size = 0x19000 if fuji is in wifi mode"
 
 	x += put_16bit_le(data + x, ofc);
 	x += put_16bit_le(data + x, 0);			 /* ProtectionStatus, no protection */
@@ -620,9 +615,7 @@ int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	struct ptp_dirent *cur;
-#ifdef HAVE_LIBEXIF
 	ExifData *ed;
-#endif
 
 	if (vcam_check_trans_id(cam, ptp))return 1;
 	if (vcam_check_session(cam))return 1;
@@ -647,7 +640,6 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 
-#ifdef HAVE_LIBEXIF
 	ed = exif_data_new_from_data((unsigned char *)data, cur->stbuf.st_size);
 	if (!ed) {
 		vcam_log_func(__func__, "Could not parse EXIF data");
@@ -670,10 +662,6 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	exif_data_unref(ed);
 
 	ptp_response(cam, PTP_RC_OK, 0);
-#else
-	vcam_log_func(__func__, "Cannot get thumbnail without libexif, lying about missing thumbnail");
-	ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
-#endif
 
 	vcam_log("Done processing thumbnail call\n");
 
