@@ -78,11 +78,12 @@ struct Config {
 };
 
 struct Priv {
-	vcam *cam[5];
+#define PRIV_MAX_CAMS 5
+	vcam *cam[PRIV_MAX_CAMS];
 };
 
 static inline vcam *get_cam(struct UsbThing *ctx, int devn) {
-	if (devn > 5) abort();
+	if (devn >= PRIV_MAX_CAMS) abort();
 	return ((struct Priv *)ctx->priv_impl)->cam[devn];
 }
 
@@ -234,13 +235,27 @@ static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int l
 	return 0;
 }
 
+static struct UsbThing *global_ctx = NULL;
+
+void vcam_add_usbt_device(const char *name, int argc, char **argv) {
+	if (global_ctx != NULL) {
+		struct Priv *priv = (struct Priv *)global_ctx->priv_impl;
+		if (global_ctx->n_devices >= PRIV_MAX_CAMS) abort();
+		priv->cam[global_ctx->n_devices] = vcam_new(name, argc, argv);
+		global_ctx->n_devices++;
+	} else {
+		vcam_panic("global_ctx NULL");
+	}
+}
+
 void usbt_user_init(struct UsbThing *ctx) {
+	global_ctx = ctx;
 	// Add devices for libusb mode
 	if (ctx->n_devices == 0) {
 		ctx->priv_impl = malloc(sizeof(struct Priv));
 		struct Priv *priv = (struct Priv *)ctx->priv_impl;
-		priv->cam[0] = vcam_new("canon_1300d");
-		priv->cam[1] = vcam_fuji_new("fuji_x_h1", "--rawconv");
+		priv->cam[0] = vcam_new("canon_1300d", 0, NULL);
+		priv->cam[1] = vcam_new("fuji_x_h1", 1, (char *[]){"--rawconv"});
 		ctx->n_devices = 2;
 	}
 	ctx->get_string_descriptor = usb_get_string;

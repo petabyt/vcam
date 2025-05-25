@@ -11,15 +11,7 @@
 
 int fuji_usb_init_cam(vcam *cam);
 
-vcam *vcam_fuji_new(const char *name, const char *arg) {
-	vcam *cam = vcam_init_standard();
-	const char *args[] = {arg};
-	int rc = fuji_init_cam(cam, name, 1, args);
-	if (rc) return NULL;
-	return cam;
-}
-
-int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
+int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
 	if (!strcmp(name, "fuji_x_a2")) {

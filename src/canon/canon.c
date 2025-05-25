@@ -21,13 +21,18 @@ static inline struct CanonBase *priv(vcam *cam) {
 #define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos_events.bin"
 
-int canon_init_cam(vcam *cam, const char *name, int argc, const char **argv) {
+int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = malloc(sizeof(struct CanonBase));
 	struct CanonBase *p = priv(cam);
 
 	p->first_events = 0;
 	p->lv_ready = 0;
 	p->calls_to_liveview = 0;
+
+	for (int i = 0; i < argc; i++) {
+		if (vcam_parse_args(cam, argc, argv, &i)) continue;
+		// ...
+	}
 
 	strcpy(cam->manufac, "Canon Inc.");
 	cam->vendor_id = 0x4a9;

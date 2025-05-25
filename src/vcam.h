@@ -100,13 +100,13 @@ typedef struct vcam {
 vcam *vcam_init_standard(void);
 
 /// @brief Invoke main command line interpreter
-int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, const char **argv);
+int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, char **argv);
 
 /// @brief Calls vcam_init_standard and inits camera from name
-vcam *vcam_new(const char *name);
+vcam *vcam_new(const char *name, int argc, char **argv);
 
 /// @brief Called by variant CLI parser to handle generic vcam parameters
-int vcam_parse_args(vcam *cam, int argc, const char **argv, int *i);
+int vcam_parse_args(vcam *cam, int argc, char **argv, int *i);
 
 /// @brief Read bytes from internal buffer (R->I)
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
@@ -314,9 +314,8 @@ int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
 void fuji_register_opcodes(vcam *cam);
-int fuji_init_cam(vcam *cam, const char *name, int argc, const char **argv);
-vcam *vcam_fuji_new(const char *name, const char *arg);
-int canon_init_cam(vcam *cam, const char *name, int argc, const char **argv);
+int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv);
+int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);
 
 int fuji_wifi_main(vcam *cam);
 int ptpip_generic_main(vcam *cam);
