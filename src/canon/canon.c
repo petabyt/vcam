@@ -194,10 +194,10 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 	// Pack in all properties and their current values
 	for (int i = 0; i < cam->props->length; i++) {
 		struct PtpProp *p = &cam->props->handlers[i];
-		cnt += ptp_write_u32(buf + cnt, 16);
+		int prop_size = vcam_get_prop_size(cam, p->code);
+		cnt += ptp_write_u32(buf + cnt, 12 + prop_size);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_PropValueChanged);
 		cnt += ptp_write_u32(buf + cnt, p->code);
-		int prop_size = vcam_get_prop_size(cam, p->code);
 		memcpy(buf + cnt, p->desc.value, prop_size);
 		cnt += prop_size;
 	}
@@ -211,7 +211,6 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 		struct PtpProp *p = &cam->props->handlers[i];
 		if (p->desc.FormFlag != PTP_EnumerationForm) continue;
 		if (p->desc.avail == NULL) abort();
-		printf("%04x\n", p->code);
 		int avail_size = ptp_get_prop_list_size(p->desc.avail, p->desc.DataType, p->desc.avail_cnt);
 		cnt += ptp_write_u32(buf + cnt, 5 * 4 + avail_size);
 		cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_AvailListChanged);
@@ -226,6 +225,11 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 	cnt += ptp_write_u32(buf + cnt, 0xc);
 	cnt += ptp_write_u32(buf + cnt, PTP_EC_EOS_InfoCheckComplete);
 	cnt += ptp_write_u32(buf + cnt, 0x20001);
+
+	// Terminating code
+	cnt += ptp_write_u32(buf + cnt, 0xc);
+	cnt += ptp_write_u32(buf + cnt, 0x0);
+	cnt += ptp_write_u32(buf + cnt, 0x0);
 
 	(*size) = cnt;
 
