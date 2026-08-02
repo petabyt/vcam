@@ -27,6 +27,7 @@ Since then it has been heavily modified and improved to more closely replicate t
 - [x] Spoof [Fujifilm Camera Connect](https://play.google.com/store/apps/details?id=com.fujifilm_dsc.app.remoteshooter&hl=en_US&gl=US)
 - [x] Spoof [EOS Connect](https://play.google.com/store/apps/details?id=jp.co.canon.ic.cameraconnect&hl=en_US&gl=US)
 - [x] [Spoof Windows 11](https://x.com/danielcdev/status/1867440146389295532)
+- [x] Add gfx100ii support (modern fuji).
 - [ ] Complete ISO MTP implementation
 - [ ] open-source extensions (chdkptp, ML)
 - [ ] DX + other mirrorless EOS implementation
@@ -66,8 +67,14 @@ See the makefile for more info on starting access points.
 make ap-canon WIFI_DEV=wlan0
 ```
 
+## gfxii100 additions
+- Some propietary fuji changes in modern bodies
+- We send the RAF file's thumbnail (not the same as the embedded jpg render)
+- Probably works for any "modern" fuji
+
 ## Credits
 Original Author (vusb): Marcus Meissner <marcus@jet.franken.de>  
 Forked from https://github.com/gphoto/libgphoto2/tree/master/libgphoto2_port/vusb  
 create_ap scripts from https://github.com/oblique/create_ap  
+gfx100ii support by Eric Psalmond <epsalmond@gmail.com>
 Licensed under the GNU Lesser General Public License v2.1  

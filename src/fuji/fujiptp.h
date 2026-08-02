@@ -22,6 +22,7 @@ enum FujiTransport {
 };
 
 #define FUJI_CMD_IP_PORT 55740
+// Fuji's internal names are sometimes mislabeled, these are correct.
 #define FUJI_EVENT_IP_PORT 55741
 #define FUJI_LIVEVIEW_IP_PORT 55742
 
@@ -49,9 +50,16 @@ enum FujiTransport {
 // XS10 on reported 0x02000A, camera connect set to 2000B
 #define FUJI_CAM_CONNECT_REMOTE_VER 0x2000C
 
-// Downloader opcodes, mostly unknown
-#define PTP_OC_FUJI_Unknown1	0x9054
-#define PTP_OC_FUJI_Unknown2	0x9055
+// Image-import prelude opcodes.
+// Captures still use standard PTP for per-object listing
+// and download: GetObjectInfo (0x1008), GetThumb (0x100A), GetPartialObject (0x101B).
+#define PTP_OC_FUJI_GetImageImportFolders	0x9050
+#define PTP_OC_FUJI_GetImageImportDates		0x9053
+#define PTP_OC_FUJI_GetExtensionObjectInfo	0x9054
+#define PTP_OC_FUJI_GetExtensionThumb		0x9055
+#define PTP_OC_FUJI_GetExtensionPartialObject	0x9056
+#define PTP_OC_FUJI_Unknown1	PTP_OC_FUJI_GetExtensionObjectInfo
+#define PTP_OC_FUJI_Unknown2	PTP_OC_FUJI_GetExtensionThumb
 
 #define PTP_DPC_FUJI_UnknownD21C	0xd21c
 #define PTP_DPC_FUJI_Unknown_D224	0xd224
@@ -60,6 +68,7 @@ enum FujiTransport {
 // Setting this doesn't appear to be necessary for downloading photos
 #define PTP_DPC_FUJI_AutoSaveDatabaseStatus	0xD228
 #define PTP_DPC_FUJI_Unknown15		0xD22B
+#define PTP_DPC_FUJI_Unknown_D22E	0xD22E
 #define PTP_DPC_FUJI_CompressionCutOff	0xD235
 #define PTP_DPC_FUJI_StorageID		0xd244
 #define PTP_DPC_FUJI_Unknown_D400	0xd400 // Possibly SelectedImgsMode2
@@ -71,9 +80,11 @@ enum FujiTransport {
 #define PTP_DPC_FUJI_Geolocation		0xd500 // "0000.000000,N00000.000000,E00000.00,M 000.0,K0000:00:0000:00:00.000"
 #define PTP_DPC_FUJI_Unknown_D52F	0xd52f
 
-// Xapp properties
-#define PTP_DPC_FUJI_Unknown18		0xD620
-#define PTP_DPC_FUJI_Unknown17		0xD621
+// GFX image-import properties
+#define PTP_DPC_FUJI_ImageImportObjectCount	0xD620
+#define PTP_DPC_FUJI_ImageImportObjectHandles	0xD621
+#define PTP_DPC_FUJI_Unknown18		PTP_DPC_FUJI_ImageImportObjectCount
+#define PTP_DPC_FUJI_Unknown17		PTP_DPC_FUJI_ImageImportObjectHandles
 
 // Most of 0xdfxx appear to be version/revision properties
 #define PTP_DPC_FUJI_ImageGetVersion	0xdf21 // Another prop used for image related things
@@ -82,7 +93,8 @@ enum FujiTransport {
 #define PTP_DPC_FUJI_RemoteVersion	0xdf24
 #define PTP_DPC_FUJI_RemoteGetObjectVersion	0xdf25 // same as GetObjectVersion, but for cams that support remote mode
 // 0xdf26 and 0xdf27 appear to be unused
-#define PTP_DPC_FUJI_Unknown_DF28	0xdf28 // xapp property, x-s10 sets to 1
+#define PTP_DPC_FUJI_RemotePhotoViewExVersion	0xdf28 // Modern image-import version, GFX100 II sets to 3
+#define PTP_DPC_FUJI_Unknown_DF28	PTP_DPC_FUJI_RemotePhotoViewExVersion
 #define PTP_DPC_FUJI_GeoTagVersion	0xdf31
 #define PTP_DPC_FUJI_Unknown11		0xdf44
 

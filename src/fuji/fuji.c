@@ -2,14 +2,50 @@
 // Copyright Daniel C - GNU Lesser General Public License v2.1
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <assert.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <vcam.h>
 #include <fujiptp.h>
 #include <cl_data.h>
+#include <data.h>
 #include "fuji.h"
 
+#define FUJI_GFX_CHUNK_SIZE 0x00C00020u
+#define FUJI_GFX_LARGE_JPEG_SIZE (FUJI_GFX_CHUNK_SIZE + (1024u * 1024u))
+#define FUJI_GFX_FIXTURE_DIR "/tmp/vcam-gfx100ii"
+#define FUJI_GFX_LARGE_JPEG_PATH FUJI_GFX_FIXTURE_DIR "/DSCF0001.JPG"
+
+#define FUJI_IMPORT_STEP_CLIENT_STATE	0x0001u
+#define FUJI_IMPORT_STEP_DF28_GET	0x0002u
+#define FUJI_IMPORT_STEP_DF28_SET	0x0004u
+#define FUJI_IMPORT_STEP_D226_SET	0x0008u
+#define FUJI_IMPORT_STEP_D227_SET	0x0010u
+#define FUJI_IMPORT_STEP_D244_GET	0x0020u
+#define FUJI_IMPORT_STEP_CURRENT_INFO	0x0040u
+#define FUJI_IMPORT_STEP_CURRENT_THUMB	0x0080u
+#define FUJI_IMPORT_STEP_FOLDERS	0x0100u
+#define FUJI_IMPORT_STEP_DATES		0x0200u
+
+#define FUJI_IMPORT_BOOTSTRAP_READY (FUJI_IMPORT_STEP_CLIENT_STATE | FUJI_IMPORT_STEP_DF28_GET | FUJI_IMPORT_STEP_DF28_SET | FUJI_IMPORT_STEP_D226_SET | FUJI_IMPORT_STEP_D227_SET | FUJI_IMPORT_STEP_D244_GET)
+#define FUJI_IMPORT_ENUM_READY (FUJI_IMPORT_BOOTSTRAP_READY | FUJI_IMPORT_STEP_CURRENT_INFO | FUJI_IMPORT_STEP_CURRENT_THUMB | FUJI_IMPORT_STEP_FOLDERS | FUJI_IMPORT_STEP_DATES)
+
 int fuji_usb_init_cam(vcam *cam);
+int ptp_fuji_getpartialobject_write(vcam *cam, ptpcontainer *ptp);
+static void fuji_setup_gfx100ii_fixtures(vcam *cam);
+
+void fuji_reset_image_import_state(vcam *cam) {
+	struct Fuji *f = fuji(cam);
+	if (!f) {
+		return;
+	}
+	f->image_import_preflight_seen = 0;
+	f->image_import_folder_query_seen = 0;
+	f->image_import_date_query_seen = 0;
+	f->image_import_steps = 0;
+	f->image_import_current_handle = 0;
+}
 
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
@@ -46,6 +82,13 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->remote_get_object_version = 5;
 		// PTP_DPC_FUJI_ImageGetLimitedVersion = 1
 		// PTP_DPC_FUJI_Unknown_D52F = 1
+	} else if (!strcmp(name, "fuji_gfx100_ii") || !strcmp(name, "fuji_gfx100ii") || !strcmp(name, "gfx100ii") || !strcmp(name, "gfx")) {
+		strcpy(cam->model, "GFX100 II");
+		f->image_get_version = 4;
+		f->get_object_version = 5;
+		f->remote_version = 0x0002000c;
+		f->remote_get_object_version = 5;
+		f->is_gfx100ii = 1;
 	} else if (!strcmp(name, "fuji_x_h1")) {
 		strcpy(cam->model, "X-H1");
 		f->image_get_version = 3; // fuji sets to 4
@@ -165,6 +208,11 @@ int vcam_fuji_setup(vcam *cam) {
 	f->no_compressed = 0;
 	f->internal_state = CAM_STATE_READY;
 	f->sent_images = 0;
+	fuji_reset_image_import_state(cam);
+
+	if (f->is_gfx100ii) {
+		fuji_setup_gfx100ii_fixtures(cam);
+	}
 
 	// TODO: Better way to ignore folders (Fuji doesn't show them)
 	f->obj_count = ptp_get_object_count(cam) - 1;
@@ -213,6 +261,469 @@ int fuji_is_compressed_mode(vcam *cam) {
 	return (int)(f->compress_small);
 }
 
+static void fuji_mark_image_import_step(vcam *cam, unsigned int step) {
+	struct Fuji *f = fuji(cam);
+	if (!f->is_gfx100ii) {
+		return;
+	}
+	f->image_import_steps |= step;
+	f->image_import_preflight_seen = 1;
+}
+
+static int fuji_image_import_has_steps(vcam *cam, unsigned int steps) {
+	struct Fuji *f = fuji(cam);
+	return (f->image_import_steps & steps) == steps;
+}
+
+static int fuji_image_import_reject(vcam *cam, ptpcontainer *ptp, const char *reason) {
+	vcam_log("Fuji GFX image-import gate rejected opcode 0x%04x: %s", ptp->code, reason);
+	ptp_response(cam, PTP_RC_AccessDenied, 0);
+	return 1;
+}
+
+static int fuji_name_has_ext(const char *name, const char *ext) {
+	const char *dot = strrchr(name, '.');
+	return dot && !strcasecmp(dot, ext);
+}
+
+static int fuji_is_large_jpeg(struct ptp_dirent *cur) {
+	return cur && fuji_name_has_ext(cur->name, ".jpg") && cur->stbuf.st_size > FUJI_GFX_CHUNK_SIZE;
+}
+
+static int fuji_has_large_jpeg(vcam *cam) {
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (fuji_is_large_jpeg(cur)) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static struct ptp_dirent *fuji_find_fixture_parent(vcam *cam) {
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (cur->name && !strcmp(cur->name, "DCIM")) {
+			return cur;
+		}
+	}
+	return cam->first_dirent;
+}
+
+static int fuji_write_com_payload(FILE *file, size_t size) {
+	char payload[4096];
+	memset(payload, 'V', sizeof(payload));
+	while (size) {
+		size_t chunk = size < sizeof(payload) ? size : sizeof(payload);
+		if (fwrite(payload, 1, chunk, file) != chunk) {
+			return -1;
+		}
+		size -= chunk;
+	}
+	return 0;
+}
+
+static int fuji_create_large_jpeg_fixture(void) {
+	struct stat st;
+	if (stat(FUJI_GFX_LARGE_JPEG_PATH, &st) == 0 && st.st_size > FUJI_GFX_CHUNK_SIZE) {
+		return 0;
+	}
+
+	mkdir(FUJI_GFX_FIXTURE_DIR, 0700);
+
+	char base_path[512];
+	snprintf(base_path, sizeof(base_path), "%s/%s", PWD, FUJI_DUMMY_JPEG_COMPRESSED);
+	FILE *base = fopen(base_path, "rb");
+	if (!base) {
+		vcam_log("%s: could not open %s", __func__, base_path);
+		return -1;
+	}
+
+	fseek(base, 0, SEEK_END);
+	long base_size = ftell(base);
+	fseek(base, 0, SEEK_SET);
+	if (base_size < 4) {
+		fclose(base);
+		return -1;
+	}
+
+	unsigned char *base_data = malloc((size_t)base_size);
+	if (!base_data) {
+		fclose(base);
+		return -1;
+	}
+	if (fread(base_data, 1, (size_t)base_size, base) != (size_t)base_size) {
+		free(base_data);
+		fclose(base);
+		return -1;
+	}
+	fclose(base);
+
+	if (base_data[0] != 0xff || base_data[1] != 0xd8 || base_data[base_size - 2] != 0xff || base_data[base_size - 1] != 0xd9) {
+		vcam_log("%s: source JPEG does not have expected SOI/EOI markers", __func__);
+		free(base_data);
+		return -1;
+	}
+
+	FILE *out = fopen(FUJI_GFX_LARGE_JPEG_PATH, "wb");
+	if (!out) {
+		free(base_data);
+		return -1;
+	}
+
+	size_t current = (size_t)base_size - 2;
+	int rc = 0;
+	if (fwrite(base_data, 1, current, out) != current) {
+		rc = -1;
+	}
+	while (!rc && current + 2 < FUJI_GFX_LARGE_JPEG_SIZE) {
+		size_t payload_size = FUJI_GFX_LARGE_JPEG_SIZE - current - 2;
+		if (payload_size > 65533) {
+			payload_size = 65533;
+		}
+
+		unsigned char header[4] = {
+			0xff,
+			0xfe,
+			(unsigned char)(((payload_size + 2) >> 8) & 0xff),
+			(unsigned char)((payload_size + 2) & 0xff),
+		};
+		if (fwrite(header, 1, sizeof(header), out) != sizeof(header) || fuji_write_com_payload(out, payload_size)) {
+			rc = -1;
+			break;
+		}
+		current += sizeof(header) + payload_size;
+	}
+	if (!rc) {
+		unsigned char eoi[2] = {0xff, 0xd9};
+		if (fwrite(eoi, 1, sizeof(eoi), out) != sizeof(eoi)) {
+			rc = -1;
+		}
+	}
+
+	free(base_data);
+	fclose(out);
+	return rc;
+}
+
+static void fuji_add_virtual_file(vcam *cam, const char *name, const char *path) {
+	struct ptp_dirent *cur = calloc(1, sizeof(*cur));
+	if (!cur) {
+		return;
+	}
+
+	cur->name = strdup(name);
+	cur->fsname = strdup(path);
+	cur->parent = fuji_find_fixture_parent(cam);
+	if (cam->ptp_objectid == 0) {
+		cam->ptp_objectid = 1;
+	}
+	cur->id = cam->ptp_objectid++;
+	if (stat(cur->fsname, &cur->stbuf) == -1) {
+		free_dirent(cur);
+		return;
+	}
+
+	cur->next = cam->first_dirent;
+	cam->first_dirent = cur;
+	vcam_log("Fuji GFX fixture object %s handle 0x%08x size %ld", cur->name, cur->id, cur->stbuf.st_size);
+}
+
+static void fuji_setup_gfx100ii_fixtures(vcam *cam) {
+	if (strcmp(cam->vcamera_filesystem, PWD "/bin/card")) {
+		vcam_log("Fuji GFX: explicit filesystem selected, skipping synthetic large JPEG fixture");
+		return;
+	}
+	if (fuji_has_large_jpeg(cam)) {
+		return;
+	}
+	if (fuji_create_large_jpeg_fixture()) {
+		vcam_log("Fuji GFX fixture generation failed; continuing with scanned filesystem");
+		return;
+	}
+	fuji_add_virtual_file(cam, "DSCF0001.JPG", FUJI_GFX_LARGE_JPEG_PATH);
+}
+
+static int fuji_is_downloadable_object(struct ptp_dirent *cur) {
+	return cur && cur->id && !S_ISDIR(cur->stbuf.st_mode);
+}
+
+static int fuji_downloadable_object_count(vcam *cam) {
+	int count = 0;
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (fuji_is_downloadable_object(cur)) {
+			count++;
+		}
+	}
+	return count;
+}
+
+static int fuji_collect_downloadable_handles(vcam *cam, uint32_t **handles) {
+	int count = fuji_downloadable_object_count(cam);
+	*handles = NULL;
+	if (!count) {
+		return 0;
+	}
+
+	uint32_t *list = calloc((size_t)count, sizeof(uint32_t));
+	if (!list) {
+		return 0;
+	}
+
+	int i = 0;
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (fuji_is_downloadable_object(cur)) {
+			list[i++] = cur->id;
+		}
+	}
+
+	for (int a = 0; a < count; a++) {
+		for (int b = a + 1; b < count; b++) {
+			if (list[b] > list[a]) {
+				uint32_t tmp = list[a];
+				list[a] = list[b];
+				list[b] = tmp;
+			}
+		}
+	}
+
+	*handles = list;
+	return count;
+}
+
+static struct ptp_dirent *fuji_find_downloadable_object(vcam *cam, uint32_t handle) {
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (!fuji_is_downloadable_object(cur)) {
+			continue;
+		}
+		if (cur->id == handle) {
+			return cur;
+		}
+	}
+	return NULL;
+}
+
+static struct ptp_dirent *fuji_find_newest_downloadable_object(vcam *cam) {
+	struct ptp_dirent *newest = NULL;
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (!fuji_is_downloadable_object(cur)) {
+			continue;
+		}
+		if (!newest || cur->id > newest->id) {
+			newest = cur;
+		}
+	}
+	return newest;
+}
+
+static void fuji_rewrite_to_selected_handle(ptpcontainer *ptp, ptpcontainer *rewritten, uint32_t handle) {
+	*rewritten = *ptp;
+	rewritten->params[0] = handle;
+}
+
+static const char *fuji_import_folder_name(vcam *cam) {
+	const char *path = cam->vcamera_filesystem;
+	if (!path || !*path) {
+		return "100_FUJI";
+	}
+
+	const char *name = strrchr(path, '/');
+	name = name ? name + 1 : path;
+	return *name ? name : "100_FUJI";
+}
+
+struct FujiImportDate {
+	char date[9];
+	uint32_t count;
+};
+
+static int fuji_collect_import_dates(vcam *cam, struct FujiImportDate *dates, int max_dates) {
+	int n = 0;
+
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (!fuji_is_downloadable_object(cur)) {
+			continue;
+		}
+
+		time_t mtime = cur->stbuf.st_mtime;
+		struct tm *tm = gmtime(&mtime);
+		if (!tm) {
+			continue;
+		}
+
+		char date[9];
+		if (strftime(date, sizeof(date), "%Y%m%d", tm) == 0) {
+			continue;
+		}
+
+		int found = -1;
+		for (int i = 0; i < n; i++) {
+			if (!strcmp(dates[i].date, date)) {
+				found = i;
+				break;
+			}
+		}
+
+		if (found >= 0) {
+			dates[found].count++;
+			continue;
+		}
+
+		if (n >= max_dates) {
+			continue;
+		}
+		strncpy(dates[n].date, date, sizeof(dates[n].date));
+		dates[n].date[sizeof(dates[n].date) - 1] = '\0';
+		dates[n].count = 1;
+		n++;
+	}
+
+	for (int a = 0; a < n; a++) {
+		for (int b = a + 1; b < n; b++) {
+			if (strcmp(dates[b].date, dates[a].date) > 0) {
+				struct FujiImportDate tmp = dates[a];
+				dates[a] = dates[b];
+				dates[b] = tmp;
+			}
+		}
+	}
+
+	return n;
+}
+
+static int ptp_fuji_get_extension_object_info(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
+
+	if (!fuji_image_import_has_steps(cam, FUJI_IMPORT_BOOTSTRAP_READY)) {
+		return fuji_image_import_reject(cam, ptp, "0x9054 before function-mode/version setup");
+	}
+	if (ptp->params[0] != 0x10000001) {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+
+	struct ptp_dirent *cur = fuji_find_newest_downloadable_object(cam);
+	if (!cur) {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+
+	ptpcontainer rewritten;
+	fuji(cam)->image_import_current_handle = cur->id;
+	fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_CURRENT_INFO);
+	fuji_rewrite_to_selected_handle(ptp, &rewritten, cur->id);
+	return ptp_getobjectinfo_write(cam, &rewritten);
+}
+
+static int ptp_fuji_get_extension_thumb(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 1)) return 1;
+
+	struct Fuji *f = fuji(cam);
+	if (!fuji_image_import_has_steps(cam, FUJI_IMPORT_STEP_CURRENT_INFO) || !f->image_import_current_handle) {
+		return fuji_image_import_reject(cam, ptp, "0x9055 before current-object metadata");
+	}
+	if (ptp->params[0] != 0x10000001) {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+	if (!fuji_find_downloadable_object(cam, f->image_import_current_handle)) {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+
+	ptpcontainer rewritten;
+	fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_CURRENT_THUMB);
+	fuji_rewrite_to_selected_handle(ptp, &rewritten, f->image_import_current_handle);
+	return ptp_getthumb_write(cam, &rewritten);
+}
+
+static int ptp_fuji_get_extension_partial_object(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 3)) return 1;
+
+	if (!fuji_image_import_has_steps(cam, FUJI_IMPORT_ENUM_READY)) {
+		return fuji_image_import_reject(cam, ptp, "0x9056 before image enumeration prelude");
+	}
+	if (!fuji_find_downloadable_object(cam, ptp->params[0])) {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+	return ptp_fuji_getpartialobject_write(cam, ptp);
+}
+
+static int ptp_fuji_get_image_import_folders(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 0)) return 1;
+
+	if (!fuji_image_import_has_steps(cam, FUJI_IMPORT_STEP_CURRENT_THUMB)) {
+		return fuji_image_import_reject(cam, ptp, "0x9050 before current-object thumbnail");
+	}
+
+	struct Fuji *f = fuji(cam);
+	f->image_import_folder_query_seen = 1;
+	fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_FOLDERS);
+
+	unsigned char data[256] = {0};
+	int x = 0;
+	x += put_32bit_le(data + x, 1);
+	int entry_len_pos = x;
+	x += put_32bit_le(data + x, 0);
+	int entry_start = x;
+	x += put_32bit_le(data + x, 0x00010001);
+	x += put_32bit_le(data + x, (uint32_t)fuji_downloadable_object_count(cam));
+	x += put_string(data + x, fuji_import_folder_name(cam));
+	put_32bit_le(data + entry_len_pos, (uint32_t)(x - entry_start));
+
+	ptp_senddata(cam, ptp->code, data, x);
+	ptp_response(cam, PTP_RC_OK, 0);
+	return 1;
+}
+
+static int ptp_fuji_get_image_import_dates(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (ptp->nparams != 2 || ptp->params[0] != 0 || ptp->params[1] != 0x7530) {
+		ptp_response(cam, PTP_RC_InvalidParameter, 0);
+		return 1;
+	}
+	if (!fuji_image_import_has_steps(cam, FUJI_IMPORT_STEP_FOLDERS)) {
+		return fuji_image_import_reject(cam, ptp, "0x9053 before folder enumeration");
+	}
+
+	struct Fuji *f = fuji(cam);
+	f->image_import_date_query_seen = 1;
+	fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_DATES);
+
+	struct FujiImportDate dates[32] = {0};
+	int count = fuji_collect_import_dates(cam, dates, 32);
+
+	unsigned char data[2048] = {0};
+	int x = 0;
+	x += put_32bit_le(data + x, (uint32_t)count);
+	for (int i = 0; i < count; i++) {
+		int entry_len_pos = x;
+		x += put_32bit_le(data + x, 0);
+		int entry_start = x;
+		x += put_string(data + x, dates[i].date);
+		x += put_32bit_le(data + x, dates[i].count);
+		put_32bit_le(data + entry_len_pos, (uint32_t)(x - entry_start));
+	}
+
+	ptp_senddata(cam, ptp->code, data, x);
+	ptp_response(cam, PTP_RC_OK, 0);
+	return 1;
+}
+
+static int ptp_fuji_unsupported(vcam *cam, ptpcontainer *ptp) {
+	vcam_log("Fuji GFX rejecting unsupported opcode 0x%04x", ptp->code);
+	ptp_response(cam, PTP_RC_OperationNotSupported, 0);
+	return 1;
+}
+
 int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int code = ptp->params[0];
 	struct Fuji *f = fuji(cam);
@@ -222,10 +733,12 @@ int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		PTP_DPC_FUJI_GetObjectVersion,
 		PTP_DPC_FUJI_EnableCorrectFileSize,
 		PTP_DPC_FUJI_CompressSmall,
+		PTP_DPC_FUJI_Unknown_D22E,
 		PTP_DPC_FUJI_ImageGetVersion,
 		PTP_DPC_FUJI_GeoTagVersion,
 		PTP_DPC_FUJI_AutoSaveVersion,
 		PTP_DPC_FUJI_AutoSaveDatabaseStatus,
+		PTP_DPC_FUJI_RemotePhotoViewExVersion,
 	};
 
 	int codes_remote_only[] = {
@@ -253,13 +766,18 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 	struct Fuji *f = fuji(cam);
 	uint32_t *uint = (uint32_t *)data;
 	uint16_t *uint16 = (uint16_t *)data;
+	uint32_t log_value = 0;
+	memcpy(&log_value, data, len < sizeof(log_value) ? len : sizeof(log_value));
 
-	vcam_log("Fuji Set property %X -> %X (size %d)", ptp->params[0], uint[0], len);
+	vcam_log("Fuji Set property %X -> %X (size %d)", ptp->params[0], log_value, len);
 
 	switch (ptp->params[0]) {
 	case PTP_DPC_FUJI_ClientState:
 		assert(len == 2);
-		f->client_state = uint[0];
+		f->client_state = uint16[0];
+		if (uint16[0] == 20) {
+			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_CLIENT_STATE);
+		}
 		//usleep(1000 * 1000 * 3);
 		break;
 	case PTP_DPC_FUJI_RemoteVersion:
@@ -270,15 +788,28 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 		break;
 	case PTP_DPC_FUJI_CompressSmall:
 		f->compress_small = uint16[0];
+		if (len == 2 && uint16[0] == 0) {
+			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D226_SET);
+		}
+		break;
+	case PTP_DPC_FUJI_Unknown_D22E:
 		break;
 	case PTP_DPC_FUJI_EnableCorrectFileSize:
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
 		f->no_compressed = uint16[0];
+		if (uint16[0] == 0) {
+			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D227_SET);
+		}
 		//usleep(1000 * 5000); // Fuji seems to take a while here
 		break;
 	case PTP_DPC_FUJI_RemoteGetObjectVersion:
 		assert(len == 4);
+		break;
+	case PTP_DPC_FUJI_RemotePhotoViewExVersion:
+		if (len == 4 && uint[0] == 3) {
+			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_DF28_SET);
+		}
 		break;
 	case PTP_DPC_FUJI_CameraState:
 		assert(len == 2);
@@ -380,6 +911,11 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		data = f->get_object_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		} break;
+	case PTP_DPC_FUJI_RemotePhotoViewExVersion:
+		data = 3;
+		fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_DF28_GET);
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
+		break;
 	case PTP_DPC_FUJI_RemoteGetObjectVersion:
 		if (f->remote_get_object_version) {
 			data = f->remote_get_object_version;
@@ -388,6 +924,11 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		break;
 //	case PTP_DPC_FUJI_ImageGetLimitedVersion:
 	case PTP_DPC_FUJI_CompressionCutOff:
+		if (f->is_gfx100ii) {
+			data = 0x00bfffe0;
+			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
+			break;
+		}
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
 	case PTP_DPC_FUJI_RemoteVersion:
@@ -400,8 +941,37 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		break;
 	case PTP_DPC_FUJI_StorageID:
 		data = 0;
+		fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D244_GET);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1);
 		break;
+	case PTP_DPC_FUJI_ImageImportObjectCount:
+		if (f->is_gfx100ii && !fuji_image_import_has_steps(cam, FUJI_IMPORT_ENUM_READY)) {
+			return fuji_image_import_reject(cam, ptp, "D620 before complete image-import prelude");
+		}
+		data = fuji_downloadable_object_count(cam);
+		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
+		break;
+	case PTP_DPC_FUJI_ImageImportObjectHandles: {
+		if (f->is_gfx100ii && !fuji_image_import_has_steps(cam, FUJI_IMPORT_ENUM_READY)) {
+			return fuji_image_import_reject(cam, ptp, "D621 before complete image-import prelude");
+		}
+		uint32_t *handles = NULL;
+		int count = fuji_collect_downloadable_handles(cam, &handles);
+		unsigned char *payload = calloc(1, (size_t)(4 + count * 4));
+		if (!payload) {
+			free(handles);
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			return 1;
+		}
+		int x = 0;
+		x += put_32bit_le(payload + x, (uint32_t)count);
+		for (int i = 0; i < count; i++) {
+			x += put_32bit_le(payload + x, handles[i]);
+		}
+		ptp_senddata(cam, ptp->code, payload, x);
+		free(handles);
+		free(payload);
+		} break;
 	case PTP_DPC_FUJI_Unknown_D52F:
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
@@ -531,11 +1101,22 @@ int ptp_fuji_liveview(int socket) {
 }
 
 int ptp_fuji_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
-	int rc = ptp_getpartialobject_write(cam, ptp);
+	int completed = 0;
+	struct ptp_dirent *cur = fuji_find_downloadable_object(cam, ptp->params[0]);
+	if (cur) {
+		uint64_t object_size = (uint64_t)cur->stbuf.st_size;
+		uint64_t offset = (uint64_t)ptp->params[1];
+		uint64_t requested = (uint64_t)ptp->params[2];
+		uint64_t bytes_returned = 0;
+		if (offset < object_size) {
+			uint64_t remaining = object_size - offset;
+			bytes_returned = requested < remaining ? requested : remaining;
+		}
+		completed = offset >= object_size || offset + bytes_returned >= object_size;
+	}
 
-	// Once the end of the file is read, the cam seems to switch object IDs
-	// From what I can tell, this can be triggered by cam's size being lower or request size being lower (TODO: just the latter)
-	if (ptp->params[2] != 0x100000) {
+	int rc = ptp_getpartialobject_write(cam, ptp);
+	if (completed) {
 		fuji_downloaded_object(cam);
 	}
 
@@ -583,6 +1164,16 @@ void fuji_register_opcodes(vcam *cam) {
 	vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_getpartialobject_write, NULL);
 
 	struct Fuji *f = fuji(cam);
+	if (f->is_gfx100ii) {
+		// GFX/XApp import uses these vendor calls only as a gallery prelude.
+		// The file body path is still standard GetObjectInfo/GetThumb/GetPartialObject.
+		vcam_register_opcode(cam, PTP_OC_GetObjectHandles, ptp_fuji_unsupported, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetImageImportFolders, ptp_fuji_get_image_import_folders, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetImageImportDates, ptp_fuji_get_image_import_dates, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionObjectInfo, ptp_fuji_get_extension_object_info, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionThumb, ptp_fuji_get_extension_thumb, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionPartialObject, ptp_fuji_get_extension_partial_object, NULL);
+	}
 	if (f->do_discovery) {
 		vcam_register_opcode(cam, PTP_OC_GetThumb, ptp_fuji_discovery_getthumb_write, NULL);
 	}

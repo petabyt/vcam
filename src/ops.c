@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -10,6 +11,79 @@
 #include <time.h>
 #include <libexif/exif-data.h>
 #include "vcam.h"
+
+#define PTP_MAX_PARTIAL_OBJECT_CHUNK (16u * 1024u * 1024u)
+
+static int exif_get_int(ExifData *ed, ExifTag tag, int *value) {
+	ExifEntry *entry = exif_data_get_entry(ed, tag);
+	if (!entry || !entry->data || !value) {
+		return 0;
+	}
+
+	uint32_t result = 0;
+	if (entry->format == EXIF_FORMAT_SHORT && entry->size >= sizeof(uint16_t)) {
+		result = exif_get_short(entry->data, exif_data_get_byte_order(ed));
+	} else if (entry->format == EXIF_FORMAT_LONG && entry->size >= sizeof(uint32_t)) {
+		result = exif_get_long(entry->data, exif_data_get_byte_order(ed));
+	} else {
+		return 0;
+	}
+	if (result > INT_MAX) {
+		return 0;
+	}
+
+	*value = (int)result;
+	return 1;
+}
+
+static void exif_get_dimensions(ExifData *ed, int *width, int *height) {
+	if (width) {
+		exif_get_int(ed, EXIF_TAG_PIXEL_X_DIMENSION, width);
+	}
+	if (height) {
+		exif_get_int(ed, EXIF_TAG_PIXEL_Y_DIMENSION, height);
+	}
+}
+
+static int exif_copy_thumbnail(ExifData *ed, unsigned char **thumb, size_t *thumb_size) {
+	if (thumb) {
+		*thumb = NULL;
+	}
+	if (thumb_size) {
+		*thumb_size = 0;
+	}
+
+	if (!ed || !ed->data || !ed->size || ed->size > INT_MAX) {
+		return 0;
+	}
+	if (thumb_size) {
+		*thumb_size = ed->size;
+	}
+	if (thumb) {
+		*thumb = malloc(ed->size);
+		if (!*thumb) {
+			if (thumb_size) {
+				*thumb_size = 0;
+			}
+			return 0;
+		}
+		memcpy(*thumb, ed->data, ed->size);
+	}
+
+	return 1;
+}
+
+static int exif_read_object_metadata(struct ptp_dirent *cur, unsigned char **thumb, size_t *thumb_size, int *width, int *height) {
+	ExifData *ed = exif_data_new_from_file(cur->fsname);
+	if (!ed) {
+		return 0;
+	}
+
+	exif_get_dimensions(ed, width, height);
+	int has_thumbnail = exif_copy_thumbnail(ed, thumb, thumb_size);
+	exif_data_unref(ed);
+	return has_thumbnail;
+}
 
 int ptp_nikon_setcontrolmode_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
@@ -377,27 +451,47 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	FILE *file = fopen(cur->fsname, "rb");
 	if (file == NULL) {
 		vcam_log("File %s not found", cur->fsname);
-		exit(-1);
-	}
-
-	size_t start = (size_t)ptp->params[1];
-	size_t size = (size_t)ptp->params[2];
-
-	if (fseek(file, start, SEEK_SET) == -1) {
-		ptp_response(cam, PTP_RC_OK, 0);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
 		return 1;
 	}
 
-	char *buffer = malloc(size);
-	int read = fread(buffer, 1, size, file); // TODO: check for folder
+	uint64_t object_size = (uint64_t)cur->stbuf.st_size;
+	uint64_t start = (uint64_t)ptp->params[1];
+	uint64_t requested = (uint64_t)ptp->params[2];
+	if (requested > PTP_MAX_PARTIAL_OBJECT_CHUNK) {
+		requested = PTP_MAX_PARTIAL_OBJECT_CHUNK;
+	}
+	size_t size = 0;
+	if (start < object_size) {
+		uint64_t remaining = object_size - start;
+		uint64_t to_read = requested < remaining ? requested : remaining;
+		if (to_read > SIZE_MAX) {
+			to_read = SIZE_MAX;
+		}
+		size = (size_t)to_read;
+	}
 
-	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, read);
-	vcam_log("Generic sending %d", read);
+	if (size && fseek(file, (long)start, SEEK_SET) == -1) {
+		fclose(file);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+
+	char *buffer = size ? malloc(size) : NULL;
+	if (size && !buffer) {
+		fclose(file);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+	size_t bytes_read = size ? fread(buffer, 1, size, file) : 0; // TODO: check for folder
+
+	ptp_senddata(cam, ptp->code, (unsigned char *)buffer, (int)bytes_read);
+	vcam_log("Generic sending %d", (int)bytes_read);
 
 	free(buffer);
 	fclose(file);
 
-	ptp_response(cam, PTP_RC_OK, 0);
+	ptp_response(cam, PTP_RC_OK, 1, (uint32_t)bytes_read);
 	return 1;
 }
 
@@ -476,52 +570,22 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 		if (strstr(cur->name, ".MPG") || strstr(cur->name, ".mpg") ||
 		    strstr(cur->name, ".MPEG") || strstr(cur->name, ".mpeg"))
 			ofc = 0x300B;
+		if (strstr(cur->name, ".MOV") || strstr(cur->name, ".mov") ||
+		    strstr(cur->name, ".MP4") || strstr(cur->name, ".mp4"))
+			ofc = PTP_OF_MOV;
+		if (strstr(cur->name, ".RAF") || strstr(cur->name, ".raf"))
+			ofc = PTP_OF_RAW;
 	}
 
-	if (ofc == 0x3801) { /* We are jpeg ... look into the exif data */
-		ExifData *ed;
-		ExifEntry *e;
-		unsigned char *filedata;
-
-		filedata = read_file(cur);
-		if (!filedata) {
-			free(data);
-			ptp_response(cam, PTP_RC_GeneralError, 0);
-			return 1;
+	if (ofc == PTP_OF_JPEG || ofc == PTP_OF_RAW) {
+		size_t exif_thumb_size = 0;
+		if (exif_read_object_metadata(cur, NULL, &exif_thumb_size, &imagewidth, &imageheight)) {
+			thumbofc = 0x3808;
+			thumbsize = (int)exif_thumb_size;
 		}
-
-		ed = exif_data_new_from_data((unsigned char *)filedata, cur->stbuf.st_size);
-		if (ed) {
-			if (ed->data) {
-				thumbofc = 0x3808;
-				thumbsize = ed->size;
-			}
-			e = exif_data_get_entry(ed, EXIF_TAG_PIXEL_X_DIMENSION);
-			if (e) {
-				vcam_log_func(__func__, "pixel x dim format is %d", e->format);
-				if (e->format == EXIF_FORMAT_SHORT) {
-					imagewidth = exif_get_short(e->data, exif_data_get_byte_order(ed));
-				} else if (e->format == EXIF_FORMAT_LONG) {
-					imagewidth = exif_get_long(e->data, exif_data_get_byte_order(ed));
-				}
-			}
-			e = exif_data_get_entry(ed, EXIF_TAG_PIXEL_Y_DIMENSION);
-			if (e) {
-				vcam_log_func(__func__, "pixel y dim format is %d", e->format);
-				if (e->format == EXIF_FORMAT_SHORT) {
-					imageheight = exif_get_short(e->data, exif_data_get_byte_order(ed));
-				} else if (e->format == EXIF_FORMAT_LONG) {
-					imageheight = exif_get_long(e->data, exif_data_get_byte_order(ed));
-				}
-			}
-
-			/* FIXME: potentially could find out more about thumbnail too */
-		}
-		exif_data_unref(ed);
-		free(filedata);
 	}
 
-	uint32_t compressed_size = cur->stbuf.st_size;
+	uint32_t compressed_size = cur->stbuf.st_size > UINT32_MAX ? UINT32_MAX : (uint32_t)cur->stbuf.st_size;
 
 #warning "TODO: compressed_size = 0x19000 if fuji is in wifi mode"
 
@@ -570,7 +634,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 		x += put_string(data + x, "Orientation: 1");
 	}
 
-	ptp_senddata(cam, 0x1008, data, x);
+	ptp_senddata(cam, ptp->code, data, x);
 	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -613,9 +677,7 @@ int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 }
 
 int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
-	unsigned char *data;
 	struct ptp_dirent *cur;
-	ExifData *ed;
 
 	if (vcam_check_trans_id(cam, ptp))return 1;
 	if (vcam_check_session(cam))return 1;
@@ -634,38 +696,24 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 		return 1;
 	}
-	data = read_file(cur);
-	if (!data) {
-		ptp_response(cam, PTP_RC_GeneralError, 0);
-		return 1;
-	}
-
-	ed = exif_data_new_from_data((unsigned char *)data, cur->stbuf.st_size);
-	if (!ed) {
-		vcam_log_func(__func__, "Could not parse EXIF data");
-		free(data);
-		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
-		return 1;
-	}
-	if (!ed->data) {
+	size_t thumb_size = 0;
+	unsigned char *thumb = NULL;
+	if (!exif_read_object_metadata(cur, &thumb, &thumb_size, NULL, NULL)) {
 		vcam_log_func(__func__, "EXIF data does not contain a thumbnail");
-		free(data);
 		ptp_response(cam, PTP_RC_NoThumbnailPresent, 0);
-		exif_data_unref(ed);
 		return 1;
 	}
 	/*
 	 * We found a thumbnail in EXIF data! Those
 	 * thumbnails are always JPEG. Set up the file.
 	 */
-	ptp_senddata(cam, 0x100A, ed->data, ed->size);
-	exif_data_unref(ed);
+	ptp_senddata(cam, ptp->code, thumb, (int)thumb_size);
+	free(thumb);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
 	vcam_log("Done processing thumbnail call\n");
 
-	free(data);
 	return 1;
 }
 

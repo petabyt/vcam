@@ -26,6 +26,13 @@ struct Fuji {
 	int internal_state;
 	/// @brief Number of images currently sent through the SEND MULTIPLE feature
 	int sent_images;
+	/// @brief GFX100 II/modern import profile. Keep this narrow until another modern body is modeled.
+	int is_gfx100ii;
+	int image_import_preflight_seen;
+	int image_import_folder_query_seen;
+	int image_import_date_query_seen;
+	unsigned int image_import_steps;
+	unsigned int image_import_current_handle;
 
 	FILE *log;
 
@@ -77,6 +84,7 @@ int fuji_tether_connect(const char *ip, int port);
 void fuji_accept_remote_ports(void);
 
 int vcam_fuji_setup(vcam *cam);
+void fuji_reset_image_import_state(vcam *cam);
 
 void fuji_register_d212(vcam *cam);
 
