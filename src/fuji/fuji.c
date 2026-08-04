@@ -1079,8 +1079,8 @@ int ptp_fuji_liveview(int socket) {
 	vcam_log("Broadcasting liveview");
 	FILE *file = fopen(FUJI_DUMMY_LV_JPEG, "rb");
 	if (file == NULL) {
-		vcam_log("File %s not found", FUJI_DUMMY_LV_JPEG);
-		exit(-1);
+		vcam_log("Liveview frame %s not found, not sending anything", FUJI_DUMMY_LV_JPEG);
+		return 0;
 	}
 
 	fseek(file, 0, SEEK_END);
