@@ -5,25 +5,17 @@
 #include <assert.h>
 #include <unistd.h>
 #include <vcam.h>
+#include <canon.h>
 
 void canon_register_d4_hidden(vcam *cam);
 void canon_register_base_eos(vcam *cam);
-
-struct CanonBase {
-	int first_events;
-	int lv_ready;
-	int calls_to_liveview;
-};
-static inline struct CanonBase *priv(vcam *cam) {
-	return (struct CanonBase *)cam->priv;
-}
 
 #define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos/eos_events.bin"
 
 int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = malloc(sizeof(struct CanonBase));
-	struct CanonBase *p = priv(cam);
+	struct CanonBase *p = canon(cam);
 
 	p->first_events = 0;
 	p->lv_ready = 0;
@@ -31,6 +23,10 @@ int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;
+		if (!strcmp(argv[i], "--ssdp-modern")) {
+			p->ssdp_modern = 1;
+			continue;
+		}
 		// ...
 	}
 
@@ -65,7 +61,7 @@ struct EosEventUint {
 };
 
 static int ptp_eos_viewfinder_data(vcam *cam, ptpcontainer *ptp) {
-	struct CanonBase *p = priv(cam);
+	struct CanonBase *p = canon(cam);
 	usleep(1000 * 10);
 	p->calls_to_liveview++;
 
@@ -81,7 +77,7 @@ static int ptp_eos_viewfinder_data(vcam *cam, ptpcontainer *ptp) {
 }
 
 static int ptp_eos_generic(vcam *cam, ptpcontainer *ptp) {
-	struct CanonBase *p = priv(cam);
+	struct CanonBase *p = canon(cam);
 	switch (ptp->code) {
 	case PTP_OC_EOS_SetRemoteMode:
 	case PTP_OC_EOS_SetEventMode:
@@ -155,7 +151,7 @@ static int ptp_eos_set_property(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 static int ptp_eos_set_property_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
-	struct CanonBase *p = priv(cam);
+	struct CanonBase *p = canon(cam);
 	uint32_t *dat = (uint32_t *)data;
 	uint32_t length = dat[0];
 	uint32_t code = dat[1];
@@ -243,7 +239,7 @@ static int eos_pack_all_props(vcam *cam, uint8_t *buf, int *size) {
 }
 
 static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
-	struct CanonBase *p = priv(cam);
+	struct CanonBase *p = canon(cam);
 	if (vcam_check_param_count(cam, ptp, 0)) return 1;
 
 	if (p->first_events) {
@@ -264,10 +260,8 @@ static int vusb_ptp_eos_events(vcam *cam, ptpcontainer *ptp) {
 }
 
 static int vusb_ptp_eos_getdevicepropvalue(vcam *cam, ptpcontainer *ptp) {
-	struct CanonBase *p = priv(cam);
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
-
-	ptp_response(cam, PTP_RC_GeneralError, 0);
+	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
 

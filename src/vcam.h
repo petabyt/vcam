@@ -319,6 +319,7 @@ int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);
 
 int fuji_wifi_main(vcam *cam);
 int ptpip_generic_main(vcam *cam);
+int canon_ssdp_start(vcam *cam);
 
 #include "data.h"
 #include "socket.h"

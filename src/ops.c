@@ -14,6 +14,8 @@
 
 #define PTP_MAX_PARTIAL_OBJECT_CHUNK (16u * 1024u * 1024u)
 
+#define MAIN_STORAGE_ID 0x00010001
+
 static int exif_get_int(ExifData *ed, ExifTag tag, int *value) {
 	ExifEntry *entry = exif_data_get_entry(ed, tag);
 	if (!entry || !entry->data || !value) {
@@ -223,7 +225,7 @@ int ptp_getnumobjects_write(vcam *cam, ptpcontainer *ptp) {
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
-	if ((ptp->params[0] != 0xffffffff) && (ptp->params[0] != 0x00010001)) {
+	if ((ptp->params[0] != 0xffffffff) && (ptp->params[0] != MAIN_STORAGE_ID)) {
 		vcam_log_func(__func__, "storage id 0x%08x unknown", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidStorageId, 0);
 		return 1;
@@ -296,7 +298,7 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 		ptp_response(cam, PTP_RC_InvalidParameter, 0);
 		return 1;
 	}
-	if ((ptp->params[0] != 0xffffffff) && (ptp->params[0] != 0x00010001)) {
+	if ((ptp->params[0] != 0xffffffff) && (ptp->params[0] != MAIN_STORAGE_ID)) {
 		vcam_log_func(__func__, "storage id 0x%08x unknown", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidStorageId, 0);
 		return 1;
@@ -389,7 +391,7 @@ int ptp_getstorageids_write(vcam *cam, ptpcontainer *ptp) {
 
 	data = malloc(200);
 
-	sids[0] = 0x00010001;
+	sids[0] = MAIN_STORAGE_ID;
 	x = put_32bit_le_array(data, sids, 1);
 
 	ptp_senddata(cam, ptp->code, data, x);
@@ -406,7 +408,7 @@ int ptp_getstorageinfo_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
-	if (ptp->params[0] != 0x00010001) {
+	if (ptp->params[0] != MAIN_STORAGE_ID) {
 		vcam_log_func(__func__, "invalid storage id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidStorageId, 0);
 		return 1;
@@ -545,7 +547,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	data = malloc(2000);
-	x += put_32bit_le(data + x, 0x10000001); /* StorageID */
+	x += put_32bit_le(data + x, MAIN_STORAGE_ID); /* StorageID */
 	/* ObjectFormatCode */
 	ofc = 0x3000;
 	if (S_ISDIR(cur->stbuf.st_mode)) {
@@ -620,7 +622,7 @@ int ptp_getobjectinfo_write(vcam *cam, ptpcontainer *ptp) {
 	sprintf(xdate, "%04d%02d%02dT%02d%02d%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 	x += put_string(data + x, xdate); /* CreationDate */
 
-#if 0
+#if 1
 	xtime = cur->stbuf.st_mtime;
 	tm = gmtime(&xtime);
 	sprintf(xdate, "%04d%02d%02dT%02d%02d%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
@@ -726,7 +728,7 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 2))return 1;
 
-	if ((ptp->params[0] != 0) && (ptp->params[0] != 0x00010001)) {
+	if ((ptp->params[0] != 0) && (ptp->params[0] != MAIN_STORAGE_ID)) {
 		vcam_log_func(__func__, "invalid storage id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_StoreNotAvailable, 0);
 		return 1;

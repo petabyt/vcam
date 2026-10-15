@@ -239,7 +239,7 @@ version_cmp() {
     return 0
 }
 
-USE_IWCONFIG=0
+USE_IWCONFIG=1
 
 is_interface() {
     [[ -z "$1" ]] && return 1
@@ -360,11 +360,11 @@ is_5ghz_frequency() {
 }
 
 is_wifi_connected() {
-    if [[ $USE_IWCONFIG -eq 0 ]]; then
-        iw dev "$1" link 2>&1 | grep -E '^Connected to' > /dev/null 2>&1 && return 0
-    else
-        iwconfig "$1" 2>&1 | grep -E 'Access Point: [0-9a-fA-F]{2}:' > /dev/null 2>&1 && return 0
-    fi
+    #if [[ $USE_IWCONFIG -eq 0 ]]; then
+    #    iw dev "$1" link 2>&1 | grep -E '^Connected to' > /dev/null 2>&1 && return 0
+    #else
+    #    iwconfig "$1" 2>&1 | grep -E 'Access Point: [0-9a-fA-F]{2}:' > /dev/null 2>&1 && return 0
+    #fi
     return 1
 }
 
@@ -1379,7 +1379,7 @@ fi
 if ! can_be_sta_and_ap ${WIFI_IFACE}; then
     if is_wifi_connected ${WIFI_IFACE}; then
         echo "ERROR: Your adapter can not be a station (i.e. be connected) and an AP at the same time" >&2
-        exit 1
+        #exit 1
     elif [[ $NO_VIRT -eq 0 ]]; then
         echo "WARN: Your adapter does not fully support AP virtual interface, enabling --no-virt" >&2
         NO_VIRT=1

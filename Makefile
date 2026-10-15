@@ -6,6 +6,9 @@ all:
 clean:
 	rm -rf build
 
+autosave:
+	build/vcam fuji_x_t4 tcp --discovery
+
 # WiFi hardware for spoofing (requires AP support)
 WIFI_DEV ?= $(shell iw dev | awk '$$1=="Interface"{print $$2}')
 
@@ -24,6 +27,9 @@ ifdef model
   endif
 endif
 
+local-ip:
+	build/vcam fuji_x_t4 tcp --local-ip --fs ~/Pictures/fuji_sd2/
+
 SSID ?= FUJIFILM-X30-ABCD
 PASSWORD ?= 
 
@@ -37,14 +43,14 @@ ap-fuji: setup-fuji
 	sudo bash scripts/create_ap $(WIFI_DEV) fuji_dummy $(SSID) $(PASSWORD)
 
 setup-canon:
-	-sudo ip link add canon_dummy type dummy
-	-sudo ip link set dev canon_dummy address '00:BB:C1:85:9F:AB'
-	-sudo ip link set canon_dummy up
-	-sudo ip route add 192.168.1.2 dev canon_dummy
-	-sudo ip address add 192.168.1.10/24 brd + dev canon_dummy noprefixroute
-	-ip a
+	ip link add canon_dummy type dummy
+	ip link set dev canon_dummy address '00:BB:C1:85:9F:AB'
+	ip link set canon_dummy up
+	ip route add 192.168.1.2 dev canon_dummy
+	ip address add 192.168.1.10/24 brd + dev canon_dummy noprefixroute
+	ip a
 ap-canon: setup-canon
-	sudo bash scripts/create_ap $(WIFI_DEV) canon_dummy 'EOST6{-464_Canon0A' $(PASSWORD) -g 192.168.1.2 --ieee80211n
+	sudo bash scripts/create_ap $(WIFI_DEV) canon_dummy 'EOST6{-464_Canon0A' 12345678 -g 192.168.1.2
 
 reset:
 	-sudo ip link delete canon_dummy

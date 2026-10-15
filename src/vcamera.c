@@ -361,6 +361,7 @@ void free_dirent(struct ptp_dirent *ent) {
 
 static void read_tree(vcam *cam, const char *path) {
 	struct ptp_dirent *root = NULL, *dir, *dcim = NULL;
+	cam->ptp_objectid = 0;
 
 	if (cam->first_dirent) {
 		vcam_log("read_tree called twice, memory leaked");
@@ -746,6 +747,7 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 		}
 	} else if (canon_init_cam(cam, name, argc, argv) == 0) {
 		if (backend == VCAM_TCP) {
+			canon_ssdp_start(cam);
 			int rc = ptpip_generic_main(cam);
 			vcam_close(cam);
 			return rc;

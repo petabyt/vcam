@@ -19,6 +19,7 @@ set(VCAM_CORE
     src/fuji/server.c
     src/ptpip.c
     src/canon/props.c
+    src/canon/ssdp.c
     src/data.c
     src/props.c
     src/fuji/ssdp.c
@@ -27,18 +28,18 @@ set(VCAM_CORE
     src/fuji/fs.c
     src/usbthing.c
 
-    usbthing/device.c
-    usbthing/usbstring.c
-    usbthing/vhci.c
+    src/usb/device.c
+    src/usb/usbstring.c
+    src/usb/vhci.c
 )
 
 get_filename_component(VCAM_PWD "${PROJECT_SOURCE_DIR}" ABSOLUTE)
 
 set(VCAM_COMMON_FLAGS -g -Wall -fPIC -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3)
 set(VCAM_COMMON_DEFINITIONS PWD="${VCAM_PWD}")
-set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src usbthing src/fuji src/canon)
+set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src src/usb src/fuji src/canon)
 
-add_library(usb-vcam SHARED ${VCAM_CORE} usbthing/libusb.c)
+add_library(usb-vcam SHARED ${VCAM_CORE} src/usb/libusb.c)
 target_link_libraries(usb-vcam ${LIBEXIF_LIBRARIES})
 target_include_directories(usb-vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(usb-vcam PRIVATE ${VCAM_COMMON_FLAGS})
@@ -49,6 +50,12 @@ target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES})
 target_include_directories(vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(vcam PRIVATE ${VCAM_COMMON_FLAGS})
 target_compile_definitions(vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
+
+#add_executable(upnp upnp/gssdp.c)
+#target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES})
+#target_include_directories(vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
+#target_compile_options(vcam PRIVATE ${VCAM_COMMON_FLAGS})
+#target_compile_definitions(vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
 
 install(
     TARGETS vcam usb-vcam

@@ -14,3 +14,5 @@ temp.txt
 .idea
 *.so
 build
+bin/card/*
+build2
