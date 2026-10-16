@@ -10,6 +10,53 @@
 #include <vcam.h>
 #include <sony.h>
 
+// Canonical shutter stop list for 0xD20D, in gphoto2's sony_shuttertable
+// order (slow -> fast, encoded (numerator<<16)|denominator). gphoto2's
+// mode-2 stepping loop computes jump widths as positions in that exact
+// table, so the enumeration must match it one-to-one for the steps to
+// converge (master's direct 0x9205 writes are unaffected by the form).
+static const uint32_t sony_shutter_stops[] = {
+	1966081, /* 30/1 */  1638401, /* 25/1 */  1310721, /* 20/1 */
+	983041,  /* 15/1 */  851969,  /* 13/1 */  655361,  /* 10/1 */
+	524289,  /*  8/1 */  393217,  /*  6/1 */  327681,  /*  5/1 */
+	262145,  /*  4/1 */  2097162, /* 32/10 */ 1638410, /* 25/10 */
+	131073,  /*  2/1 */  1048586, /* 16/10 */ 851978,  /* 13/10 */
+	65537,   /*  1/1 */  524298,  /*  8/10 */ 393226,  /*  6/10 */
+	327690,  /*  5/10 */ 262154,  /*  4/10 */ 65539,   /*  1/3  */
+	65540,   /*  1/4  */  65541,   /*  1/5  */  65542,   /*  1/6  */
+	65544,   /*  1/8  */  65546,   /*  1/10 */  65549,   /*  1/13 */
+	65551,   /*  1/15 */  65556,   /*  1/20 */  65561,   /*  1/25 */
+	65566,   /*  1/30 */  65576,   /*  1/40 */  65586,   /*  1/50 */
+	65596,   /*  1/60 */  65616,   /*  1/80 */  65636,   /* 1/100 */
+	65661,   /* 1/125 */  65696,   /* 1/160 */  65736,   /* 1/200 */
+	65786,   /* 1/250 */  65856,   /* 1/320 */  65936,   /* 1/400 */
+	66036,   /* 1/500 */  66176,   /* 1/640 */  66336,   /* 1/800 */
+	66536,   /* 1/1000 */ 66786,   /* 1/1250 */ 67136,   /* 1/1600 */
+	67536,   /* 1/2000 */ 68036,   /* 1/2500 */ 68736,   /* 1/3200 */
+	69536,   /* 1/4000 */ 70536,   /* 1/5000 */ 71936,   /* 1/6400 */
+	73536,   /* 1/8000 */ 75536,   /* 1/10000 */ 78036,  /* 1/12500 */
+	81536,   /* 1/16000 */ 85536,  /* 1/20000 */ 90536,  /* 1/25000 */
+	97536,   /* 1/32000 */
+};
+
+void sony_add_shutter_prop(vcam *cam, int rw, uint32_t value) {
+	int n = sizeof(sony_shutter_stops) / sizeof(sony_shutter_stops[0]);
+	struct PtpPropDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	desc.DevicePropertyCode = 0xd20d;
+	desc.DataType = PTP_TC_UINT32;
+	desc.GetSet = rw ? 1 : 0;
+	desc.factory_default_value = malloc(4);
+	desc.value = malloc(4);
+	memcpy(desc.factory_default_value, &value, 4);
+	memcpy(desc.value, &value, 4);
+	desc.FormFlag = PTP_EnumerationForm;
+	desc.avail = malloc(n * 4);
+	desc.avail_cnt = n;
+	memcpy(desc.avail, sony_shutter_stops, n * 4);
+	vcam_register_prop(cam, 0xd20d, &desc);
+}
+
 static int type_width(uint16_t type) {
 	switch (type) {
 	case PTP_TC_INT8: case PTP_TC_UINT8: return 1;

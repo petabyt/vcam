@@ -205,10 +205,15 @@ static int sony_sdioconnect_op(vcam *cam, ptpcontainer *ptp) {
 // 0x9202 SDIO_GetExtDeviceInfo: protocol negotiation. The response version
 // word selects mode 2 (0x0c8) or mode 3 (0x12c); a zero-length reply would
 // make gphoto2 fall back to mode 2, so the arrays must be non-empty.
+// gphoto2 sends (0x12c) or (0x12c, 1) depending on version - accept both.
 static int sony_getextdeviceinfo_op(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_trans_id(cam, ptp)) return 1;
 	if (vcam_check_session(cam)) return 1;
-	if (vcam_check_param_count(cam, ptp, 2)) return 1;
+	if (ptp->nparams < 1 || ptp->nparams > 2) {
+		vcam_log_func(__func__, "params should be 1 or 2, but is %d", ptp->nparams);
+		ptp_response(cam, PTP_RC_ParameterNotSupported, 0);
+		return 1;
+	}
 
 	struct Sony *p = sony(cam);
 	unsigned char *data = malloc(16 + 2 * cam->props->length);
@@ -318,6 +323,62 @@ static int sony_controldevice_write(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+// Apply a signed step (from the u8 control value: 0x01 = +1, 0xff = -1,
+// N = +N, 0x100-N = -N) to a property. Enum-form props step through their
+// enumeration (that includes the shutter, whose stop list is registered as
+// an enum), other range-form props step by their form step. Returns 0 when
+// the value changed.
+static int sony_apply_step(vcam *cam, struct PtpPropDesc *desc, uint8_t step) {
+	int width = sony_dpv_size(desc->DataType);
+	if (width <= 0 || width > 4) return -1;
+
+	int delta = (step <= 0x7f) ? (int)step : (int)step - 0x100;
+	if (delta == 0) return -1;
+
+	if (desc->FormFlag == PTP_EnumerationForm && desc->avail != NULL && desc->avail_cnt > 0) {
+		// Find the current position in the enumeration
+		int pos = -1;
+		for (int i = 0; i < desc->avail_cnt; i++) {
+			if (memcmp((uint8_t *)desc->avail + i * width, desc->value, width) == 0) {
+				pos = i;
+				break;
+			}
+		}
+		int newpos;
+		if (pos < 0) {
+			// Off-list value: jump to the list end in the requested
+			// direction; gphoto2 re-reads and steps on from there
+			newpos = (delta > 0) ? desc->avail_cnt - 1 : 0;
+		} else {
+			newpos = pos + delta;
+			if (newpos < 0) newpos = 0;
+			if (newpos >= desc->avail_cnt) newpos = desc->avail_cnt - 1;
+		}
+		if (newpos == pos) return -1;
+		memcpy(desc->value, (uint8_t *)desc->avail + newpos * width, width);
+		return 0;
+	}
+
+	if (desc->FormFlag == PTP_RangeForm && desc->form_min && desc->form_max && desc->form_step) {
+		long long cur = 0, lo = 0, hi = 0, st = 1;
+		memcpy(&cur, desc->value, width);
+		memcpy(&lo, desc->form_min, width);
+		memcpy(&hi, desc->form_max, width);
+		memcpy(&st, desc->form_step, width);
+		if (width == 1) { cur = (long long)(int8_t)(uint8_t)cur; lo = (long long)(int8_t)(uint8_t)lo; hi = (long long)(int8_t)(uint8_t)hi; }
+		if (width == 2) { cur = (long long)(int16_t)(uint16_t)cur; lo = (long long)(int16_t)(uint16_t)lo; hi = (long long)(int16_t)(uint16_t)hi; }
+		long long newv = cur + (long long)delta * st;
+		if (newv < lo) newv = lo;
+		if (newv > hi) newv = hi;
+		if (newv == cur) return -1;
+		uint32_t out = (uint32_t)newv;
+		memcpy(desc->value, &out, width);
+		return 0;
+	}
+
+	return -1;
+}
+
 static int sony_controldevice_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
 	if (vcam_check_trans_id(cam, ptp)) return 1;
 	if (vcam_check_session(cam)) return 1;
@@ -346,6 +407,15 @@ static int sony_controldevice_data(vcam *cam, ptpcontainer *ptp, unsigned char *
 				p->full_pressed = 0;
 				vcam_log_func(__func__, "release");
 			}
+		}
+	} else if (len >= 1) {
+		// Stepping controls (gphoto2's PUT_SONY_VALUE_ loop): u8 0x01 =
+		// step up, 0xff = step down, N = jump N entries (enum order)
+		struct PtpPropDesc *desc = vcam_get_prop_desc(cam, propcode);
+		if (desc != NULL && sony_apply_step(cam, desc, data[0]) == 0) {
+			sony_notify(cam, 100, PTP_EC_Sony_DevicePropChanged, propcode);
+		} else {
+			vcam_log_func(__func__, "control 0x%04x step 0x%02x not appliable", propcode, len > 0 ? data[0] : 0);
 		}
 	} else {
 		vcam_log_func(__func__, "control 0x%04x (%u bytes)", propcode, len);

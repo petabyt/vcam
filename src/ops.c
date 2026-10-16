@@ -360,6 +360,7 @@ int ptp_getobjecthandles_write(vcam *cam, ptpcontainer *ptp) {
 		cur = cur->next;
 	}
 
+	vcam_log_func(__func__, "mode %08x cnt %d", mode, cnt);
 	data = malloc(4 + 4 * cnt);
 	x = put_32bit_le(data + x, cnt);
 	cur = cam->first_dirent;
@@ -994,15 +995,6 @@ int ptp_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
-	struct PtpPropDesc *desc = vcam_get_prop_desc(cam, (int)ptp->params[0]);
-	if (desc != NULL) {
-		if (desc->GetSet == PTP_AC_Invisible) {
-			vcam_log_func(__func__, "deviceprop 0x%04x is invisible", ptp->params[0]);
-			ptp_response(cam, PTP_RC_DevicePropNotSupported, 0);
-			return 1;
-		}
-	}
-
 	for (i = 0; i < cam->props->length; i++) {
 		if (cam->props->handlers[i].code == ptp->params[0])
 			break;
@@ -1029,6 +1021,10 @@ int ptp_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigned cha
 	}
 
 	if (desc->GetSet == PTP_AC_Invisible) {
+		// Invisible props exist but are not settable - acknowledge the
+		// write without applying it. The transaction must still complete
+		// with a response or the whole pipeline desynchronizes.
+		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}
 

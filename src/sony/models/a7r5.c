@@ -14,7 +14,7 @@ int sony_register_model_a7r5(vcam *cam) {
 	sony_add_prop(cam, 0x5010, PTP_TC_INT16, 0, "0", "enum:");
 	sony_add_prop(cam, 0xd200, PTP_TC_INT16, 1, "0", "enum:");
 	sony_add_prop(cam, 0xd201, PTP_TC_UINT8, 1, "31", "enum:1,31,17,18,19,20,21");
-	sony_add_prop(cam, 0xd20d, PTP_TC_UINT32, 1, "65596", "range:73536:1:1966081");
+	sony_add_shutter_prop(cam, 1, 65596); // 1/60 s, like the dump value
 	sony_add_prop(cam, 0xd20f, PTP_TC_UINT16, 1, "4000", "range:2500:100:9900");
 	sony_add_prop(cam, 0xd211, PTP_TC_UINT8, 1, "1", "enum:1,3,2,4");
 	sony_add_prop(cam, 0xd213, PTP_TC_UINT8, 1, "1", "enum:");

@@ -39,6 +39,12 @@ struct Fuji {
 	int rawconv_jpeg_handle;
 	struct PtpObjectInfo *rawconv_jpeg_object_info;
 //	void *rawconv_jpeg_buffer;
+
+	/// @brief USB-card-reader/live-view state (gphoto2 preview flow, usb.c)
+	int usb_liveview;
+	unsigned char *usb_lv_data;
+	uint32_t usb_lv_size;
+	unsigned char *usb_lv_raw;
 //	size_t rawconv_jpeg_length;
 	char *rawconv_jpeg_path;
 

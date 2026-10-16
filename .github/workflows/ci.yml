@@ -1,0 +1,90 @@
+# CI: build vcam and run every emulated camera model through a real
+# libgphoto2/gphoto2 stack via the fake-libusb shim (usb-vcam).
+#
+# All 21 models (6+1 Canon, 2 Nikon, 2 Sony, 11 Fuji) are exercised with
+# scripts/run-all-regression-tests.sh: summary, config tree, file listing, live view
+# preview and remote capture + download. No USB hardware or root is needed -
+# the shim (build/libusb-vcam.so) answers libusb calls inside the client
+# process (see scripts/gp_client.md).
+#
+# Uses the distro libgphoto2/gphoto2 packages (ubuntu-24.04: libgphoto2
+# 2.5.31 / gphoto2 2.5.28), which pins the client version the models are
+# validated against.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc libusb-1.0-0-dev libexif-dev pkg-config
+
+      - name: Build
+        run: |
+          cmake -G Ninja -B build
+          cmake --build build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcam-build
+          path: |
+            build/libusb-vcam.so
+            build/vcam
+          if-no-files-found: error
+
+  test:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gphoto2 (distro packages)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gphoto2 libgphoto2-dev libusb-1.0-0-dev libexif-dev
+          echo "gphoto2 CLI: $(gphoto2 --version 2>/dev/null | head -1)"
+          echo "libgphoto2: $(dpkg -s libgphoto2-6t64 2>/dev/null | grep ^Version || dpkg -s libgphoto2-6 | grep ^Version)"
+
+      - name: Build gp_client against system libgphoto2
+        run: cc -o /tmp/gp_client scripts/gp_client.c -lgphoto2 -lgphoto2_port
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: vcam-build
+          path: build
+
+      - name: Run all model regression tests
+        env:
+          GP_INSTALL: /usr
+          GP_CLIENT: /tmp/gp_client
+          SHIM: ${{ github.workspace }}/build/libusb-vcam.so
+          GPHOTO2_CLI: /usr/bin/gphoto2
+        run: |
+          chmod +x build/libusb-vcam.so build/vcam
+          bash scripts/run-all-regression-tests.sh
+
+      - name: Upload regression test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-test-logs
+          path: |
+            /tmp/opencode/*.log
+            /tmp/opencode/COMM_DUMP
+            COMM_DUMP
+          if-no-files-found: ignore

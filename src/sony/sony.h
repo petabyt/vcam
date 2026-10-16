@@ -107,6 +107,8 @@ int sony_register_model_a7r5(vcam *cam);
 // Property registration helpers (props.c)
 /// @brief rw uses the Sony GetSet convention: 1 = GetSet, 0 = Get-only
 void sony_add_prop(vcam *cam, uint16_t code, uint16_t type, int rw, const char *value, const char *form);
+/// @brief Register 0xD20D ShutterSpeed as a canonical stop-list enumeration
+void sony_add_shutter_prop(vcam *cam, int rw, uint32_t value);
 
 // Opcode registration and handlers (ops.c)
 void sony_register_ops(vcam *cam);
