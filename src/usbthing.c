@@ -83,8 +83,12 @@ struct Priv {
 };
 
 static inline vcam *get_cam(struct UsbThing *ctx, int devn) {
-	if (devn >= PRIV_MAX_CAMS) abort();
+	if (devn >= PRIV_MAX_CAMS || devn < 0) abort();
 	return ((struct Priv *)ctx->priv_impl)->cam[devn];
+}
+
+struct vcam *usbt_get_cam(struct UsbThing *ctx, int devn) {
+	return get_cam(ctx, devn);
 }
 
 int usb_get_string(struct UsbThing *ctx, int devn, int id, char buffer[127]) {
@@ -226,8 +230,10 @@ static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int l
 		return rc;
 		//return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
 	} else if (ep == 0x83) {
-		// Don't respond to interrupt polling
-		return -1;
+		// Serve queued PTP interrupt events to the host.
+		// vcam_readint only returns events whose trigger time has passed, so
+		// callers poll with timeout 0 and wait themselves.
+		return vcam_readint(get_cam(ctx, devn), (unsigned char *)data, len, 0);
 	} else {
 		vcam_log("Illegal endpoint 0x%x", ep);
 		abort();
@@ -254,9 +260,36 @@ void usbt_user_init(struct UsbThing *ctx) {
 	if (ctx->n_devices == 0) {
 		ctx->priv_impl = malloc(sizeof(struct Priv));
 		struct Priv *priv = (struct Priv *)ctx->priv_impl;
-		priv->cam[0] = vcam_new("canon_1300d", 0, NULL);
-		priv->cam[1] = vcam_new("fuji_x_h1", 1, (char *[]){"--rawconv"});
-		ctx->n_devices = 2;
+
+		// Model can be selected from the client process with VCAM_USB_MODEL,
+		// e.g. LD_PRELOAD=build/usb-vcam.so VCAM_USB_MODEL=canon_1300d gphoto2 -L
+		// Extra flags are passed through VCAM_USB_ARGS (space separated).
+		const char *model = getenv("VCAM_USB_MODEL");
+		if (model != NULL && model[0] != '\0') {
+			char **argv = NULL;
+			int argc = 0;
+
+			const char *argstr = getenv("VCAM_USB_ARGS");
+			if (argstr != NULL && argstr[0] != '\0') {
+				char *args = strdup(argstr);
+				if (args == NULL) vcam_panic("out of memory");
+				argv = malloc(sizeof(char *) * 16);
+				if (argv == NULL) vcam_panic("out of memory");
+				char *tok = strtok(args, " \t");
+				while (tok != NULL && argc < 16) {
+					argv[argc++] = tok;
+					tok = strtok(NULL, " \t");
+				}
+			}
+
+			priv->cam[0] = vcam_new(model, argc, argv);
+			if (priv->cam[0] == NULL) vcam_panic("vcam_new failed for model %s", model);
+			ctx->n_devices = 1;
+		} else {
+			priv->cam[0] = vcam_new("canon_1300d", 0, NULL);
+			priv->cam[1] = vcam_new("fuji_x_h1", 1, (char *[]){"--rawconv"});
+			ctx->n_devices = 2;
+		}
 	}
 	ctx->get_string_descriptor = usb_get_string;
 	ctx->get_total_config_descriptor = usb_send_config_descriptor;

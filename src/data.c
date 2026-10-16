@@ -270,7 +270,7 @@ char *get_string(unsigned char *data) {
 	return x;
 }
 
-int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt) {
+int put_16bit_le_array(unsigned char *data, const uint16_t *arr, int cnt) {
 	int x = 0, i;
 
 	x += put_32bit_le(data, cnt);
@@ -279,7 +279,7 @@ int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt) {
 	return x;
 }
 
-int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt) {
+int put_32bit_le_array(unsigned char *data, const uint32_t *arr, int cnt) {
 	int x = 0, i;
 
 	x += put_32bit_le(data, cnt);

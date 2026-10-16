@@ -145,8 +145,15 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	unsigned char *data;
 	int x = 0, i, cnt;
 	uint16_t *opcodes, *devprops;
-	uint16_t imageformats[1];
-	uint16_t events[5];
+
+	static const uint16_t default_events[] = {0x4002, 0x4003, 0x4006, 0x400a, 0x400d};
+	static const uint16_t default_formats[] = {0x3801};
+	const uint16_t *events = cam->events ? cam->events : default_events;
+	int n_events = cam->events ? cam->n_events : (int)(sizeof(default_events) / sizeof(default_events[0]));
+	const uint16_t *capture_formats = cam->capture_formats ? cam->capture_formats : default_formats;
+	int n_capture_formats = cam->capture_formats ? cam->n_capture_formats : (int)(sizeof(default_formats) / sizeof(default_formats[0]));
+	const uint16_t *image_formats = cam->image_formats ? cam->image_formats : default_formats;
+	int n_image_formats = cam->image_formats ? cam->n_image_formats : (int)(sizeof(default_formats) / sizeof(default_formats[0]));
 
 	if (vcam_check_param_count(cam, ptp, 0)) return 1;
 
@@ -165,8 +172,8 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 
 	// TODO: Allow cameras to customize these
 	x += put_16bit_le(data + x, 0x64); /* StandardVersion */
-	x += put_32bit_le(data + x, 0x6); /* VendorExtensionID */
-	x += put_16bit_le(data + x, 0x64); /* VendorExtensionVersion */
+	x += put_32bit_le(data + x, cam->vendor_extension_id ? cam->vendor_extension_id : PTP_VENDOR_MICROSOFT); /* VendorExtensionID */
+	x += put_16bit_le(data + x, cam->vendor_extension_version ? cam->vendor_extension_version : 0x64); /* VendorExtensionVersion */
 	x += put_string(data + x, cam->extension); /* VendorExtensionDesc */
 	x += put_16bit_le(data + x, 0);		/* FunctionalMode */
 
@@ -181,24 +188,24 @@ int ptp_deviceinfo_write(vcam *cam, ptpcontainer *ptp) {
 	x += put_16bit_le_array(data + x, opcodes, cnt); /* OperationsSupported */
 	free(opcodes);
 
-	events[0] = 0x4002;
-	events[1] = 0x4003;
-	events[2] = 0x4006;
-	events[3] = 0x400a;
-	events[4] = 0x400d;
-	x += put_16bit_le_array(data + x, events, sizeof(events) / sizeof(events[0])); /* EventsSupported */
+	x += put_16bit_le_array(data + x, events, n_events); /* EventsSupported */
 
 	devprops = malloc(cam->props->length * sizeof(uint16_t));
 	for (i = 0; i < cam->props->length; i++)
 		devprops[i] = cam->props->handlers[i].code;
-	x += put_16bit_le_array(data + x, devprops, cam->props->length); /* DevicePropertiesSupported */
+	/* DevicePropertiesSupported: an explicit override list wins (Nikon
+	 * bodies keep their vendor props out of GetDeviceInfo and expose them
+	 * through GetVendorPropCodes 0x90CA instead) */
+	if (cam->deviceprops != NULL) {
+		x += put_16bit_le_array(data + x, cam->deviceprops, cam->n_deviceprops);
+	} else {
+		x += put_16bit_le_array(data + x, devprops, cam->props->length);
+	}
 	free(devprops);
 
-	imageformats[0] = 0x3801;
-	x += put_16bit_le_array(data + x, imageformats, 1); /* CaptureFormats */
+	x += put_16bit_le_array(data + x, capture_formats, n_capture_formats); /* CaptureFormats */
 
-	imageformats[0] = 0x3801;
-	x += put_16bit_le_array(data + x, imageformats, 1); /* ImageFormats */
+	x += put_16bit_le_array(data + x, image_formats, n_image_formats); /* ImageFormats */
 
 	x += put_string(data + x, cam->manufac);
 
@@ -445,6 +452,27 @@ int ptp_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	if (!cur) {
+		// Not in the FS view - vendors may serve virtual objects from
+		// memory (e.g. an EOS SDRAM capture pending download)
+		unsigned char *vdata;
+		uint32_t vsize;
+		if (cam->lookup_virtual_object != NULL &&
+		    cam->lookup_virtual_object(cam, ptp->params[0], &vdata, &vsize) == 0) {
+			uint32_t start = ptp->params[1];
+			uint32_t requested = ptp->params[2];
+			if (requested > PTP_MAX_PARTIAL_OBJECT_CHUNK)
+				requested = PTP_MAX_PARTIAL_OBJECT_CHUNK;
+			if (start > vsize)
+				start = vsize;
+			uint32_t avail = vsize - start;
+			uint32_t tocopy = requested < avail ? requested : avail;
+
+			ptp_senddata(cam, ptp->code, (unsigned char *)vdata + start, (int)tocopy);
+			vcam_log("Virtual object 0x%08x sending %d", ptp->params[0], (int)tocopy);
+			ptp_response(cam, PTP_RC_OK, 1, tocopy);
+			return 1;
+		}
+
 		vcam_log_func(__func__, "invalid object id 0x%08x", ptp->params[0]);
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
 		return 1;

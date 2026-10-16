@@ -11,6 +11,70 @@ static void add_prop_u32(vcam *cam, int code, uint32_t value) {
 	vcam_register_prop(cam, code, &desc);
 }
 
+// Minimal EOS device property set needed for the remote capture flow.
+// All u32 props - the client hardcodes the expected type for each of these
+// codes, so string/binary props must not be registered here (see the big
+// DataType switch in gphoto2's ptp_unpack_EOS_events).
+int canon_register_capture_props(vcam *cam) {
+	add_prop_u32(cam, PTP_DPC_EOS_CaptureDestination, 0x2);
+	add_prop_u32(cam, PTP_DPC_EOS_AvailableShots, 0xC03);
+	add_prop_u32(cam, PTP_DPC_EOS_FocusMode, 0x3);
+	add_prop_u32(cam, PTP_DPC_EOS_BatteryPower, 0x2);
+	add_prop_u32(cam, PTP_DPC_EOS_ModelID, 0x80000404);
+	add_prop_u32(cam, PTP_DPC_EOS_PTPExtensionVersion, 0x100);
+	return 0;
+}
+
+// Typed property registration, used by the generated per-model profiles.
+// Width must match what the client expects (see scripts/eos_dump2c.py).
+static void add_prop_typed(vcam *cam, int code, int datatype, uint32_t value, int width) {
+	struct PtpPropDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	desc.value = malloc(width);
+	desc.DataType = datatype;
+	memcpy(desc.value, &value, width);
+	vcam_register_prop(cam, code, &desc);
+}
+
+int canon_add_prop_u32(vcam *cam, int code, uint32_t value) {
+	add_prop_typed(cam, code, PTP_TC_UINT32, value, 4);
+	return 0;
+}
+
+int canon_add_prop_u16(vcam *cam, int code, uint16_t value) {
+	add_prop_typed(cam, code, PTP_TC_UINT16, value, 2);
+	return 0;
+}
+
+int canon_add_prop_u8(vcam *cam, int code, uint8_t value) {
+	add_prop_typed(cam, code, PTP_TC_UINT8, value, 1);
+	return 0;
+}
+
+int canon_add_prop_i32(vcam *cam, int code, int32_t value) {
+	add_prop_typed(cam, code, PTP_TC_INT32, (uint32_t)value, 4);
+	return 0;
+}
+
+// Make sure the remote capture flow always has its critical properties, even
+// when a model's dump lacks them
+int canon_ensure_capture_props(vcam *cam) {
+	if (vcam_get_prop_desc(cam, PTP_DPC_EOS_CaptureDestination) == NULL)
+		canon_add_prop_u32(cam, PTP_DPC_EOS_CaptureDestination, 0x2);
+	if (vcam_get_prop_desc(cam, PTP_DPC_EOS_AvailableShots) == NULL)
+		canon_add_prop_u32(cam, PTP_DPC_EOS_AvailableShots, 0xC03);
+	if (vcam_get_prop_desc(cam, PTP_DPC_EOS_FocusMode) == NULL)
+		canon_add_prop_u32(cam, PTP_DPC_EOS_FocusMode, 0x3);
+	// The client's EOS M / PowerShot G prepare path sets the viewfinder
+	// output device through the EOS property cache
+	if (vcam_get_prop_desc(cam, PTP_DPC_EOS_EVFOutputDevice) == NULL)
+		canon_add_prop_u32(cam, PTP_DPC_EOS_EVFOutputDevice, 0x0);
+	// OLCInfoChanged events are only parsed when this cached prop is nonzero
+	if (vcam_get_prop_desc(cam, PTP_DPC_EOS_OLCInfoVersion) == NULL)
+		canon_add_prop_u32(cam, PTP_DPC_EOS_OLCInfoVersion, 0x7);
+	return 0;
+}
+
 int vcam_canon_setup(vcam *cam) {
 	add_prop_u32(cam, PTP_DPC_EOS_AutoExposureMode, 0x3);
 	add_prop_u32(cam, PTP_DPC_EOS_FocusMode, 0x3);

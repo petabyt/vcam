@@ -62,5 +62,10 @@ int usbt_hub_handle_control_request(struct UsbThing *ctx, int endpoint, void *da
 /// @brief Optional dummy implementation for get_qualifier_descriptor
 int usbt_get_device_qualifier_descriptor(struct UsbThing *ctx, int devn, struct usb_qualifier_descriptor *q);
 
+/// @brief Get the vcam instance backing a device slot
+/// @note Only valid for device implementations that embed vcams (see usbthing.c)
+struct vcam;
+struct vcam *usbt_get_cam(struct UsbThing *ctx, int devn);
+
 // usbstring.c
 int utf8_to_utf16le(const char *s, uint16_t *cp, unsigned int len);

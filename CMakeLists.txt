@@ -8,13 +8,14 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 pkg_check_modules(LIBEXIF REQUIRED libexif)
 
-set(VCAM_CORE 
+set(VCAM_CORE
     src/log.c
     src/vcamera.c
     src/pack.c
     src/packet.c
     src/ops.c
     src/canon/canon.c
+    src/canon/objects.c
     src/fuji/fuji.c
     src/fuji/server.c
     src/ptpip.c
@@ -26,6 +27,12 @@ set(VCAM_CORE
     src/socket.c
     src/fuji/usb.c
     src/fuji/fs.c
+    src/nikon/nikon.c
+    src/nikon/ops.c
+    src/nikon/props.c
+    src/sony/sony.c
+    src/sony/ops.c
+    src/sony/props.c
     src/usbthing.c
 
     src/usb/device.c
@@ -33,11 +40,23 @@ set(VCAM_CORE
     src/usb/vhci.c
 )
 
+# Generated per-model Canon profiles (see scripts/eos_dump2c.py)
+file(GLOB VCAM_CANON_MODELS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/canon/models/*.c)
+list(APPEND VCAM_CORE ${VCAM_CANON_MODELS})
+
+# Per-model Nikon prop tables (transcribed from libgphoto2 camera dumps)
+file(GLOB VCAM_NIKON_MODELS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/nikon/models/*.c)
+list(APPEND VCAM_CORE ${VCAM_NIKON_MODELS})
+
+# Per-model Sony prop tables (transcribed from libgphoto2 camera dumps)
+file(GLOB VCAM_SONY_MODELS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/sony/models/*.c)
+list(APPEND VCAM_CORE ${VCAM_SONY_MODELS})
+
 get_filename_component(VCAM_PWD "${PROJECT_SOURCE_DIR}" ABSOLUTE)
 
 set(VCAM_COMMON_FLAGS -g -Wall -fPIC -Wshadow -Wcast-qual -Wpedantic -Werror=incompatible-pointer-types -Wstrict-aliasing=3)
 set(VCAM_COMMON_DEFINITIONS PWD="${VCAM_PWD}")
-set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src src/usb src/fuji src/canon)
+set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src src/usb src/fuji src/canon src/nikon src/sony)
 
 add_library(usb-vcam SHARED ${VCAM_CORE} src/usb/libusb.c)
 target_link_libraries(usb-vcam ${LIBEXIF_LIBRARIES})

@@ -22,6 +22,11 @@ enum CamBackendType {
 	VCAM_GADGETFS,
 };
 
+// DeviceInfo VendorExtensionID values (PTP vendor codes)
+#define PTP_VENDOR_MICROSOFT 0x00000006
+#define PTP_VENDOR_NIKON     0x0000000A
+#define PTP_VENDOR_SONY      0x00000011
+
 void vcam_log_func(const char *func, const char *format, ...);
 void vcam_log(const char *format, ...);
 void vcam_panic(const char *format, ...);
@@ -56,6 +61,29 @@ typedef struct vcam {
 	/// @brief DeviceInfo.VendorExtensionDesc
 	char extension[128];
 
+	/// @brief DeviceInfo.VendorExtensionID (defaults to PTP_VENDOR_MICROSOFT)
+	uint32_t vendor_extension_id;
+	/// @brief DeviceInfo.VendorExtensionVersion (defaults to 0x64 = 1.0)
+	uint16_t vendor_extension_version;
+
+	/// @brief Optional override for the DeviceInfo EventsSupported list.
+	/// When NULL the standard set (ObjectAdded/ObjectRemoved/
+	/// DevicePropChanged/StoreAdded/CaptureComplete) is advertised.
+	const uint16_t *events;
+	int n_events;
+
+	/// @brief Optional override for the DeviceInfo DevicePropertiesSupported
+	/// list. When NULL every registered property is advertised.
+	const uint16_t *deviceprops;
+	int n_deviceprops;
+
+	/// @brief Optional overrides for the DeviceInfo Capture/ImageFormats
+	/// lists. When NULL a single 0x3801 (JPEG) entry is advertised.
+	const uint16_t *capture_formats;
+	int n_capture_formats;
+	const uint16_t *image_formats;
+	int n_image_formats;
+
 	/// @brief Custom IP address for TCP, NULL to use default IP
 	char *custom_ip_addr;
 
@@ -72,6 +100,11 @@ typedef struct vcam {
 
 	/// @brief Path to folder to scan for object list
 	const char *vcamera_filesystem;
+
+	/// @brief Optional vendor hook: look up a virtual (non-FS) object's data,
+	/// e.g. an SDRAM capture not yet downloaded. Returns 0 on hit, nonzero
+	/// when the handle is unknown. Data stays owned by the vendor.
+	int (*lookup_virtual_object)(struct vcam *cam, uint32_t handle, unsigned char **data, uint32_t *size);
 
 	unsigned char *inbulk;
 	int	nrinbulk;
@@ -279,10 +312,25 @@ struct ptp_dirent {
 	struct ptp_dirent *next;
 };
 
+/// @brief Which client-facing channel an injected event belongs to
+enum ptp_event_channel {
+	/// Classic PTP interrupt container, served on the USB interrupt endpoint
+	/// and by ptp_pop_event() (Fuji event opcodes)
+	PTP_CH_CLASSIC,
+	/// EOS vendor event entry (variable size), served by GetEvent (0x9116)
+	PTP_CH_EOS,
+	/// Nikon event entry, served by GetEvent (0x90C7) / GetEventEx (0x941C)
+	/// and - like classic events - by the USB interrupt endpoint, whichever
+	/// consumer polls first
+	PTP_CH_NIKON,
+};
+
 struct ptp_interrupt {
 	unsigned char *data;
 	int size;
 	struct timeval triggertime;
+	/// @brief Which client-facing channel this entry belongs to
+	enum ptp_event_channel channel;
 	struct ptp_interrupt *next;
 };
 
@@ -299,6 +347,14 @@ void vcam_virtual_pop_object(int id);
 /// @brief Inject an interrupt into the general purpose event list
 int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid);
 
+/// @brief Inject an interrupt on a specific event channel
+int ptp_inject_interrupt_channel(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid, enum ptp_event_channel channel);
+
+/// @brief Inject a pre-serialized event entry blob (e.g. an EOS GetEvent entry
+/// of the form {u32 size, u32 code, payload...}) into the event list on the
+/// given channel. The blob is copied.
+int ptp_inject_event_data(vcam *cam, int when, uint16_t code, const void *entry, int size, enum ptp_event_channel channel);
+
 struct GenericEvent {
 	uint32_t size;
 	uint16_t x;
@@ -307,15 +363,26 @@ struct GenericEvent {
 	uint32_t value;
 };
 
+/// @brief Pop the next due event from the Nikon GetEvent (0x90C7/0x941C)
+/// channel. Returns 0 and fills ev on success, 1 when nothing is due.
+int ptp_pop_nikon_event(vcam *cam, struct GenericEvent *ev);
+
 /// @brief Shortcut for ptp_inject_interrupt
 int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value);
 
 /// @brief Pop event from the interrupt list, FIFO
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev);
 
+/// @brief Pop the next due event from the EOS GetEvent channel.
+/// Returns 0 and hands over the malloc'd entry blob on success,
+/// 1 when no due entry is available.
+int ptp_pop_eos_event(vcam *cam, unsigned char **data, int *size);
+
 void fuji_register_opcodes(vcam *cam);
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv);
 int canon_init_cam(vcam *cam, const char *name, int argc, char **argv);
+int nikon_init_cam(vcam *cam, const char *name, int argc, char **argv);
+int sony_init_cam(vcam *cam, const char *name, int argc, char **argv);
 
 int fuji_wifi_main(vcam *cam);
 int ptpip_generic_main(vcam *cam);

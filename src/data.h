@@ -1,8 +1,8 @@
 #pragma once
 
 // vcam data structure API inherited from gphoto2
-int put_32bit_le_array(unsigned char *data, uint32_t *arr, int cnt);
-int put_16bit_le_array(unsigned char *data, uint16_t *arr, int cnt);
+int put_32bit_le_array(unsigned char *data, const uint32_t *arr, int cnt);
+int put_16bit_le_array(unsigned char *data, const uint16_t *arr, int cnt);
 char *get_string(unsigned char *data);
 int put_string(unsigned char *data, const char *str);
 int put_8bit_le(unsigned char *data, uint8_t x);

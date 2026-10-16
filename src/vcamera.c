@@ -115,6 +115,7 @@ int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc) {
 		if (prop->code == code) break;
 		prop = NULL;
 	}
+	int existed = (prop != NULL);
 	if (prop == NULL) {
 		cam->props = realloc(cam->props, sizeof(struct PtpPropList) + (sizeof(struct PtpProp) * (cam->props->length + 1)));
 		prop = &cam->props->handlers[cam->props->length];
@@ -128,7 +129,11 @@ int vcam_register_prop(vcam *cam, int code, struct PtpPropDesc *desc) {
 
 	memcpy(&prop->desc, desc, sizeof(struct PtpPropDesc));
 
-	cam->props->length += 1;
+	// Only grow the list for new codes - replacing an existing entry must
+	// not append a garbage slot (this used to leave zero-code props in the
+	// DeviceInfo DevicePropertiesSupported list)
+	if (!existed)
+		cam->props->length += 1;
 	return 0;
 }
 
@@ -431,7 +436,7 @@ static void hexdump(void *buffer, int size) {
 
 void vcam_process_output(vcam *cam) {
 	ptpcontainer ptp;
-	int i, j;
+	int i;
 
 	if (cam->next_cmd_kills_connection) {
 		vcam_log("Killing connection");
@@ -590,13 +595,12 @@ int ptp_notify_event(vcam *cam, uint16_t code, uint32_t value) {
 	return ptp_inject_interrupt(cam, 1000, code, 1, value, 0);
 }
 
-int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
+int ptp_inject_event_data(vcam *cam, int when, uint16_t code, const void *entry, int size, enum ptp_event_channel channel) {
 	struct ptp_interrupt *interrupt, **pint;
 	struct timeval now;
-	unsigned char *data;
-	int x = 0;
+	void *data;
 
-	vcam_log_func(__func__, "generate interrupt 0x%04x, %d params, param1 0x%08x, timeout=%d", code, nparams, param1, when);
+	vcam_log_func(__func__, "generate event 0x%04x, %d bytes, channel %d, timeout=%d", code, size, channel, when);
 
 	gettimeofday(&now, NULL);
 	now.tv_usec += (when % 1000) * 1000;
@@ -606,16 +610,15 @@ int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32
 		now.tv_sec++;
 	}
 
-	data = malloc(0x10);
-	x += put_32bit_le(data + x, 0x10);
-	x += put_16bit_le(data + x, 4);
-	x += put_16bit_le(data + x, code);
-	x += put_32bit_le(data + x, transid);
-	x += put_32bit_le(data + x, param1);
+	data = malloc(size);
+	if (data == NULL) vcam_panic("out of memory");
+	memcpy(data, entry, size);
 
 	interrupt = malloc(sizeof(struct ptp_interrupt));
+	if (interrupt == NULL) vcam_panic("out of memory");
 	interrupt->data = data;
-	interrupt->size = x;
+	interrupt->size = size;
+	interrupt->channel = channel;
 	interrupt->triggertime = now;
 	interrupt->next = NULL;
 
@@ -640,14 +643,104 @@ int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32
 	return 1;
 }
 
+int ptp_inject_interrupt_channel(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid, enum ptp_event_channel channel) {
+	unsigned char data[0x10];
+	int x = 0;
+
+	(void)nparams;
+
+	x += put_32bit_le(data + x, 0x10);
+	x += put_16bit_le(data + x, 4);
+	x += put_16bit_le(data + x, code);
+	x += put_32bit_le(data + x, transid);
+	x += put_32bit_le(data + x, param1);
+
+	return ptp_inject_event_data(cam, when, code, data, x, channel);
+}
+
+int ptp_inject_interrupt(vcam *cam, int when, uint16_t code, int nparams, uint32_t param1, uint32_t transid) {
+	return ptp_inject_interrupt_channel(cam, when, code, nparams, param1, transid, PTP_CH_CLASSIC);
+}
+
+// Finds the first entry of the given channel in the event list
+static struct ptp_interrupt **find_channel_entry(vcam *cam, enum ptp_event_channel channel) {
+	struct ptp_interrupt **pp = &cam->first_interrupt;
+	while (*pp && (*pp)->channel != channel)
+		pp = &(*pp)->next;
+	return pp;
+}
+
+// Finds the first *due* entry belonging to any of the given channels, or
+// points at the list tail when none is due yet. The list is sorted by
+// trigger time, so the first hit is the oldest due entry.
+static struct ptp_interrupt **find_due_entry(vcam *cam, int serve_classic, int serve_nikon) {
+	struct timeval now;
+	gettimeofday(&now, NULL);
+
+	struct ptp_interrupt **pp = &cam->first_interrupt;
+	while (*pp) {
+		if (((*pp)->channel == PTP_CH_CLASSIC && serve_classic) ||
+		    ((*pp)->channel == PTP_CH_NIKON && serve_nikon)) {
+			if ((*pp)->triggertime.tv_sec < now.tv_sec ||
+			    ((*pp)->triggertime.tv_sec == now.tv_sec &&
+			     (*pp)->triggertime.tv_usec <= now.tv_usec))
+				return pp;
+		}
+		pp = &(*pp)->next;
+	}
+	return pp;
+}
+
 int ptp_pop_event(vcam *cam, struct GenericEvent *ev) {
-	// first_interrupt is allowed to be NULL, will produce timeout (no events)
-	if (cam->first_interrupt == NULL) return 1;
+	// Classic PTP channel only - EOS GetEvent entries live in the same
+	// queue but are drained by ptp_pop_eos_event()
+	struct ptp_interrupt **pp = find_channel_entry(cam, PTP_CH_CLASSIC);
+	if (*pp == NULL) return 1;
 
-	memcpy(ev, cam->first_interrupt->data, sizeof(struct GenericEvent));
+	memcpy(ev, (*pp)->data, sizeof(struct GenericEvent));
 
-	struct ptp_interrupt *prev = cam->first_interrupt;
-	cam->first_interrupt = cam->first_interrupt->next;
+	struct ptp_interrupt *prev = *pp;
+	*pp = prev->next;
+	free(prev->data);
+	free(prev);
+
+	return 0;
+}
+
+/// @brief Pop the next due event from the EOS GetEvent channel.
+int ptp_pop_eos_event(vcam *cam, unsigned char **data, int *size) {
+	struct ptp_interrupt **pp = find_channel_entry(cam, PTP_CH_EOS);
+	if (*pp == NULL) return 1;
+
+	// Entries are time-sorted, so if the first EOS entry is not due yet,
+	// none are
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	if ((*pp)->triggertime.tv_sec > now.tv_sec) return 1;
+	if ((*pp)->triggertime.tv_sec == now.tv_sec &&
+	    (*pp)->triggertime.tv_usec > now.tv_usec) return 1;
+
+	struct ptp_interrupt *pint = *pp;
+	*pp = pint->next;
+	*data = pint->data;
+	*size = pint->size;
+	free(pint);
+
+	return 0;
+}
+
+/// @brief Pop the next due event from the Nikon GetEvent (0x90C7/0x941C)
+/// channel. Entries on this channel can also be consumed by the USB
+/// interrupt endpoint (see vcam_readint) - whoever polls first wins, like
+/// on real hardware.
+int ptp_pop_nikon_event(vcam *cam, struct GenericEvent *ev) {
+	struct ptp_interrupt **pp = find_due_entry(cam, 0, 1);
+	if (*pp == NULL) return 1;
+
+	memcpy(ev, (*pp)->data, sizeof(struct GenericEvent));
+
+	struct ptp_interrupt *prev = *pp;
+	*pp = prev->next;
 	free(prev->data);
 	free(prev);
 
@@ -658,9 +751,12 @@ int ptp_pop_event(vcam *cam, struct GenericEvent *ev) {
 int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	struct timeval now, end;
 	int newtimeout, tocopy;
-	struct ptp_interrupt *pint;
+	struct ptp_interrupt **pp;
 
-	if (!cam->first_interrupt) {
+	// Classic PTP and Nikon event channels are served here - EOS GetEvent
+	// entries must not leak onto the USB interrupt endpoint.
+	pp = find_due_entry(cam, 1, 1);
+	if (*pp == NULL) {
 		return GP_ERROR_TIMEOUT;
 	}
 	gettimeofday(&now, NULL);
@@ -671,22 +767,22 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 		end.tv_usec -= 1000000;
 		end.tv_sec++;
 	}
-	if (cam->first_interrupt->triggertime.tv_sec > end.tv_sec) {
+	if ((*pp)->triggertime.tv_sec > end.tv_sec) {
 		return GP_ERROR_TIMEOUT;
 	}
-	if ((cam->first_interrupt->triggertime.tv_sec == end.tv_sec) &&
-	    (cam->first_interrupt->triggertime.tv_usec > end.tv_usec)) {
+	if (((*pp)->triggertime.tv_sec == end.tv_sec) &&
+	    ((*pp)->triggertime.tv_usec > end.tv_usec)) {
 		return GP_ERROR_TIMEOUT;
 	}
-	newtimeout = (cam->first_interrupt->triggertime.tv_sec - now.tv_sec) * 1000 + (cam->first_interrupt->triggertime.tv_usec - now.tv_usec) / 1000;
+	newtimeout = ((*pp)->triggertime.tv_sec - now.tv_sec) * 1000 + ((*pp)->triggertime.tv_usec - now.tv_usec) / 1000;
 	if (newtimeout > timeout)
 		vcam_log_func(__func__, "miscalculated? %d vs %d", timeout, newtimeout);
-	tocopy = cam->first_interrupt->size;
+	tocopy = (*pp)->size;
 	if (tocopy > bytes)
 		tocopy = bytes;
-	memcpy(data, cam->first_interrupt->data, tocopy);
-	pint = cam->first_interrupt;
-	cam->first_interrupt = cam->first_interrupt->next;
+	memcpy(data, (*pp)->data, tocopy);
+	struct ptp_interrupt *pint = *pp;
+	*pp = pint->next;
 	free(pint->data);
 	free(pint);
 	return tocopy;
@@ -751,6 +847,22 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 			int rc = ptpip_generic_main(cam);
 			vcam_close(cam);
 			return rc;
+		}
+	} else if (nikon_init_cam(cam, name, argc, argv) == 0) {
+		// USB-only for now - Nikon WLAN bodies speak standard PTP/IP, so
+		// this can be wired to ptpip_generic_main() later
+		if (backend == VCAM_TCP) {
+			vcam_log("Nikon models do not support the tcp backend yet");
+			vcam_close(cam);
+			return -1;
+		}
+	} else if (sony_init_cam(cam, name, argc, argv) == 0) {
+		// USB-only for now - Sony bodies need the PTPIP-only 0x9280/0x9281
+		// handshake before PTP/IP works (see gphoto2 camera_init)
+		if (backend == VCAM_TCP) {
+			vcam_log("Sony models do not support the tcp backend yet");
+			vcam_close(cam);
+			return -1;
 		}
 	} else {
 		vcam_log("Invalid camera '%s'", name);
