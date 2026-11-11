@@ -67,16 +67,19 @@ The gfx100ii model auto-populates image-import fixtures under `/tmp/vcam-gfx100i
 
 ### Wi-Fi / access point emulation
 
-`make ap-fuji` / `make ap-canon` (with `model=fuji_x_h1` etc.) spin up a dummy network
-interface and run `scripts/create_ap` to broadcast camera SSIDs. Requires `hostapd`,
-`dnsmasq`, `iptables`, `iproute2`, `iw` and root; `make reset` removes the dummy
-interfaces. See `Makefile` and `scripts/README.md`.
+`./build/vcam <model> wifi` brings up the camera AP natively (hostapd +
+dnsmasq spawned as supervised children), waits for a phone to associate and
+get a DHCP lease, then serves PTP/IP on the AP address. Requires `hostapd`,
+`dnsmasq` and root/CAP_NET_ADMIN. `--check` prints the bring-up plan without
+touching anything, `--cleanup` reverts leftovers of a crashed run. The
+interface carrying the default route is never touched; all changes are
+reversed on teardown. See `scripts/README.md`.
 
 ## Testing
 
 There is no formal unit-test suite. Useful checks:
 
-- `scripts/smoke-gfx100ii.py` — Python smoke test that drives the Fuji TCP
+- `scripts/regression-gfx100ii.py` — Python regression test that drives the Fuji TCP
   image-import path over a raw PTP/IP socket
 - Running vcam with `--dump` and inspecting the `COMM_DUMP` byte dump
 - Building with the strict warning set enabled (it is by default) and fixing regressions
@@ -102,7 +105,7 @@ src/fuji/       Fujifilm implementation: PTP ops (fuji.c), TCP server (server.c)
 src/usb/        USB device emulation backends (usbthing): device.c, usbstring.c,
                 vhci.c (kernel virtual HCD), libusb.c (fake libusb-1.0 .so),
                 otg.c (gadgetfs, not compiled), dummy.c (manual demo)
-scripts/        create_ap Wi-Fi helpers, wlanstart.sh, smoke test, misc tools
+scripts/        create_ap Wi-Fi helpers, wlanstart.sh, regression test, misc tools
 upnp/           Standalone SSDP/UPnP experiment; upnp/gssdp-vcam is a vendored,
                 patched libgssdp fork built with meson — NOT built by the root CMake
 bin/            Test fixtures (sample FS trees) and screenshots

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <byteswap.h>
 #include <assert.h>
+#include <vcam.h>
 #include "usbip.h"
 #include "usbthing.h"
 
@@ -16,6 +17,11 @@ struct Priv {
 	uint8_t *buffer;
 	size_t buffer_length;
 };
+
+// Result codes of the usbip request handlers: 0 = served (response sent or
+// URB deliberately parked), PEER_CLOSED = the kernel side of the socketpair
+// is gone (client exit / detach) and the serving loop must end.
+#define PEER_CLOSED 1
 
 static void hexdump(void *buffer, int size) {
 	unsigned char *buf = (unsigned char *)buffer;
@@ -28,8 +34,61 @@ static void hexdump(void *buffer, int size) {
 	printf("\n");
 }
 
+// send() that cannot raise SIGPIPE and loops over partial writes.
+// Returns 0, or -1 when the peer is gone / the socket failed.
+static int send_all(int sockfd, const void *buf, size_t len) {
+	const char *p = buf;
+	size_t left = len;
+
+	while (left > 0) {
+		ssize_t rc = send(sockfd, p, left, MSG_NOSIGNAL);
+		if (rc < 0) {
+			if (errno == EINTR) continue;
+			return -1;
+		}
+		p += rc;
+		left -= rc;
+	}
+	return 0;
+}
+
+// recv() exactly len bytes. Returns 0, PEER_CLOSED when the kernel closed
+// the session, or -1 on other errors (EINTR is retried).
+static int recv_full(int sockfd, void *buf, size_t len) {
+	char *p = buf;
+	size_t left = len;
+
+	while (left > 0) {
+		ssize_t rc = recv(sockfd, p, left, 0);
+		if (rc == 0) return PEER_CLOSED;
+		if (rc < 0) {
+			if (errno == EINTR) continue;
+			return -1;
+		}
+		p += rc;
+		left -= rc;
+	}
+	return 0;
+}
+
+// Complete a URB with an error status instead of leaving it pending forever.
+static int respond_ret_submit_status(int sockfd, struct usbip_header *header, int32_t status) {
+	struct usbip_header resp = {0};
+	resp.base.command = bswap_32(USBIP_RET_SUBMIT);
+	resp.base.seqnum = header->base.seqnum;
+	resp.base.devid = header->base.devid;
+	resp.base.direction = header->base.direction;
+	resp.base.ep = header->base.ep;
+	resp.u.ret_submit.status = bswap_32(status);
+
+	if (send_all(sockfd, &resp, sizeof(resp))) return PEER_CLOSED;
+	return 0;
+}
+
+// Serves one CMD_SUBMIT. Returns 0 when the request was handled (response
+// sent, or the URB deliberately parked) and the session continues;
+// nonzero ends the session.
 static int handle_submit(struct UsbThing *ctx, int sockfd, struct usbip_header *header) {
-	int resp_len = 0;
 	uint32_t len = bswap_32(header->u.cmd_submit.transfer_buffer_length);
 	uint32_t dir = bswap_32(header->base.direction);
 	uint32_t ep = bswap_32(header->base.ep);
@@ -42,70 +101,73 @@ static int handle_submit(struct UsbThing *ctx, int sockfd, struct usbip_header *
 	resp.base.devid = header->base.devid;
 	resp.base.direction = header->base.direction;
 	resp.base.ep = header->base.ep;
-	resp.u.ret_submit.status = bswap_32(0);
-	resp.u.ret_submit.start_frame = bswap_32(0);
-	resp.u.ret_submit.number_of_packets = bswap_32(0);
-	resp.u.ret_submit.error_count = bswap_32(0);
 
 	uint8_t *buffer = NULL;
+	int resp_len = 0;
+	int rc;
 
 	if (ep == 0) {
+		// Control request; OUT requests carry their payload after the header
 		buffer = malloc(65535);
-		// Handle control request payloads
-		int payload_size = 0;
+		if (buffer == NULL) return respond_ret_submit_status(sockfd, header, -ENOMEM);
 		if (dir == 0 && len != 0) {
-			int rc = recv(sockfd, &header->u.cmd_submit.setup[8], len, 0);
-			if (rc != len) return -1;
-			payload_size += (int)len;
+			rc = recv_full(sockfd, &header->u.cmd_submit.setup[8], len);
+			if (rc) goto peer_or_error;
 		}
-
-		int rc = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8 + payload_size, buffer);
-		if (rc < 0) return rc;
-		resp_len = rc;
+		resp_len = ctx->handle_control_request(ctx, 0, (int)ep, header->u.cmd_submit.setup, 8 + (dir == 0 ? (int)len : 0), buffer);
+		if (resp_len < 0) {
+			free(buffer);
+			return respond_ret_submit_status(sockfd, header, -EIO);
+		}
 		if (dir == 0 && len != 0 && resp_len != 0) {
 			printf("Illegal double data phase in control request\n");
 			abort();
 		}
-		resp.u.ret_submit.actual_length = bswap_32(resp_len);
 	} else if (dir == 1) {
-		buffer = malloc(len);
-		assert(buffer != NULL);
-
+		// Bulk/interrupt IN. Interrupt IN with no event due parks the URB:
+		// no RET_SUBMIT is sent and the kernel keeps it pending until the
+		// client times out and unlinks it.
+		buffer = malloc(len ? len : 1);
+		if (buffer == NULL) return respond_ret_submit_status(sockfd, header, -ENOMEM);
 		resp_len = ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, buffer, (int)len);
-		if (resp_len == -1) {
+		if (resp_len == GP_ERROR_TIMEOUT) {
+			free(buffer);
 			return 0;
 		}
-		resp.u.ret_submit.actual_length = bswap_32(resp_len);
-	} else if (dir == 0) {
-		buffer = malloc(len);
-		assert(buffer != NULL);
-
-		int read = 0;
-		for (int i = 0; i < 10; i++) {
-			printf("Trying again...\n");
-			int rc = recv(sockfd, buffer + read, len - read, 0);
-			assert(rc >= 0);
-			read += rc;
-			if (read == len) break;
+		if (resp_len < 0) {
+			free(buffer);
+			return respond_ret_submit_status(sockfd, header, -EIO);
 		}
-		assert(read == len);
-
+	} else if (dir == 0) {
+		// Bulk/interrupt OUT, payload follows the header
+		buffer = malloc(len ? len : 1);
+		if (buffer == NULL) return respond_ret_submit_status(sockfd, header, -ENOMEM);
+		rc = recv_full(sockfd, buffer, len);
+		if (rc) goto peer_or_error;
 		ctx->handle_bulk_transfer(ctx, 0, (int)ep_addr, buffer, (int)len);
 		resp_len = 0;
-		resp.u.ret_submit.actual_length = bswap_32(len);
 	} else {
 		printf("Illegal state\n");
 		abort();
 	}
 
-	send(sockfd, &resp, 0x30, 0);
-	if (resp_len && buffer != NULL)
-		send(sockfd, buffer, resp_len, 0);
-
-	if (buffer != NULL)
-		free(buffer);
-
+	// For host->device bulk/interrupt transfers the URB completes with
+	// actual_length = transfer length; for control and IN transfers it is
+	// the returned data length
+	if (ep != 0 && dir == 0)
+		resp.u.ret_submit.actual_length = bswap_32((int)len);
+	else
+		resp.u.ret_submit.actual_length = bswap_32(resp_len);
+	if (send_all(sockfd, &resp, sizeof(resp))) goto peer_or_error;
+	if (dir == 1 && resp_len > 0) {
+		if (send_all(sockfd, buffer, resp_len)) goto peer_or_error;
+	}
+	free(buffer);
 	return 0;
+
+peer_or_error:
+	free(buffer);
+	return PEER_CLOSED;
 }
 
 int usbt_vhci_init(struct UsbThing *ctx) {
@@ -133,7 +195,9 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 
 	int port = 0;
 	int devid = 1;
-	int speed = 2;
+	// USB_SPEED_HIGH: the descriptors advertise 512-byte bulk packets,
+	// which usbcore would otherwise clamp to 64 on a full-speed attach
+	int speed = 3;
 
 	// Write the command to take over the port
 	char cmd[255];
@@ -148,51 +212,50 @@ int usbt_vhci_init(struct UsbThing *ctx) {
 	int sockfd = sockets[0];
 
 	while (1) {
-		char packet[512] = {0};
-		int rc = recv(sockfd, packet, sizeof(struct usbip_header), 0);
-		if (rc < 0) {
-			printf("Failed to receive data %d\n", errno);
-			return -1;
-		} else if (rc == 0) {
-			continue;
-		} else if (rc != sizeof(struct usbip_header)) {
-			printf("Received partial packet %d\n", rc);
-			abort();
+		struct usbip_header header;
+		int rc = recv_full(sockfd, &header, sizeof(header));
+		if (rc) {
+			// The kernel detaches the device when our socket closes,
+			// there is nothing to clean up on this side
+			printf("usbip session ended (%s)\n",
+			       rc == PEER_CLOSED ? "peer closed" : strerror(errno));
+			break;
 		}
-		//printf("Received %d\n", rc);
 
-		struct usbip_header *header = (struct usbip_header *)packet;
-		uint32_t command = bswap_32(header->base.command);
+		uint32_t command = bswap_32(header.base.command);
 		switch (command) {
 		case USBIP_CMD_SUBMIT:
-			rc = handle_submit(ctx, sockfd, header);
-			if (rc) goto exit;
+			if (handle_submit(ctx, sockfd, &header)) {
+				printf("usbip peer closed mid-transfer\n");
+				close(fd);
+				return 0;
+			}
 			break;
 		case USBIP_CMD_UNLINK: {
-			printf("USBIP_CMD_UNLINK\n");
+			usbt_dbg("USBIP_CMD_UNLINK\n");
 			struct usbip_header resp = {0};
 			resp.base.command = bswap_32(USBIP_RET_UNLINK);
-			resp.base.seqnum = header->base.seqnum;
-			resp.base.devid = header->base.devid;
-			resp.base.direction = header->base.direction;
-			resp.base.ep = header->base.ep;
-			resp.u.ret_unlink.status = bswap_32(0);
-			send(sockfd, &resp, 48, 0);
+			resp.base.seqnum = header.base.seqnum;
+			resp.base.devid = header.base.devid;
+			resp.base.direction = header.base.direction;
+			resp.base.ep = header.base.ep;
+			resp.u.ret_unlink.status = 0;
+			if (send_all(sockfd, &resp, sizeof(resp))) {
+				printf("usbip peer closed on unlink response\n");
+				close(fd);
+				return 0;
+			}
 			} break;
 		case USBIP_RESET_DEV:
 			printf("USBIP_RESET_DEV\n");
 			break;
 		default:
 			printf("Unknown usbip command %x\n", command);
-			hexdump(header, rc);
+			hexdump(&header, sizeof(header));
 			abort();
 		}
 	}
 
 	close(fd);
 	return 0;
-
-	exit:;
-	close(fd);
-	return -1;
 }

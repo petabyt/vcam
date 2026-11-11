@@ -20,6 +20,24 @@ enum CamBackendType {
 	VCAM_TCP,
 	VCAM_VHCI,
 	VCAM_GADGETFS,
+	/// @brief Camera AP emulation (src/wifi.c): brings up hostapd/dnsmasq,
+	/// waits for a phone, then runs the TCP backend on the AP address
+	VCAM_WIFI,
+};
+
+/// @brief Endpoint layout of the emulated USB device (usbthing backends).
+/// Selects the config descriptor blob and the bulk/interrupt routing in
+/// src/usbthing.c. Set by device implementations during init.
+enum vcam_usb_ep_profile {
+	/// Canon-style still-image device: bulk OUT 0x02, bulk IN 0x81,
+	/// interrupt IN 0x83 (wMaxPacketSize 8)
+	VCAM_EP_CANON = 0,
+	/// Fujifilm "USB CARD READER" bodies: bulk OUT 0x01, bulk IN 0x81,
+	/// interrupt IN 0x82 (wMaxPacketSize 32) - see bin/fuji/fujicard.txt
+	VCAM_EP_FUJI_CARD = 1,
+	/// Fujifilm "USB RAW CONV./BACKUP RESTORE": same addresses,
+	/// interrupt IN wMaxPacketSize 24 - see bin/fuji/fujiraw.txt
+	VCAM_EP_FUJI_RAW = 2,
 };
 
 // DeviceInfo VendorExtensionID values (PTP vendor codes)
@@ -66,6 +84,20 @@ typedef struct vcam {
 	/// @brief DeviceInfo.VendorExtensionVersion (defaults to 0x64 = 1.0)
 	uint16_t vendor_extension_version;
 
+	/// @brief USB endpoint layout (enum vcam_usb_ep_profile)
+	uint8_t usb_ep_profile;
+
+	/// @brief WiFi backend identity, hardcoded per model in the vendor
+	/// init functions (empty = wifi backend falls back to generic values)
+	char ap_ssid[64];
+	/// @brief WPA2 passphrase; empty string = open network
+	char ap_password[64];
+	/// @brief AP gateway IP; empty = generic 192.168.0.1 default
+	char ap_gateway[32];
+	/// @brief Set when --ssid/--password/--gateway overrode the values
+	/// above from the command line
+	uint8_t ap_overridden;
+
 	/// @brief Optional override for the DeviceInfo EventsSupported list.
 	/// When NULL the standard set (ObjectAdded/ObjectRemoved/
 	/// DevicePropChanged/StoreAdded/CaptureComplete) is advertised.
@@ -106,6 +138,12 @@ typedef struct vcam {
 	/// when the handle is unknown. Data stays owned by the vendor.
 	int (*lookup_virtual_object)(struct vcam *cam, uint32_t handle, unsigned char **data, uint32_t *size);
 
+	/// @brief When set, InitiateCapture injects only CaptureComplete, no
+	/// ObjectAdded events. Real Fuji bodies leave object discovery to the
+	/// client's GetObjectHandles diff (see libgphoto2 camera_wait_for_event);
+	/// injecting both makes clients report the same object twice.
+	uint8_t capture_no_objectadded;
+
 	unsigned char *inbulk;
 	int	nrinbulk;
 	unsigned char *outbulk;
@@ -140,6 +178,11 @@ vcam *vcam_new(const char *name, int argc, char **argv);
 
 /// @brief Called by variant CLI parser to handle generic vcam parameters
 int vcam_parse_args(vcam *cam, int argc, char **argv, int *i);
+
+/// @brief Parse the WiFi identity overrides (--ssid/--password/--gateway)
+/// into cam->ap_* - call from the vendor init flag loops (wifi backend or
+/// tcp). Returns 1 when the argument was consumed.
+int vcam_parse_ap_args(vcam *cam, int argc, char **argv, int *i);
 
 /// @brief Read bytes from internal buffer (R->I)
 int vcam_read(vcam *cam, int ep, unsigned char *data, int bytes);
@@ -388,7 +431,15 @@ int fuji_wifi_main(vcam *cam);
 int ptpip_generic_main(vcam *cam);
 int canon_ssdp_start(vcam *cam);
 
+// WiFi backend (src/wifi.c): config struct + flag filter in wifi.h.
+// vcam_wifi_config() returns the (single-camera) backend config that
+// vcam_wifi_filter_args fills; vcam_wifi_run brings the AP up and
+// dispatches to the vendor TCP flow.
+struct vcam_wifi_config *vcam_wifi_config(void);
+int vcam_wifi_run(vcam *cam, int vendor);
+
 #include "data.h"
 #include "socket.h"
+#include "wifi.h"
 
 #endif /* !defined(IOLIBS_VUSB_VCAMERA_H) */

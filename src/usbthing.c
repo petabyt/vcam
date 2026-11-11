@@ -26,10 +26,14 @@ struct usb_endpoint_descriptor_min {
 struct Config {
 	struct usb_config_descriptor config;
 	struct usb_interface_descriptor interf0;
-	struct usb_endpoint_descriptor_min ep1;
-	struct usb_endpoint_descriptor_min ep81;
-	struct usb_endpoint_descriptor_min ep82;
-} __attribute__((packed)) config = {
+	struct usb_endpoint_descriptor_min ep_bulk_out;
+	struct usb_endpoint_descriptor_min ep_bulk_in;
+	struct usb_endpoint_descriptor_min ep_int_in;
+} __attribute__((packed));
+
+// Canon-style still-image layout (Canon EOS Rebel T6, see src/notes/a.txt):
+// bulk OUT 0x02, bulk IN 0x81, interrupt IN 0x83
+static struct Config config_canon = {
 	.config = {
 		.bLength = USB_DT_CONFIG_SIZE,
 		.bDescriptorType = USB_DT_CONFIG,
@@ -51,15 +55,7 @@ struct Config {
 		.bNumEndpoints = 3,
 		.iInterface = 0,
 	},
-	.ep1 = {
-		.bLength = sizeof(struct usb_endpoint_descriptor_min),
-		.bDescriptorType = USB_DT_ENDPOINT,
-		.bEndpointAddress = 0x81,
-		.bmAttributes = 2,
-		.wMaxPacketSize = 0x200,
-		.bInterval = 0,
-	},
-	.ep81 = {
+	.ep_bulk_out = {
 		.bLength = sizeof(struct usb_endpoint_descriptor_min),
 		.bDescriptorType = USB_DT_ENDPOINT,
 		.bEndpointAddress = 0x2,
@@ -67,7 +63,15 @@ struct Config {
 		.wMaxPacketSize = 0x200,
 		.bInterval = 0,
 	},
-	.ep82 = {
+	.ep_bulk_in = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x81,
+		.bmAttributes = 2,
+		.wMaxPacketSize = 0x200,
+		.bInterval = 0,
+	},
+	.ep_int_in = {
 		.bLength = sizeof(struct usb_endpoint_descriptor_min),
 		.bDescriptorType = USB_DT_ENDPOINT,
 		.bEndpointAddress = 0x83,
@@ -76,6 +80,116 @@ struct Config {
 		.bInterval = 10,
 	},
 };
+
+// Fujifilm "USB CARD READER" layout, from the X-H1 lsusb dump
+// (bin/fuji/fujicard.txt): bulk OUT 0x01, bulk IN 0x81, interrupt IN 0x82
+// with a 32-byte interrupt pair
+static struct Config config_fuji_card = {
+	.config = {
+		.bLength = USB_DT_CONFIG_SIZE,
+		.bDescriptorType = USB_DT_CONFIG,
+		.bNumInterfaces = 0x1,
+		.wTotalLength = sizeof(struct Config),
+		.bConfigurationValue = 0x1,
+		.iConfiguration = 0,
+		.bmAttributes = 0xc0,
+		.bMaxPower = 0x32,
+	},
+	.interf0 = {
+		.bLength = USB_DT_INTERFACE_SIZE,
+		.bDescriptorType = USB_DT_INTERFACE,
+		.bInterfaceProtocol = 1,
+		.bInterfaceClass = 6,
+		.bInterfaceSubClass = 1,
+		.bAlternateSetting = 0,
+		.bInterfaceNumber = 0,
+		.bNumEndpoints = 3,
+		.iInterface = 0,
+	},
+	.ep_bulk_out = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x1,
+		.bmAttributes = 2,
+		.wMaxPacketSize = 0x200,
+		.bInterval = 1,
+	},
+	.ep_bulk_in = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x81,
+		.bmAttributes = 2,
+		.wMaxPacketSize = 0x200,
+		.bInterval = 0,
+	},
+	.ep_int_in = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x82,
+		.bmAttributes = 3,
+		.wMaxPacketSize = 0x20,
+		.bInterval = 11,
+	},
+};
+
+// Fujifilm "USB RAW CONV./BACKUP RESTORE" layout: identical to the card
+// reader, but the interrupt pair shrinks to 24 bytes with interval 4
+// (bin/fuji/fujiraw.txt)
+static struct Config config_fuji_raw = {
+	.config = {
+		.bLength = USB_DT_CONFIG_SIZE,
+		.bDescriptorType = USB_DT_CONFIG,
+		.bNumInterfaces = 0x1,
+		.wTotalLength = sizeof(struct Config),
+		.bConfigurationValue = 0x1,
+		.iConfiguration = 0,
+		.bmAttributes = 0xc0,
+		.bMaxPower = 0x32,
+	},
+	.interf0 = {
+		.bLength = USB_DT_INTERFACE_SIZE,
+		.bDescriptorType = USB_DT_INTERFACE,
+		.bInterfaceProtocol = 1,
+		.bInterfaceClass = 6,
+		.bInterfaceSubClass = 1,
+		.bAlternateSetting = 0,
+		.bInterfaceNumber = 0,
+		.bNumEndpoints = 3,
+		.iInterface = 0,
+	},
+	.ep_bulk_out = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x1,
+		.bmAttributes = 2,
+		.wMaxPacketSize = 0x200,
+		.bInterval = 1,
+	},
+	.ep_bulk_in = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x81,
+		.bmAttributes = 2,
+		.wMaxPacketSize = 0x200,
+		.bInterval = 0,
+	},
+	.ep_int_in = {
+		.bLength = sizeof(struct usb_endpoint_descriptor_min),
+		.bDescriptorType = USB_DT_ENDPOINT,
+		.bEndpointAddress = 0x82,
+		.bmAttributes = 3,
+		.wMaxPacketSize = 0x18,
+		.bInterval = 4,
+	},
+};
+
+static const struct Config *get_config_blob(vcam *cam) {
+	switch (cam->usb_ep_profile) {
+	case VCAM_EP_FUJI_CARD: return &config_fuji_card;
+	case VCAM_EP_FUJI_RAW: return &config_fuji_raw;
+	default: return &config_canon;
+	}
+}
 
 struct Priv {
 #define PRIV_MAX_CAMS 5
@@ -92,12 +206,19 @@ struct vcam *usbt_get_cam(struct UsbThing *ctx, int devn) {
 }
 
 int usb_get_string(struct UsbThing *ctx, int devn, int id, char buffer[127]) {
+	vcam *cam = get_cam(ctx, devn);
 	switch (id) {
 	case STRINGID_MANUFACTURER:
-		strcpy(buffer, get_cam(ctx, devn)->manufac);
+		strcpy(buffer, cam->manufac);
 		return 0;
 	case STRINGID_PRODUCT:
-		strcpy(buffer, get_cam(ctx, devn)->model);
+		// Fuji bodies expose themselves as "USB PTP Camera"; the model
+		// name comes from PTP DeviceInfo. Real X-H1: iManufacturer is 0.
+		if (cam->usb_ep_profile != VCAM_EP_CANON) {
+			strcpy(buffer, "USB PTP Camera");
+			return 0;
+		}
+		strcpy(buffer, cam->model);
 		return 0;
 	case STRINGID_SERIAL:
 		strcpy(buffer, "123456");
@@ -120,6 +241,8 @@ int usb_get_device_descriptor(struct UsbThing *ctx, int devn, struct usb_device_
 	dev->idProduct = get_cam(ctx, devn)->product_id;
 
 	dev->iManufacturer = STRINGID_MANUFACTURER;
+	if (get_cam(ctx, devn)->usb_ep_profile != VCAM_EP_CANON)
+		dev->iManufacturer = 0; // real Fuji bodies have no manufacturer string
 	dev->iProduct = STRINGID_PRODUCT;
 	dev->iSerialNumber = STRINGID_SERIAL;
 	dev->bNumConfigurations = 1;
@@ -139,8 +262,9 @@ static void hexdump(void *buffer, int size) {
 
 int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, void *data) {
 	if (i == 0) {
-		memcpy(data, &config, sizeof(config));
-		return sizeof(config);
+		const struct Config *cfg = get_config_blob(get_cam(ctx, devn));
+		memcpy(data, cfg, sizeof(*cfg));
+		return sizeof(*cfg);
 	} else {
 		printf("config desc\n");
 		abort();
@@ -149,12 +273,12 @@ int usb_send_config_descriptor(struct UsbThing *ctx, int devn, int i, void *data
 }
 
 static int get_config_descriptor(struct UsbThing *ctx, int devn, struct usb_config_descriptor *desc, int i) {
-	memcpy(desc, &config.config, sizeof(config.config));
+	memcpy(desc, &get_config_blob(get_cam(ctx, devn))->config, sizeof(struct usb_config_descriptor));
 	return 0;
 }
 
 int get_interface_descriptor(struct UsbThing *ctx, int devn, struct usb_interface_descriptor *desc, int i) {
-	memcpy(desc, &config.interf0, sizeof(config.interf0));
+	memcpy(desc, &get_config_blob(get_cam(ctx, devn))->interf0, sizeof(struct usb_interface_descriptor));
 	return 0;
 }
 
@@ -221,15 +345,17 @@ static int urb_splitter(struct UsbThing *ctx, int devn, int ep, void *data, int 
 }
 
 static int handle_bulk(struct UsbThing *ctx, int devn, int ep, void *data, int len) {
-	if (ep == 0x2) {
+	const struct Config *cfg = get_config_blob(get_cam(ctx, devn));
+
+	if (ep == cfg->ep_bulk_out.bEndpointAddress) {
 		vcam_log("Passing h->d to vcam %d", len);
 		return vcam_write(get_cam(ctx, devn), ep, (const unsigned char *)data, len);
-	} else if (ep == 0x81) {
+	} else if (ep == cfg->ep_bulk_in.bEndpointAddress) {
 		int rc = urb_splitter(ctx, devn, ep, data, len);
 		vcam_log("Reading bulk d->h to vcam (%d)", rc);
 		return rc;
 		//return vcam_read(get_cam(ctx, devn), ep, (unsigned char *)data, len);
-	} else if (ep == 0x83) {
+	} else if (ep == cfg->ep_int_in.bEndpointAddress) {
 		// Serve queued PTP interrupt events to the host.
 		// vcam_readint only returns events whose trigger time has passed, so
 		// callers poll with timeout 0 and wait themselves.

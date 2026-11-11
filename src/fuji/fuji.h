@@ -1,6 +1,8 @@
 #ifndef VCAM_FUJI_H
 #define VCAM_FUJI_H
 
+#include <sys/time.h>
+
 struct Fuji {
 	enum FujiTransport transport;
 	int do_discovery;
@@ -42,9 +44,18 @@ struct Fuji {
 
 	/// @brief USB-card-reader/live-view state (gphoto2 preview flow, usb.c)
 	int usb_liveview;
+	int remote_ports_running;
 	unsigned char *usb_lv_data;
 	uint32_t usb_lv_size;
 	unsigned char *usb_lv_raw;
+
+	/// @brief Current PTP_DPC_FUJI_CameraAction (0xD208) value. The client
+	/// writes an action code here, then InitiateCapture executes it.
+	int usb_action;
+	/// @brief Set while the AF busy window (0xD209 reads 1) is running
+	int usb_af_active;
+	/// @brief When the current AF window was started
+	struct timeval usb_af_start;
 //	size_t rawconv_jpeg_length;
 	char *rawconv_jpeg_path;
 
@@ -87,7 +98,7 @@ int fuji_ssdp_import(const char *ip, char *name);
 int fuji_tether_connect(const char *ip, int port);
 
 // Launch thread to listen to liveview/event ports
-void fuji_accept_remote_ports(void);
+void fuji_accept_remote_ports(vcam *cam);
 
 int vcam_fuji_setup(vcam *cam);
 void fuji_reset_image_import_state(vcam *cam);

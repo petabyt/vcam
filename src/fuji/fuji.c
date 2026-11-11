@@ -47,6 +47,8 @@ void fuji_reset_image_import_state(vcam *cam) {
 	f->image_import_current_handle = 0;
 }
 
+#define FUJI_SSID_ID "ABCD"
+
 int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	cam->priv = calloc(1, sizeof(struct Fuji));
 	struct Fuji *f = fuji(cam);
@@ -56,30 +58,35 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->get_object_version = 2;
 		f->remote_version = 0;
 		cam->product_id = 0x2c6;
+		sprintf(cam->ap_ssid, "FUJIFILM-XA2-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_t20")) {
 		strcpy(cam->model, "X-T20");
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x00020004;
 		f->remote_get_object_version = 2;
+		sprintf(cam->ap_ssid, "FUJIFILM-XT20-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_t2")) {
 		strcpy(cam->model, "X-T2");
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x0002000a;
 		f->remote_get_object_version = 2;
+		sprintf(cam->ap_ssid, "FUJIFILM-XT2-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_s10")) {
 		strcpy(cam->model, "X-S10");
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x0002000a; // fuji sets to 2000b
 		f->remote_get_object_version = 4;
+		sprintf(cam->ap_ssid, "FUJIFILM-XS10-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_t4")) {
 		strcpy(cam->model, "X-T4");
 		f->image_get_version = 4;
 		f->get_object_version = 5;
 		f->remote_version = 0x0002000a; // fuji sets to 2000c
 		f->remote_get_object_version = 5;
+		sprintf(cam->ap_ssid, "FUJIFILM-XT4-" FUJI_SSID_ID);
 		// PTP_DPC_FUJI_ImageGetLimitedVersion = 1
 		// PTP_DPC_FUJI_Unknown_D52F = 1
 	} else if (!strcmp(name, "fuji_gfx100_ii") || !strcmp(name, "fuji_gfx100ii") || !strcmp(name, "gfx100ii") || !strcmp(name, "gfx")) {
@@ -89,6 +96,7 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->remote_version = 0x0002000c;
 		f->remote_get_object_version = 5;
 		f->is_gfx100ii = 1;
+		sprintf(cam->ap_ssid, "FUJIFILM-GFX100II-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_h1")) {
 		strcpy(cam->model, "X-H1");
 		f->image_get_version = 3; // fuji sets to 4
@@ -96,6 +104,7 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->remote_version = 0x00020006; // fuji sets to 2000C
 		f->remote_get_object_version = 4;
 		cam->product_id = 0x2d7;
+		sprintf(cam->ap_ssid, "FUJIFILM-XH1-" FUJI_SSID_ID);
 		static char *path = "bin/fuji/backups/FUJIFILM_X-H1_20240327_2218.DAT";
 		f->settings_file_path = path;
 	} else if (!strcmp(name, "fuji_x_dev")) {
@@ -104,24 +113,28 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->get_object_version = 4;
 		f->remote_version = 0x00020006;
 		f->remote_get_object_version = 4;
+		sprintf(cam->ap_ssid, "FUJIFILM-XDEV-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_f10")) {
 		strcpy(cam->model, "X-F10");
 		f->image_get_version = 3;
 		f->get_object_version = 4;
 		f->remote_version = 0x00020004; // fuji sets to 2000C
 		f->remote_get_object_version = 2;
+		sprintf(cam->ap_ssid, "FUJIFILM-XF10-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x30")) {
 		strcpy(cam->model, "X30");
 		f->image_get_version = 3;
 		f->get_object_version = 3; // 2016 fuji sets to 4
 		f->remote_version = 0x00020002; // 2024 fuji sets to 2000C
 		f->remote_get_object_version = 1;
+		sprintf(cam->ap_ssid, "FUJIFILM-X30-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_t30")) {
 		strcpy(cam->model, "X-T30");
 		f->image_get_version = 0xdead;
 		f->get_object_version = 0xdead;
 		f->remote_version = 0xdead;
 		f->remote_get_object_version = 0xdead;
+		sprintf(cam->ap_ssid, "FUJIFILM-XT30-" FUJI_SSID_ID);
 	} else {
 		return -1;
 	}
@@ -132,13 +145,20 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	strcpy(cam->version, "1.30");
 	strcpy(cam->serial, "xxxxxxxxxxxxxxxxxxxxxxxx");
 
+	// WiFi identity: open network, Fuji AP subnet convention. SSID is set
+	// per model above.
+	strcpy(cam->ap_gateway, "192.168.0.1");
+
 	f->transport = FUJI_FEATURE_WIRELESS_COMM;
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;
+		if (vcam_parse_ap_args(cam, argc, argv, &i)) continue;
 		if (!strcmp(argv[i], "--usb")) {
 			f->transport = FUJI_FEATURE_USB_CARD_READER;
 		} else if (!strcmp(argv[i], "--rawconv")) {
 			f->transport = FUJI_FEATURE_RAW_CONV;
+		} else if (!strcmp(argv[i], "--usbtether")) {
+			f->transport = FUJI_FEATURE_USB_TETHER_SHOOT;
 		} else if (!strcmp(argv[i], "--select-img")) {
 			f->is_select_multiple_images = 1;
 		} else if (!strcmp(argv[i], "--discovery")) {
@@ -993,14 +1013,11 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-void fuji_accept_remote_ports(void); // fuji-server.c
-
 int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	if (ptp->code == PTP_OC_InitiateOpenCapture) {
 		f->internal_state = CAM_STATE_IDLE_REMOTE;
-		vcam_log("Opening remote ports"); // BUG: It does this twice
-		fuji_accept_remote_ports();
+		fuji_accept_remote_ports(cam);
 	} else if (ptp->code == PTP_OC_TerminateOpenCapture) {
 		f->internal_state = CAM_STATE_IDLE_REMOTE;
 		vcam_log("One time sending all remote props");

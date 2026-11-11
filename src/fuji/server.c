@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@
 static const char *server_ip_address = "192.168.0.1";
 static int first_client_write = 1;
 static int left_of_init_packet = FUJI_ACK_PACKET_SIZE;
+static pthread_mutex_t remote_ports_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void format_sockaddr(const struct sockaddr *addr, socklen_t addrlen, char *host, size_t host_len, char *service, size_t service_len) {
 	int rc = getnameinfo(addr, addrlen, host, host_len, service, service_len, NI_NUMERICHOST | NI_NUMERICSERV);
@@ -319,53 +321,103 @@ static int new_ptp_tcp_socket(int port) {
 int ptp_fuji_liveview(int socket);
 
 static void *fuji_accept_remote_ports_thread(void *arg) {
+	struct Fuji *f = arg;
 	int event_socket = new_ptp_tcp_socket(FUJI_EVENT_IP_PORT);
+	if (event_socket == -1)
+		goto done;
 	int video_socket = new_ptp_tcp_socket(FUJI_LIVEVIEW_IP_PORT);
-
-	struct sockaddr_storage client_address_event;
-	socklen_t client_address_length_event = sizeof(client_address_event);
-	int client_socket_event = accept(event_socket, (struct sockaddr *)&client_address_event, &client_address_length_event);
-	if (client_socket_event == -1) {
-		vcam_log("Failed to accept event socket");
-		abort();
+	if (video_socket == -1) {
+		close(event_socket);
+		goto done;
 	}
 
-	char client_host[NI_MAXHOST];
-	char client_port[NI_MAXSERV];
-	format_sockaddr((struct sockaddr *)&client_address_event, client_address_length_event, client_host, sizeof(client_host), client_port, sizeof(client_port));
-	vcam_log("Event port connection accepted from %s:%s", client_host, client_port);
-
-	struct sockaddr_storage client_address_video;
-	socklen_t client_address_length_video = sizeof(client_address_video);
-	int client_socket_video = accept(video_socket, (struct sockaddr *)&client_address_video, &client_address_length_video);
-	if (client_socket_video == -1) {
-		vcam_log("Failed to accept video socket");
-		abort();
-	}
-
-	format_sockaddr((struct sockaddr *)&client_address_video, client_address_length_video, client_host, sizeof(client_host), client_port, sizeof(client_port));
-	vcam_log("Video port connection accepted from %s:%s", client_host, client_port);
-
-	// TODO: Do this continuously with two frames? 
-	ptp_fuji_liveview(client_socket_video);
-
-	// TODO: Break loop on sigint?
 	while (1) {
-		uint32_t temp;
-		vcam_log("Liveview/event thread sleeping... (read attempts %d %d)", recv(client_socket_video, &temp, 4, 0), recv(client_socket_event, &temp, 4, 0));
-		usleep(1000000);
-	}
+		struct sockaddr_storage client_address_event;
+		socklen_t client_address_length_event = sizeof(client_address_event);
+		int client_socket_event = accept(event_socket, (struct sockaddr *)&client_address_event, &client_address_length_event);
+		if (client_socket_event == -1) {
+			vcam_log("Failed to accept event socket");
+			break;
+		}
 
+		char client_host[NI_MAXHOST];
+		char client_port[NI_MAXSERV];
+		format_sockaddr((struct sockaddr *)&client_address_event, client_address_length_event, client_host, sizeof(client_host), client_port, sizeof(client_port));
+		vcam_log("Event port connection accepted from %s:%s", client_host, client_port);
+
+		struct sockaddr_storage client_address_video;
+		socklen_t client_address_length_video = sizeof(client_address_video);
+		int client_socket_video = accept(video_socket, (struct sockaddr *)&client_address_video, &client_address_length_video);
+		if (client_socket_video == -1) {
+			vcam_log("Failed to accept video socket");
+			close(client_socket_event);
+			break;
+		}
+
+		format_sockaddr((struct sockaddr *)&client_address_video, client_address_length_video, client_host, sizeof(client_host), client_port, sizeof(client_port));
+		vcam_log("Video port connection accepted from %s:%s", client_host, client_port);
+
+		// TODO: Do this continuously with two frames? 
+		ptp_fuji_liveview(client_socket_video);
+
+		struct pollfd clients[] = {
+			{ .fd = client_socket_event, .events = POLLIN },
+			{ .fd = client_socket_video, .events = POLLIN },
+		};
+		int connected = 1;
+		while (connected) {
+			int rc = poll(clients, 2, -1);
+			if (rc < 0 && errno == EINTR)
+				continue;
+			if (rc < 0)
+				break;
+			for (int i = 0; i < 2; i++) {
+				if (clients[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+					connected = 0;
+					break;
+				}
+				if (clients[i].revents & POLLIN) {
+					char buffer[256];
+					if (recv(clients[i].fd, buffer, sizeof(buffer), 0) <= 0) {
+						connected = 0;
+						break;
+					}
+				}
+			}
+		}
+		close(client_socket_event);
+		close(client_socket_video);
+		vcam_log("Remote ports disconnected; waiting for new connections");
+	}
+	close(event_socket);
+	close(video_socket);
+
+done:
+	pthread_mutex_lock(&remote_ports_mutex);
+	f->remote_ports_running = 0;
+	pthread_mutex_unlock(&remote_ports_mutex);
 	return (void *)0;
 }
 
-void fuji_accept_remote_ports(void) {
+void fuji_accept_remote_ports(vcam *cam) {
 	pthread_t thread;
+	struct Fuji *f = fuji(cam);
 
-	if (pthread_create(&thread, NULL, fuji_accept_remote_ports_thread, NULL)) {
+	pthread_mutex_lock(&remote_ports_mutex);
+	if (f->remote_ports_running) {
+		pthread_mutex_unlock(&remote_ports_mutex);
 		return;
 	}
-
+	f->remote_ports_running = 1;
+	vcam_log("Opening remote ports");
+	if (pthread_create(&thread, NULL, fuji_accept_remote_ports_thread, f)) {
+		f->remote_ports_running = 0;
+		pthread_mutex_unlock(&remote_ports_mutex);
+		vcam_log("Failed to start remote ports thread");
+		return;
+	}
+	pthread_detach(thread);
+	pthread_mutex_unlock(&remote_ports_mutex);
 	vcam_log("Started new thread to accept remote ports");
 }
 

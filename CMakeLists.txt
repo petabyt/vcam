@@ -11,6 +11,7 @@ pkg_check_modules(LIBEXIF REQUIRED libexif)
 set(VCAM_CORE
     src/log.c
     src/vcamera.c
+    src/wifi.c
     src/pack.c
     src/packet.c
     src/ops.c
@@ -69,12 +70,6 @@ target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES})
 target_include_directories(vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(vcam PRIVATE ${VCAM_COMMON_FLAGS})
 target_compile_definitions(vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
-
-#add_executable(upnp upnp/gssdp.c)
-#target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES})
-#target_include_directories(vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
-#target_compile_options(vcam PRIVATE ${VCAM_COMMON_FLAGS})
-#target_compile_definitions(vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
 
 install(
     TARGETS vcam usb-vcam

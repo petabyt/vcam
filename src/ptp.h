@@ -732,6 +732,10 @@ struct PtpIpInitPacket {
 // Extension for camera to PTP_RC_DevicePropNotSupported to request for a prop
 #define PTP_AC_Invisible	0x3
 
+// GetDevicePropDesc GetSet wire codes (PTP spec, DevicePropDesc)
+#define PTP_DPGS_Get		0x0
+#define PTP_DPGS_GetSet		0x1
+
 // Device type codes
 #define PTP_TC_UNDEF	0x0
 #define PTP_TC_INT8		0x1

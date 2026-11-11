@@ -283,6 +283,10 @@ enum FujiStates {
 #define PTP_DPC_FUJI_ProgramShift			0xD205
 #define PTP_DPC_FUJI_FocusAreas				0xD206
 #define PTP_DPC_FUJI_PriorityMode			0xD207 /* from setprioritymode */
+/// @brief Shoot control. The client writes an action code (see
+/// FUJI_USB_ACTION_* in src/fuji/usb.c) and then calls InitiateCapture to
+/// execute it. Values observed by libgphoto2 camlibs/ptp2/config.c
+#define PTP_DPC_FUJI_CameraAction			0xD208
 #define PTP_DPC_FUJI_AFStatus				0xD209
 #define PTP_DPC_FUJI_DeviceName				0xD20B
 #define PTP_DPC_FUJI_MediaRecord			0xD20C /* from capmediarecord */

@@ -700,10 +700,6 @@ int ptp_getobject_write(vcam *cam, ptpcontainer *ptp) {
 	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
 
-#ifdef VCAM_FUJI
-	fuji_downloaded_object(cam);
-#endif
-
 	return 1;
 }
 
@@ -811,7 +807,8 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 		dir->name = strdup(buf);
 		cam->first_dirent = dir;
 		/* Emit ObjectAdded event for the created folder */
-		ptp_inject_interrupt(cam, 80, 0x4002, 1, cam->ptp_objectid, cam->seqnr); /* objectadded */
+		if (!cam->capture_no_objectadded)
+			ptp_inject_interrupt(cam, 80, 0x4002, 1, cam->ptp_objectid, cam->seqnr); /* objectadded */
 	}
 	if (capcnt++ == 150) {
 		/* The start of the operation succeeds, but the memory runs full during it. */
@@ -830,7 +827,8 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	sprintf(newcur->name, "GPH_%04d.JPG", capcnt++);
 	cam->first_dirent = newcur;
 
-	ptp_inject_interrupt(cam, 100, 0x4002, 1, cam->ptp_objectid, cam->seqnr); /* objectadded */
+	if (!cam->capture_no_objectadded)
+		ptp_inject_interrupt(cam, 100, 0x4002, 1, cam->ptp_objectid, cam->seqnr); /* objectadded */
 	ptp_inject_interrupt(cam, 120, 0x400d, 0, 0, cam->seqnr);	     /* capturecomplete */
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
@@ -936,7 +934,14 @@ int ptp_getdevicepropdesc_write(vcam *cam, ptpcontainer *ptp) {
 
 	x += put_16bit_le(data + x, desc->DevicePropertyCode);
 	x += put_16bit_le(data + x, desc->DataType);
-	x += put_8bit_le(data + x, desc->GetSet);
+	/* The wire GetSet field uses PTP_DPGS codes (0x01 = get/set), not the
+	 * internal PTP_AC_* access codes - gphoto2 refuses to set a property
+	 * unless it reports PTP_DPGS_GetSet here. Invisible props stay
+	 * read-only on the wire. */
+	uint8_t getset_wire = PTP_DPGS_Get;
+	if (desc->GetSet != PTP_AC_Read && desc->GetSet != PTP_AC_Invisible)
+		getset_wire = PTP_DPGS_GetSet;
+	x += put_8bit_le(data + x, getset_wire);
 	x += put_data(data + x, desc->factory_default_value, ptp_get_prop_size(desc->factory_default_value, desc->DataType));
 	x += put_data(data + x, desc->value, ptp_get_prop_size(desc->value, desc->DataType));
 	x += put_8bit_le(data + x, desc->FormFlag);
@@ -1122,7 +1127,7 @@ static int ptp_write_uint16_array(uint8_t *d, uint16_t *list, int memb_n) {
 	int of = 0;
 	of += ptp_write_u32(d + of, (uint32_t)memb_n);
 	for (int i = 0; i < memb_n; i++) {
-		of += ptp_write_u16(d + of, list[0]);
+		of += ptp_write_u16(d + of, list[i]);
 	}
 	return of;
 }
@@ -1132,19 +1137,13 @@ static int ptp_mtp_obj_props_supported_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam , ptp, 1)) return 1;
 
-	uint8_t list_buf[512];
-	int of = 0;
-
-	if (ptp->params[0] == PTP_OF_Association) {
-		uint16_t list[] = {0xdc01, 0xdc02, 0xdc03, 0xdc04, 0xdc07, 0xdc0b, 0xdc41, 0xdc44, 0xdc08, 0xdc09};
-		of += ptp_write_uint16_array(list_buf + of, list, 10);
-	} else if (ptp->params[0] == PTP_OF_JPEG || ptp->params[0] == PTP_OF_IMAGE || ptp->params[0] == PTP_OF_RAW) {
-		uint16_t list[] = {0xdc01, 0xdc02, 0xdc03, 0xdc04, 0xdc07, 0xdc08, 0xdc0b, 0xdc41, 0xdc44, 0xdc87, 0xdc88, 0xdcd3};
-		of += ptp_write_uint16_array(list_buf + of, list, 10);
-	} else {
-		ptp_response(cam, PTP_RC_InvalidObjectFormatCode, 0);
-		return 1;
-	}
+	/* Real Fuji bodies answer with the same 12-property list regardless of
+	 * the queried object format (X-H1 captured by Windows 11 MTP, see
+	 * src/notes - session dump in private/dump/fuji/xh1-try-win11.txt) */
+	uint16_t list[] = {0xdc01, 0xdc02, 0xdc03, 0xdc04, 0xdc07, 0xdc08,
+			   0xdc0b, 0xdc41, 0xdc44, 0xdc87, 0xdc88, 0xdcd3};
+	uint8_t list_buf[64];
+	int of = ptp_write_uint16_array(list_buf, list, (int)(sizeof(list) / sizeof(list[0])));
 
 	ptp_senddata(cam, ptp->code, (void *)list_buf, of);
 	ptp_response(cam, PTP_RC_OK, 0);

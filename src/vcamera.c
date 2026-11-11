@@ -333,12 +333,15 @@ void read_directories(vcam *cam, const char *path, struct ptp_dirent *parent) {
 		strcat(cur->fsname, "/");
 		strcat(cur->fsname, de->d_name);
 		//gp_log_("Found filename: %s\n", cur->fsname);
+		if (-1 == stat(cur->fsname, &cur->stbuf)) {
+			vcam_log("Cannot stat object %s", cur->fsname);
+			free_dirent(cur);
+			continue;
+		}
 		cur->id = cam->ptp_objectid++;
 		cur->next = cam->first_dirent;
 		cur->parent = parent;
 		cam->first_dirent = cur;
-		if (-1 == stat(cur->fsname, &cur->stbuf))
-			continue;
 		if (S_ISDIR(cur->stbuf.st_mode))
 			read_directories(cam, cur->fsname, cur); /* recurse! */
 	}
@@ -366,6 +369,11 @@ void free_dirent(struct ptp_dirent *ent) {
 
 static void read_tree(vcam *cam, const char *path) {
 	struct ptp_dirent *root = NULL, *dir, *dcim = NULL;
+	struct stat root_stat;
+	if (stat(path, &root_stat) == -1 || !S_ISDIR(root_stat.st_mode)) {
+		vcam_log("Cannot scan filesystem directory %s", path);
+		return;
+	}
 	cam->ptp_objectid = 0;
 
 	if (cam->first_dirent) {
@@ -377,7 +385,8 @@ static void read_tree(vcam *cam, const char *path) {
 	cam->first_dirent->fsname = strdup(path);
 	cam->first_dirent->id = cam->ptp_objectid++;
 	cam->first_dirent->next = NULL;
-	stat(cam->first_dirent->fsname, &cam->first_dirent->stbuf); /* assuming it works */
+	cam->first_dirent->parent = NULL;
+	cam->first_dirent->stbuf = root_stat;
 	root = cam->first_dirent;
 	read_directories(cam, path, cam->first_dirent);
 
@@ -395,7 +404,7 @@ static void read_tree(vcam *cam, const char *path) {
 		dcim->id = cam->ptp_objectid++;
 		dcim->next = cam->first_dirent;
 		dcim->parent = root;
-		stat(dcim->fsname, &dcim->stbuf); /* assuming it works */
+		dcim->stbuf = root_stat;
 		cam->first_dirent = dcim;
 	}
 }
@@ -788,6 +797,23 @@ int vcam_readint(vcam *cam, unsigned char *data, int bytes, int timeout) {
 	return tocopy;
 }
 
+int vcam_parse_ap_args(vcam *cam, int argc, char **argv, int *i) {
+	if (!strcmp(argv[(*i)], "--ssid")) {
+		(*i)++;
+		snprintf(cam->ap_ssid, sizeof(cam->ap_ssid), "%s", argv[(*i)]);
+	} else if (!strcmp(argv[(*i)], "--password")) {
+		(*i)++;
+		snprintf(cam->ap_password, sizeof(cam->ap_password), "%s", argv[(*i)]);
+	} else if (!strcmp(argv[(*i)], "--gateway")) {
+		(*i)++;
+		snprintf(cam->ap_gateway, sizeof(cam->ap_gateway), "%s", argv[(*i)]);
+	} else {
+		return 0;
+	}
+	cam->ap_overridden = 1;
+	return 1;
+}
+
 int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
 	if (!strcmp(argv[(*i)], "--ip")) {
 		(*i)++;
@@ -841,10 +867,22 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 			vcam_close(cam);
 			return rc;
 		}
+		if (backend == VCAM_WIFI) {
+			// wifi backend does not change the model's PTP behavior,
+			// it only owns the AP + address lifecycle
+			int rc = vcam_wifi_run(cam, WIFI_VENDOR_FUJI);
+			vcam_close(cam);
+			return rc;
+		}
 	} else if (canon_init_cam(cam, name, argc, argv) == 0) {
 		if (backend == VCAM_TCP) {
 			canon_ssdp_start(cam);
 			int rc = ptpip_generic_main(cam);
+			vcam_close(cam);
+			return rc;
+		}
+		if (backend == VCAM_WIFI) {
+			int rc = vcam_wifi_run(cam, WIFI_VENDOR_CANON);
 			vcam_close(cam);
 			return rc;
 		}

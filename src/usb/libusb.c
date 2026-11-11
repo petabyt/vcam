@@ -30,8 +30,9 @@ struct libusb_device_handle {
 //
 // libgphoto2 keeps a pool of interrupt transfers permanently submitted and
 // waits inside libusb_handle_events_timeout() for them to complete, so the
-// event endpoint (0x83) has to be serviceable from there. Completions are
-// polled from the vcam interrupt queue (see vcam_readint).
+// interrupt IN endpoint (0x83 on Canon bodies, 0x82 on Fujifilm) has to be
+// serviceable from there. Completions are polled from the vcam interrupt
+// queue (see vcam_readint).
 // ---------------------------------------------------------------------------
 
 struct pending_entry {
@@ -512,10 +513,34 @@ int libusb_control_transfer(libusb_device_handle *dev, uint8_t bmRequestType, ui
 	}
 }
 
+// True when the endpoint is a descriptor-declared interrupt IN endpoint.
+// Vendors differ (Canon puts it on 0x83, Fujifilm on 0x82), so this is
+// derived from the config descriptor instead of hardcoding an address.
+static int is_interrupt_in_ep(struct libusb_device_handle *dh, unsigned char endpoint) {
+	struct libusb_device dev = {.devn = dh->devn, .usb = dh->usb};
+	struct libusb_config_descriptor *config;
+
+	if (libusb_get_config_descriptor(&dev, 0, &config) != 0) return 0;
+
+	int found = 0;
+	if (config->interface[0].altsetting != NULL) {
+		for (int i = 0; i < config->interface[0].altsetting[0].bNumEndpoints; i++) {
+			const struct libusb_endpoint_descriptor *ep = &config->interface[0].altsetting[0].endpoint[i];
+			if (ep->bEndpointAddress == endpoint) {
+				found = (endpoint & LIBUSB_ENDPOINT_IN) &&
+					(ep->bmAttributes & 3) == LIBUSB_TRANSFER_TYPE_INTERRUPT;
+				break;
+			}
+		}
+	}
+	libusb_free_config_descriptor(config);
+	return found;
+}
+
 int libusb_interrupt_transfer(libusb_device_handle *dev, unsigned char endpoint, unsigned char *data, int length, int *transferred, unsigned int timeout) {
 	if (transferred != NULL) *transferred = 0;
 
-	if (endpoint == 0x83) {
+	if (is_interrupt_in_ep(dev, endpoint)) {
 		// Interrupt IN: poll the event queue until an event is due or the
 		// timeout (0 = wait forever) expires. GP_ERROR_TIMEOUT is returned
 		// by the queue when no event has triggered yet.

@@ -61,12 +61,20 @@ int canon_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;
+		if (vcam_parse_ap_args(cam, argc, argv, &i)) continue;
 		if (!strcmp(argv[i], "--ssdp-modern")) {
 			p->ssdp_modern = 1;
 			continue;
 		}
 		// ...
 	}
+
+	// WiFi identity: EOS phone-app AP convention (Makefile's old create_ap
+	// invocation: SSID with the '{-464' token, WPA2 '12345678', AP at
+	// 192.168.1.2 with the phone as 192.168.1.10)
+	strcpy(cam->ap_ssid, "EOST6{-464_Canon0A");
+	strcpy(cam->ap_password, "12345678");
+	strcpy(cam->ap_gateway, "192.168.1.2");
 
 	const struct CanonModelProfile *profile = NULL;
 	for (unsigned i = 0; i < sizeof(canon_models) / sizeof(canon_models[0]); i++) {
