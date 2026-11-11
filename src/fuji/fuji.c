@@ -4,6 +4,7 @@
 #include <string.h>
 #include <strings.h>
 #include <assert.h>
+#include <fnmatch.h>
 #include <time.h>
 #include <sys/socket.h>
 #include <vcam.h>
@@ -45,6 +46,7 @@ void fuji_reset_image_import_state(vcam *cam) {
 	f->image_import_date_query_seen = 0;
 	f->image_import_steps = 0;
 	f->image_import_current_handle = 0;
+	f->image_import_folder_filter[0] = '\0';
 }
 
 #define FUJI_SSID_ID "ABCD"
@@ -184,7 +186,7 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	}
 }
 
-enum CameraStates {
+enum FujiInternalStates {
 	// Initial state before ACK
 	CAM_STATE_READY,
 	// Idle in normal mode
@@ -258,19 +260,19 @@ int vcam_fuji_setup(vcam *cam) {
 	}
 
 	// Common startup events for all cameras
-	ptp_notify_event(cam, PTP_DPC_FUJI_CameraState, f->camera_state);
+	ptp_notify_event(cam, PTP_DPC_FUJI_CameraState_DF00, f->camera_state);
 
 	if (f->camera_state == FUJI_MULTIPLE_TRANSFER) {
-		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode_D220, 1);
 	}
 
-	ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount, f->obj_count);
+	ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount_D2222, f->obj_count);
 
 	if (f->remote_version) {
 		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount2, f->obj_count);
 		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D400, 1);
-		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode_D220, 1);
 	}
 
 	return 0;
@@ -466,10 +468,25 @@ static int fuji_is_downloadable_object(struct ptp_dirent *cur) {
 	return cur && cur->id && !S_ISDIR(cur->stbuf.st_mode);
 }
 
+static const char *fuji_import_folder_name(vcam *cam, struct ptp_dirent *cur) {
+	if (cur && cur->parent && cur->parent->name && *cur->parent->name)
+		return cur->parent->name;
+	const char *path = cam->vcamera_filesystem;
+	if (!path || !*path)
+		return "100_FUJI";
+	const char *name = strrchr(path, '/');
+	return name && name[1] ? name + 1 : (name ? "100_FUJI" : path);
+}
+
+static int fuji_import_object_selected(vcam *cam, struct ptp_dirent *cur) {
+	const char *filter = fuji(cam)->image_import_folder_filter;
+	return fuji_is_downloadable_object(cur) && (!*filter || fnmatch(filter, fuji_import_folder_name(cam, cur), 0) == 0);
+}
+
 static int fuji_downloadable_object_count(vcam *cam) {
 	int count = 0;
 	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
-		if (fuji_is_downloadable_object(cur)) {
+		if (fuji_import_object_selected(cam, cur)) {
 			count++;
 		}
 	}
@@ -490,18 +507,8 @@ static int fuji_collect_downloadable_handles(vcam *cam, uint32_t **handles) {
 
 	int i = 0;
 	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
-		if (fuji_is_downloadable_object(cur)) {
+		if (fuji_import_object_selected(cam, cur)) {
 			list[i++] = cur->id;
-		}
-	}
-
-	for (int a = 0; a < count; a++) {
-		for (int b = a + 1; b < count; b++) {
-			if (list[b] > list[a]) {
-				uint32_t tmp = list[a];
-				list[a] = list[b];
-				list[b] = tmp;
-			}
 		}
 	}
 
@@ -539,17 +546,6 @@ static void fuji_rewrite_to_selected_handle(ptpcontainer *ptp, ptpcontainer *rew
 	rewritten->params[0] = handle;
 }
 
-static const char *fuji_import_folder_name(vcam *cam) {
-	const char *path = cam->vcamera_filesystem;
-	if (!path || !*path) {
-		return "100_FUJI";
-	}
-
-	const char *name = strrchr(path, '/');
-	name = name ? name + 1 : path;
-	return *name ? name : "100_FUJI";
-}
-
 struct FujiImportDate {
 	char date[9];
 	uint32_t count;
@@ -559,7 +555,7 @@ static int fuji_collect_import_dates(vcam *cam, struct FujiImportDate *dates, in
 	int n = 0;
 
 	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
-		if (!fuji_is_downloadable_object(cur)) {
+		if (!fuji_import_object_selected(cam, cur)) {
 			continue;
 		}
 
@@ -687,18 +683,76 @@ static int ptp_fuji_get_image_import_folders(vcam *cam, ptpcontainer *ptp) {
 	f->image_import_folder_query_seen = 1;
 	fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_FOLDERS);
 
-	unsigned char data[256] = {0};
+	/* D601-D605 follow the X-T5 capture. Only the D602 name list is
+	 * derived from the filesystem; the other descriptor fields are unknown. */
+	static const unsigned char d601[] = { 0x01, 0xd6, 0xff, 0xff, 0x01, 0x01, 0, 0, 0x01, 0, 0, 0x01, 0, 0 };
+	static const unsigned char d602[] = { 0x02, 0xd6, 0xff, 0xff, 0x01, 0x01, 0, 0, 0x01, 0, 0, 0x02 };
+	static const unsigned char d603[] = { 0x03, 0xd6, 0x04, 0, 0x01, 0, 0, 0, 0, 0x01, 0, 0, 0x3f, 0, 0x01, 0 };
+	static const unsigned char d604[] = { 0x04, 0xd6, 0x04, 0, 0x01, 0, 0, 0, 0, 0x01, 0, 0, 0x1f, 0, 0x01, 0 };
+	static const unsigned char d605[] = { 0x05, 0xd6, 0x06, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0, 0, 0x7f, 0, 0, 0, 0x01, 0, 0, 0 };
+	size_t size = 128;
+	unsigned int folders = 0;
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (!fuji_is_downloadable_object(cur))
+			continue;
+		const char *name = fuji_import_folder_name(cam, cur);
+		int seen = 0;
+		for (struct ptp_dirent *prev = cam->first_dirent; prev != cur; prev = prev->next) {
+			if (fuji_is_downloadable_object(prev) && !strcmp(name, fuji_import_folder_name(cam, prev))) {
+				seen = 1;
+				break;
+			}
+		}
+		if (!seen) {
+			if (strlen(name) > 254 || ++folders > 65535) {
+				ptp_response(cam, PTP_RC_GeneralError, 0);
+				return 1;
+			}
+			size += 1 + 2 * (strlen(name) + 1);
+		}
+	}
+	unsigned char *data = calloc(1, size);
+	if (!data) {
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
 	int x = 0;
-	x += put_32bit_le(data + x, 1);
+	x += put_32bit_le(data + x, 5);
+	x += put_32bit_le(data + x, sizeof(d601) + 4);
+	memcpy(data + x, d601, sizeof(d601));
+	x += sizeof(d601);
 	int entry_len_pos = x;
-	x += put_32bit_le(data + x, 0);
-	int entry_start = x;
-	x += put_32bit_le(data + x, 0x00010001);
-	x += put_32bit_le(data + x, (uint32_t)fuji_downloadable_object_count(cam));
-	x += put_string(data + x, fuji_import_folder_name(cam));
-	put_32bit_le(data + entry_len_pos, (uint32_t)(x - entry_start));
+	x += 4;
+	memcpy(data + x, d602, sizeof(d602));
+	x += sizeof(d602);
+	x += put_16bit_le(data + x, folders);
+	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
+		if (!fuji_is_downloadable_object(cur))
+			continue;
+		const char *name = fuji_import_folder_name(cam, cur);
+		int seen = 0;
+		for (struct ptp_dirent *prev = cam->first_dirent; prev != cur; prev = prev->next) {
+			if (fuji_is_downloadable_object(prev) && !strcmp(name, fuji_import_folder_name(cam, prev))) {
+				seen = 1;
+				break;
+			}
+		}
+		if (!seen)
+			x += put_string(data + x, name);
+	}
+	put_32bit_le(data + entry_len_pos, (uint32_t)(x - entry_len_pos));
+	x += put_32bit_le(data + x, sizeof(d603) + 4);
+	memcpy(data + x, d603, sizeof(d603));
+	x += sizeof(d603);
+	x += put_32bit_le(data + x, sizeof(d604) + 4);
+	memcpy(data + x, d604, sizeof(d604));
+	x += sizeof(d604);
+	x += put_32bit_le(data + x, sizeof(d605) + 4);
+	memcpy(data + x, d605, sizeof(d605));
+	x += sizeof(d605);
 
 	ptp_senddata(cam, ptp->code, data, x);
+	free(data);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }
@@ -718,24 +772,70 @@ static int ptp_fuji_get_image_import_dates(vcam *cam, ptpcontainer *ptp) {
 	f->image_import_date_query_seen = 1;
 	fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_DATES);
 
-	struct FujiImportDate dates[32] = {0};
-	int count = fuji_collect_import_dates(cam, dates, 32);
-
-	unsigned char data[2048] = {0};
+	int max_dates = fuji_downloadable_object_count(cam);
+	struct FujiImportDate *dates = calloc((size_t)max_dates + 1, sizeof(*dates));
+	unsigned char *data = calloc((size_t)max_dates + 1, 27);
+	if (!dates || !data) {
+		free(dates);
+		free(data);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+	int count = fuji_collect_import_dates(cam, dates, max_dates);
 	int x = 0;
 	x += put_32bit_le(data + x, (uint32_t)count);
 	for (int i = 0; i < count; i++) {
 		int entry_len_pos = x;
 		x += put_32bit_le(data + x, 0);
-		int entry_start = x;
 		x += put_string(data + x, dates[i].date);
 		x += put_32bit_le(data + x, dates[i].count);
-		put_32bit_le(data + entry_len_pos, (uint32_t)(x - entry_start));
+		put_32bit_le(data + entry_len_pos, (uint32_t)(x - entry_len_pos));
 	}
 
 	ptp_senddata(cam, ptp->code, data, x);
+	free(data);
+	free(dates);
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
+}
+
+static int ptp_fuji_set_import_filter(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	if (vcam_check_param_count(cam, ptp, 0)) return 1;
+	return 0;
+}
+
+static int ptp_fuji_set_import_filter_data(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len) {
+	(void)ptp;
+	struct Fuji *f = fuji(cam);
+	if (len == 4 && get_32bit_le(data) == 0) {
+		f->image_import_folder_filter[0] = '\0';
+		ptp_response(cam, PTP_RC_OK, 0);
+		return 0;
+	}
+	if (len < 11 || get_32bit_le(data) != 1 || get_32bit_le(data + 4) != len - 4 ||
+	    get_16bit_le(data + 8) != 0xd602) {
+		ptp_response(cam, PTP_RC_InvalidParameter, 0);
+		return 1;
+	}
+	unsigned int chars = data[10];
+	if (!chars || len != 11 + chars * 2 || data[len - 2] || data[len - 1]) {
+		ptp_response(cam, PTP_RC_InvalidParameter, 0);
+		return 1;
+	}
+	char filter[256];
+	for (unsigned int i = 0; i + 1 < chars; i++) {
+		if (!data[11 + i * 2] || data[12 + i * 2]) {
+			ptp_response(cam, PTP_RC_InvalidParameter, 0);
+			return 1;
+		}
+		filter[i] = data[11 + i * 2];
+	}
+	filter[chars - 1] = '\0';
+	memcpy(f->image_import_folder_filter, filter, chars);
+	ptp_response(cam, PTP_RC_OK, 0);
+	return 0;
 }
 
 static int ptp_fuji_unsupported(vcam *cam, ptpcontainer *ptp) {
@@ -744,26 +844,43 @@ static int ptp_fuji_unsupported(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+static int ptp_fuji_import_object(vcam *cam, ptpcontainer *ptp) {
+	if (vcam_check_trans_id(cam, ptp)) return 1;
+	if (vcam_check_session(cam)) return 1;
+	int nparams = ptp->code == PTP_OC_GetPartialObject ? 3 : 1;
+	if (vcam_check_param_count(cam, ptp, nparams)) return 1;
+	if (!fuji_find_downloadable_object(cam, ptp->params[0])) {
+		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+	switch (ptp->code) {
+	case PTP_OC_GetObjectInfo: return ptp_getobjectinfo_write(cam, ptp);
+	case PTP_OC_GetThumb: return ptp_getthumb_write(cam, ptp);
+	case PTP_OC_GetObject: return ptp_getobject_write(cam, ptp);
+	default: return ptp_fuji_getpartialobject_write(cam, ptp);
+	}
+}
+
 int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int code = ptp->params[0];
 	struct Fuji *f = fuji(cam);
 	int codes[] = {
-		PTP_DPC_FUJI_CameraState,
-		PTP_DPC_FUJI_ClientState,
-		PTP_DPC_FUJI_GetObjectVersion,
-		PTP_DPC_FUJI_EnableCorrectFileSize,
-		PTP_DPC_FUJI_CompressSmall,
+		PTP_DPC_FUJI_CameraState_DF00,
+		PTP_DPC_FUJI_ClientState_DF01,
+		PTP_DPC_FUJI_GetObjectVersion_DF22,
+		PTP_DPC_FUJI_EnableCorrectFileSize_D227,
+		PTP_DPC_FUJI_CompressSmall_D226,
 		PTP_DPC_FUJI_Unknown_D22E,
-		PTP_DPC_FUJI_ImageGetVersion,
+		PTP_DPC_FUJI_ImageGetVersion_DF21,
 		PTP_DPC_FUJI_GeoTagVersion,
-		PTP_DPC_FUJI_AutoSaveVersion,
+		PTP_DPC_FUJI_AutoSaveVersion_DF23,
 		PTP_DPC_FUJI_AutoSaveDatabaseStatus,
-		PTP_DPC_FUJI_RemotePhotoViewExVersion,
+		PTP_DPC_FUJI_RemotePhotoViewExVersion_DF28,
 	};
 
 	int codes_remote_only[] = {
-	    PTP_DPC_FUJI_RemoteVersion,
-	    PTP_DPC_FUJI_RemoteGetObjectVersion,		
+	    PTP_DPC_FUJI_RemoteVersion_DF24,
+	    PTP_DPC_FUJI_RemoteGetObjectVersion_DF25,		
 	};
 
 	for (size_t i = 0; i < (sizeof(codes) / sizeof(codes[0])); i++) {
@@ -792,7 +909,7 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 	vcam_log("Fuji Set property %X -> %X (size %d)", ptp->params[0], log_value, len);
 
 	switch (ptp->params[0]) {
-	case PTP_DPC_FUJI_ClientState:
+	case PTP_DPC_FUJI_ClientState_DF01:
 		assert(len == 2);
 		f->client_state = uint16[0];
 		if (uint16[0] == 20) {
@@ -800,13 +917,13 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 		}
 		//usleep(1000 * 1000 * 3);
 		break;
-	case PTP_DPC_FUJI_RemoteVersion:
+	case PTP_DPC_FUJI_RemoteVersion_DF24:
 		assert(len == 4);
 		f->min_remote_version = uint[0];
 		break;
-	case PTP_DPC_FUJI_GetObjectVersion:
+	case PTP_DPC_FUJI_GetObjectVersion_DF22:
 		break;
-	case PTP_DPC_FUJI_CompressSmall:
+	case PTP_DPC_FUJI_CompressSmall_D226:
 		f->compress_small = uint16[0];
 		if (len == 2 && uint16[0] == 0) {
 			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D226_SET);
@@ -814,7 +931,7 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 		break;
 	case PTP_DPC_FUJI_Unknown_D22E:
 		break;
-	case PTP_DPC_FUJI_EnableCorrectFileSize:
+	case PTP_DPC_FUJI_EnableCorrectFileSize_D227:
 		assert(len == 2);
 		assert(uint16[0] == 1 || uint16[0] == 0);
 		f->no_compressed = uint16[0];
@@ -823,26 +940,26 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 		}
 		//usleep(1000 * 5000); // Fuji seems to take a while here
 		break;
-	case PTP_DPC_FUJI_RemoteGetObjectVersion:
+	case PTP_DPC_FUJI_RemoteGetObjectVersion_DF25:
 		assert(len == 4);
 		break;
-	case PTP_DPC_FUJI_RemotePhotoViewExVersion:
+	case PTP_DPC_FUJI_RemotePhotoViewExVersion_DF28:
 		if (len == 4 && uint[0] == 3) {
 			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_DF28_SET);
 		}
 		break;
-	case PTP_DPC_FUJI_CameraState:
+	case PTP_DPC_FUJI_CameraState_DF00:
 		assert(len == 2);
-		ptp_notify_event(cam, PTP_DPC_FUJI_CameraState, uint16[0]);
-		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
-		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount, f->obj_count);
+		ptp_notify_event(cam, PTP_DPC_FUJI_CameraState_DF00, uint16[0]);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode_D220, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount_D2222, f->obj_count);
 		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D52F, 1);
 		ptp_notify_event(cam, PTP_DPC_FUJI_Unknown_D400, 1);
-		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount, f->obj_count);
+		ptp_notify_event(cam, PTP_DPC_FUJI_ObjectCount_D2222, f->obj_count);
 		break;
 	case PTP_DPC_FUJI_GeoTagVersion:
 		break;
-	case PTP_DPC_FUJI_AutoSaveVersion:
+	case PTP_DPC_FUJI_AutoSaveVersion_DF23:
 		break;
 	case PTP_DPC_FUJI_AutoSaveDatabaseStatus:
 		break;
@@ -900,7 +1017,7 @@ void fuji_register_d212(vcam *cam) {
 	desc.DataType = PTP_TC_STRING; // Nonstandard
 	desc.GetSet = PTP_AC_Read;
 	desc.value = malloc(512);
-	vcam_register_prop_handlers(cam, PTP_DPC_FUJI_EventsList, &desc, d212_getvalue, NULL);
+	vcam_register_prop_handlers(cam, PTP_DPC_FUJI_EventsList_D212, &desc, d212_getvalue, NULL);
 }
 
 int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
@@ -908,35 +1025,35 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	vcam_log("Get property %X", ptp->params[0]);
 	int data = -1;
 	switch (ptp->params[0]) {
-	case PTP_DPC_FUJI_EventsList:
+	case PTP_DPC_FUJI_EventsList_D212:
 		return fuji_send_events(cam, ptp);
-	case PTP_DPC_FUJI_ObjectCount:
+	case PTP_DPC_FUJI_ObjectCount_D2222:
 	case PTP_DPC_FUJI_ObjectCount2:
 		data = f->obj_count;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_DPC_FUJI_ClientState:
+	case PTP_DPC_FUJI_ClientState_DF01:
 		data = f->client_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_DPC_FUJI_CameraState:
+	case PTP_DPC_FUJI_CameraState_DF00:
 		data = f->camera_state;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_DPC_FUJI_ImageGetVersion:
+	case PTP_DPC_FUJI_ImageGetVersion_DF21:
 		data = f->image_get_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_DPC_FUJI_GetObjectVersion: {
+	case PTP_DPC_FUJI_GetObjectVersion_DF22: {
 		data = f->get_object_version;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		} break;
-	case PTP_DPC_FUJI_RemotePhotoViewExVersion:
+	case PTP_DPC_FUJI_RemotePhotoViewExVersion_DF28:
 		data = 3;
 		fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_DF28_GET);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_DPC_FUJI_RemoteGetObjectVersion:
+	case PTP_DPC_FUJI_RemoteGetObjectVersion_DF25:
 		if (f->remote_get_object_version) {
 			data = f->remote_get_object_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
@@ -951,7 +1068,7 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		}
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		break;
-	case PTP_DPC_FUJI_RemoteVersion:
+	case PTP_DPC_FUJI_RemoteVersion_DF24:
 		if (f->remote_version) {
 			data = f->remote_version;
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
@@ -959,7 +1076,7 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 			ptp_senddata(cam, ptp->code, (unsigned char *)&data, 0);
 		}
 		break;
-	case PTP_DPC_FUJI_StorageID:
+	case PTP_DPC_FUJI_StorageID_D244:
 		data = 0;
 		fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D244_GET);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1);
@@ -996,7 +1113,7 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		data = 0;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;
-	case PTP_DPC_FUJI_AutoSaveVersion:
+	case PTP_DPC_FUJI_AutoSaveVersion_DF23:
 		data = 1;
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 4);
 		break;		
@@ -1157,8 +1274,8 @@ void fuji_downloaded_object(vcam *cam) {
 		}
 
 		// Then we resend the events from the start of the connection
-		ptp_notify_event(cam, PTP_DPC_FUJI_CameraState, f->camera_state);
-		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode, 1);
+		ptp_notify_event(cam, PTP_DPC_FUJI_CameraState_DF00, f->camera_state);
+		ptp_notify_event(cam, PTP_DPC_FUJI_SelectedImgsMode_D220, 1);
 
 		f->sent_images++;
 	}
@@ -1185,10 +1302,15 @@ void fuji_register_opcodes(vcam *cam) {
 		// GFX/XApp import uses these vendor calls only as a gallery prelude.
 		// The file body path is still standard GetObjectInfo/GetThumb/GetPartialObject.
 		vcam_register_opcode(cam, PTP_OC_GetObjectHandles, ptp_fuji_unsupported, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetImageImportFolders, ptp_fuji_get_image_import_folders, NULL);
+		vcam_register_opcode(cam, PTP_OC_GetObjectInfo, ptp_fuji_import_object, NULL);
+		vcam_register_opcode(cam, PTP_OC_GetThumb, ptp_fuji_import_object, NULL);
+		vcam_register_opcode(cam, PTP_OC_GetObject, ptp_fuji_import_object, NULL);
+		vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_import_object, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetFilterProps, ptp_fuji_get_image_import_folders, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_SetFilter_9051, ptp_fuji_set_import_filter, ptp_fuji_set_import_filter_data);
 		vcam_register_opcode(cam, PTP_OC_FUJI_GetImageImportDates, ptp_fuji_get_image_import_dates, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionObjectInfo, ptp_fuji_get_extension_object_info, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionThumb, ptp_fuji_get_extension_thumb, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetPreviewObjectInfo, ptp_fuji_get_extension_object_info, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetPreviewThumb, ptp_fuji_get_extension_thumb, NULL);
 		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionPartialObject, ptp_fuji_get_extension_partial_object, NULL);
 	}
 	if (f->do_discovery) {

@@ -35,6 +35,7 @@ struct Fuji {
 	int image_import_date_query_seen;
 	unsigned int image_import_steps;
 	unsigned int image_import_current_handle;
+	char image_import_folder_filter[256];
 
 	FILE *log;
 
