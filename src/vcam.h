@@ -123,6 +123,10 @@ typedef struct vcam {
 	pid_t sig;
 
 	FILE *comm_dump;
+	/// @brief Initialize camera metadata only, without starting a backend.
+	int camera_json_only;
+	/// @brief Exit the process when a Fuji gallery client requests an invalid object ID.
+	int strict;
 
 	struct ptp_interrupt *first_interrupt;
 	struct ptp_dirent *first_dirent;

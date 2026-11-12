@@ -6,6 +6,7 @@
 struct Fuji {
 	enum FujiTransport transport;
 	int do_discovery;
+	int do_discovery_wireless;
 	int do_register;
 	int do_tether;
 	int is_select_multiple_images;
@@ -13,6 +14,7 @@ struct Fuji {
 	int get_object_version;
 	int remote_version;
 	int remote_get_object_version;
+	int storage_slot;
 
 	/// @brief Current value for PTP_PC_FUJI_ClientState
 	int client_state;
@@ -30,6 +32,8 @@ struct Fuji {
 	int sent_images;
 	/// @brief GFX100 II/modern import profile. Keep this narrow until another modern body is modeled.
 	int is_gfx100ii;
+	int has_gallery_preview;
+	int has_gallery_filters;
 	int image_import_preflight_seen;
 	int image_import_folder_query_seen;
 	int image_import_date_query_seen;

@@ -826,7 +826,10 @@ int vcam_parse_args(vcam *cam, int argc, char **argv, int *i) {
 		(*i)++;
 		read_tree(cam, cam->vcamera_filesystem);
 	} else if (!strcmp(argv[(*i)], "--dump")) {
-		cam->comm_dump = fopen("COMM_DUMP", "wb");
+		if (!cam->camera_json_only)
+			cam->comm_dump = fopen("COMM_DUMP", "wb");
+	} else if (!strcmp(argv[(*i)], "--strict")) {
+		cam->strict = 1;
 	} else if (!strcmp(argv[(*i)], "--sig")) {
 		(*i)++;
 		cam->sig = atoi(argv[(*i)]);
@@ -862,6 +865,7 @@ vcam *vcam_init_standard(void) {
 
 int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc, char **argv) {
 	if (fuji_init_cam(cam, name, argc, argv) == 0) {
+		if (cam->camera_json_only) return 0;
 		if (backend == VCAM_TCP) {
 			int rc = fuji_wifi_main(cam);
 			vcam_close(cam);
@@ -875,6 +879,7 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 			return rc;
 		}
 	} else if (canon_init_cam(cam, name, argc, argv) == 0) {
+		if (cam->camera_json_only) return 0;
 		if (backend == VCAM_TCP) {
 			canon_ssdp_start(cam);
 			int rc = ptpip_generic_main(cam);
@@ -887,6 +892,7 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 			return rc;
 		}
 	} else if (nikon_init_cam(cam, name, argc, argv) == 0) {
+		if (cam->camera_json_only) return 0;
 		// USB-only for now - Nikon WLAN bodies speak standard PTP/IP, so
 		// this can be wired to ptpip_generic_main() later
 		if (backend == VCAM_TCP) {
@@ -895,6 +901,7 @@ int vcam_main(vcam *cam, const char *name, enum CamBackendType backend, int argc
 			return -1;
 		}
 	} else if (sony_init_cam(cam, name, argc, argv) == 0) {
+		if (cam->camera_json_only) return 0;
 		// USB-only for now - Sony bodies need the PTPIP-only 0x9280/0x9281
 		// handshake before PTP/IP works (see gphoto2 camera_init)
 		if (backend == VCAM_TCP) {

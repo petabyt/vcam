@@ -444,7 +444,7 @@ int fuji_wifi_main(vcam *cam) {
 	}
 
 	// PC AutoSave
-	if (f->do_discovery) {
+	if (f->do_discovery || f->do_discovery_wireless) {
 		vcam_log("Fuji discovery on %s", this_ip);
 		server_ip_address = this_ip;
 		fuji_ssdp_import(server_ip_address, "VCAM");

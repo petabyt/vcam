@@ -91,6 +91,17 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		sprintf(cam->ap_ssid, "FUJIFILM-XT4-" FUJI_SSID_ID);
 		// PTP_DPC_FUJI_ImageGetLimitedVersion = 1
 		// PTP_DPC_FUJI_Unknown_D52F = 1
+	} else if (!strcmp(name, "fuji_x_t5")) {
+		strcpy(cam->model, "X-T5");
+		// Provisional values based on the X-T4 until X-T5 version reads are captured.
+		f->image_get_version = 4;
+		f->get_object_version = 5;
+		f->remote_version = 0x0002000a;
+		f->remote_get_object_version = 5;
+		f->storage_slot = 1;
+		f->has_gallery_preview = 1;
+		f->has_gallery_filters = 1;
+		sprintf(cam->ap_ssid, "FUJIFILM-XT5-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_gfx100_ii") || !strcmp(name, "fuji_gfx100ii") || !strcmp(name, "gfx100ii") || !strcmp(name, "gfx")) {
 		strcpy(cam->model, "GFX100 II");
 		f->image_get_version = 4;
@@ -98,6 +109,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->remote_version = 0x0002000c;
 		f->remote_get_object_version = 5;
 		f->is_gfx100ii = 1;
+		f->has_gallery_preview = 1;
+		f->has_gallery_filters = 1;
 		sprintf(cam->ap_ssid, "FUJIFILM-GFX100II-" FUJI_SSID_ID);
 	} else if (!strcmp(name, "fuji_x_h1")) {
 		strcpy(cam->model, "X-H1");
@@ -166,6 +179,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		} else if (!strcmp(argv[i], "--discovery")) {
 			f->do_discovery = 1;
 			f->transport = FUJI_FEATURE_AUTOSAVE;
+		} else if (!strcmp(argv[i], "--discovery-wireless")) {
+			f->do_discovery_wireless = 1;
 		} else if (!strcmp(argv[i], "--register")) {
 			f->do_register = 1;
 			f->transport = FUJI_FEATURE_AUTOSAVE;
@@ -176,6 +191,11 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 			vcam_log("Unknown option %s", argv[i]);
 			return -1;
 		}
+	}
+
+	if (f->do_discovery_wireless && (f->do_discovery || f->do_register || f->transport != FUJI_FEATURE_WIRELESS_COMM)) {
+		vcam_log("--discovery-wireless requires wireless communication mode and cannot be combined with --discovery or --register");
+		return -1;
 	}
 
 	if (f->transport == FUJI_FEATURE_WIRELESS_COMM || f->transport == FUJI_FEATURE_WIRELESS_TETHER || f->transport == FUJI_FEATURE_AUTOSAVE) {
@@ -232,7 +252,7 @@ int vcam_fuji_setup(vcam *cam) {
 	f->sent_images = 0;
 	fuji_reset_image_import_state(cam);
 
-	if (f->is_gfx100ii) {
+	if (f->is_gfx100ii && !cam->camera_json_only) {
 		fuji_setup_gfx100ii_fixtures(cam);
 	}
 
@@ -285,7 +305,7 @@ int fuji_is_compressed_mode(vcam *cam) {
 
 static void fuji_mark_image_import_step(vcam *cam, unsigned int step) {
 	struct Fuji *f = fuji(cam);
-	if (!f->is_gfx100ii) {
+	if (!f->has_gallery_preview) {
 		return;
 	}
 	f->image_import_steps |= step;
@@ -480,7 +500,7 @@ static const char *fuji_import_folder_name(vcam *cam, struct ptp_dirent *cur) {
 
 static int fuji_import_object_selected(vcam *cam, struct ptp_dirent *cur) {
 	const char *filter = fuji(cam)->image_import_folder_filter;
-	return fuji_is_downloadable_object(cur) && (!*filter || fnmatch(filter, fuji_import_folder_name(cam, cur), 0) == 0);
+	return fuji(cam)->storage_slot != 2 && fuji_is_downloadable_object(cur) && (!*filter || fnmatch(filter, fuji_import_folder_name(cam, cur), 0) == 0);
 }
 
 static int fuji_downloadable_object_count(vcam *cam) {
@@ -526,6 +546,15 @@ static struct ptp_dirent *fuji_find_downloadable_object(vcam *cam, uint32_t hand
 		}
 	}
 	return NULL;
+}
+
+static int fuji_invalid_gallery_object(vcam *cam, ptpcontainer *ptp) {
+	if (cam->strict) {
+		vcam_log("Strict mode: opcode 0x%04x requested invalid object ID 0x%08x", ptp->code, ptp->params[0]);
+		exit(EXIT_FAILURE);
+	}
+	ptp_response(cam, PTP_RC_DeviceBusy, 0);
+	return 1;
 }
 
 static struct ptp_dirent *fuji_find_newest_downloadable_object(vcam *cam) {
@@ -610,11 +639,18 @@ static int ptp_fuji_get_extension_object_info(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
-	if (!fuji_image_import_has_steps(cam, FUJI_IMPORT_BOOTSTRAP_READY)) {
+	if (fuji(cam)->is_gfx100ii && !fuji_image_import_has_steps(cam, FUJI_IMPORT_BOOTSTRAP_READY)) {
 		return fuji_image_import_reject(cam, ptp, "0x9054 before function-mode/version setup");
 	}
 	if (ptp->params[0] != 0x10000001) {
 		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
+		return 1;
+	}
+	/* X-T5 capture: the second slot reports StoreNotAvailable. There is
+	 * currently no second-card filesystem configured in vcam. */
+	if (fuji(cam)->storage_slot == 2) {
+		ptp_senddata(cam, ptp->code, NULL, 0);
+		ptp_response(cam, PTP_RC_StoreNotAvailable, 0);
 		return 1;
 	}
 
@@ -664,8 +700,7 @@ static int ptp_fuji_get_extension_partial_object(vcam *cam, ptpcontainer *ptp) {
 		return fuji_image_import_reject(cam, ptp, "0x9056 before image enumeration prelude");
 	}
 	if (!fuji_find_downloadable_object(cam, ptp->params[0])) {
-		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
-		return 1;
+		return fuji_invalid_gallery_object(cam, ptp);
 	}
 	return ptp_fuji_getpartialobject_write(cam, ptp);
 }
@@ -850,8 +885,7 @@ static int ptp_fuji_import_object(vcam *cam, ptpcontainer *ptp) {
 	int nparams = ptp->code == PTP_OC_GetPartialObject ? 3 : 1;
 	if (vcam_check_param_count(cam, ptp, nparams)) return 1;
 	if (!fuji_find_downloadable_object(cam, ptp->params[0])) {
-		ptp_response(cam, PTP_RC_InvalidObjectHandle, 0);
-		return 1;
+		return fuji_invalid_gallery_object(cam, ptp);
 	}
 	switch (ptp->code) {
 	case PTP_OC_GetObjectInfo: return ptp_getobjectinfo_write(cam, ptp);
@@ -864,6 +898,8 @@ static int ptp_fuji_import_object(vcam *cam, ptpcontainer *ptp) {
 int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 	int code = ptp->params[0];
 	struct Fuji *f = fuji(cam);
+	if (code == PTP_DPC_FUJI_StorageID_D244 && f->storage_slot)
+		return 1;
 	int codes[] = {
 		PTP_DPC_FUJI_CameraState_DF00,
 		PTP_DPC_FUJI_ClientState_DF01,
@@ -909,6 +945,23 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 	vcam_log("Fuji Set property %X -> %X (size %d)", ptp->params[0], log_value, len);
 
 	switch (ptp->params[0]) {
+	case PTP_DPC_FUJI_StorageID_D244:
+		if (len != 1) {
+			ptp_response(cam, PTP_RC_InvalidDevicePropFormat, 0);
+			return 1;
+		}
+		if (data[0] != 1 && data[0] != 2) {
+			ptp_response(cam, PTP_RC_InvalidDevicePropValue, 0);
+			return 1;
+		}
+		if (f->storage_slot != data[0]) {
+			f->image_import_current_handle = 0;
+			f->image_import_folder_query_seen = 0;
+			f->image_import_date_query_seen = 0;
+			f->image_import_steps &= ~(FUJI_IMPORT_STEP_CURRENT_INFO | FUJI_IMPORT_STEP_CURRENT_THUMB | FUJI_IMPORT_STEP_FOLDERS | FUJI_IMPORT_STEP_DATES);
+		}
+		f->storage_slot = data[0];
+		break;
 	case PTP_DPC_FUJI_ClientState_DF01:
 		assert(len == 2);
 		f->client_state = uint16[0];
@@ -1077,7 +1130,7 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		}
 		break;
 	case PTP_DPC_FUJI_StorageID_D244:
-		data = 0;
+		data = f->storage_slot;
 		fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D244_GET);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1);
 		break;
@@ -1298,19 +1351,23 @@ void fuji_register_opcodes(vcam *cam) {
 	vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_getpartialobject_write, NULL);
 
 	struct Fuji *f = fuji(cam);
+	if (f->has_gallery_preview) {
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetPreviewObjectInfo, ptp_fuji_get_extension_object_info, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetPreviewThumb, ptp_fuji_get_extension_thumb, NULL);
+	}
+	if (f->has_gallery_filters) {
+		vcam_register_opcode(cam, PTP_OC_GetObjectInfo, ptp_fuji_import_object, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetFilterProps, ptp_fuji_get_image_import_folders, NULL);
+		vcam_register_opcode(cam, PTP_OC_FUJI_SetFilter_9051, ptp_fuji_set_import_filter, ptp_fuji_set_import_filter_data);
+		vcam_register_opcode(cam, PTP_OC_FUJI_GetImageImportDates, ptp_fuji_get_image_import_dates, NULL);
+	}
 	if (f->is_gfx100ii) {
 		// GFX/XApp import uses these vendor calls only as a gallery prelude.
 		// The file body path is still standard GetObjectInfo/GetThumb/GetPartialObject.
 		vcam_register_opcode(cam, PTP_OC_GetObjectHandles, ptp_fuji_unsupported, NULL);
-		vcam_register_opcode(cam, PTP_OC_GetObjectInfo, ptp_fuji_import_object, NULL);
 		vcam_register_opcode(cam, PTP_OC_GetThumb, ptp_fuji_import_object, NULL);
 		vcam_register_opcode(cam, PTP_OC_GetObject, ptp_fuji_import_object, NULL);
 		vcam_register_opcode(cam, PTP_OC_GetPartialObject, ptp_fuji_import_object, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetFilterProps, ptp_fuji_get_image_import_folders, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_SetFilter_9051, ptp_fuji_set_import_filter, ptp_fuji_set_import_filter_data);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetImageImportDates, ptp_fuji_get_image_import_dates, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetPreviewObjectInfo, ptp_fuji_get_extension_object_info, NULL);
-		vcam_register_opcode(cam, PTP_OC_FUJI_GetPreviewThumb, ptp_fuji_get_extension_thumb, NULL);
 		vcam_register_opcode(cam, PTP_OC_FUJI_GetExtensionPartialObject, ptp_fuji_get_extension_partial_object, NULL);
 	}
 	if (f->do_discovery) {
