@@ -746,6 +746,8 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 
 int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	struct ptp_dirent *cur, *newcur, *dir, *dcim = NULL;
+	struct stat capture_stat;
+	const char *capture_path;
 	int capcnt = 98;
 	char buf[10];
 
@@ -777,9 +779,15 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 		cur = cur->next;
 	}
 	if (!cur) {
-		vcam_log_func(__func__, "I do not have a JPG file in the store, can not proceed");
-		ptp_response(cam, PTP_RC_StoreNotAvailable, 0);
-		return 1;
+		capture_path = PWD "/bin/fuji/jpeg-compressed.jpg";
+		if (stat(capture_path, &capture_stat) == -1) {
+			vcam_log_func(__func__, "No capture JPEG available at %s", capture_path);
+			ptp_response(cam, PTP_RC_StoreNotAvailable, 0);
+			return 1;
+		}
+	} else {
+		capture_path = cur->fsname;
+		capture_stat = cur->stbuf;
 	}
 	/* identify the DCIM dir, so we can attach a virtual xxxGPHOT directory to virtually store the new picture in */
 	dir = cam->first_dirent;
@@ -800,7 +808,7 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 	if (!dir) {
 		dir = malloc(sizeof(struct ptp_dirent));
 		dir->id = ++cam->ptp_objectid;
-		dir->fsname = "virtual";
+		dir->fsname = strdup("virtual");
 		dir->stbuf = dcim->stbuf; /* only the S_ISDIR flag is used */
 		dir->parent = dcim;
 		dir->next = cam->first_dirent;
@@ -819,8 +827,8 @@ int ptp_initiatecapture_write(vcam *cam, ptpcontainer *ptp) {
 
 	newcur = malloc(sizeof(struct ptp_dirent));
 	newcur->id = ++cam->ptp_objectid;
-	newcur->fsname = strdup(cur->fsname);
-	newcur->stbuf = cur->stbuf;
+	newcur->fsname = strdup(capture_path);
+	newcur->stbuf = capture_stat;
 	newcur->parent = dir;
 	newcur->next = cam->first_dirent;
 	newcur->name = malloc(8 + 3 + 1 + 1);

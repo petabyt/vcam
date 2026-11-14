@@ -370,9 +370,12 @@ void free_dirent(struct ptp_dirent *ent) {
 static void read_tree(vcam *cam, const char *path) {
 	struct ptp_dirent *root = NULL, *dir, *dcim = NULL;
 	struct stat root_stat;
+	int scan = 1;
 	if (stat(path, &root_stat) == -1 || !S_ISDIR(root_stat.st_mode)) {
-		vcam_log("Cannot scan filesystem directory %s", path);
-		return;
+		vcam_log("Cannot scan filesystem directory %s; using an empty virtual card", path);
+		memset(&root_stat, 0, sizeof(root_stat));
+		root_stat.st_mode = S_IFDIR | 0755;
+		scan = 0;
 	}
 	cam->ptp_objectid = 0;
 
@@ -388,7 +391,8 @@ static void read_tree(vcam *cam, const char *path) {
 	cam->first_dirent->parent = NULL;
 	cam->first_dirent->stbuf = root_stat;
 	root = cam->first_dirent;
-	read_directories(cam, path, cam->first_dirent);
+	if (scan)
+		read_directories(cam, path, cam->first_dirent);
 
 	/* See if we have a DCIM directory, if not, create one. */
 	dir = cam->first_dirent;
