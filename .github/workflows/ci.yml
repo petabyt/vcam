@@ -68,15 +68,42 @@ jobs:
           name: vcam-build
           path: build
 
+      - name: Cache Fuji SD card archive
+        id: fuji-card-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/vcam-fixtures/fuji_sd.tar.gz
+          key: fuji-sd-fec5f34b8aedf49ce04c9a6f11e495ffdaadd2b51b200924f27fe3ccce932dec
+
+      - name: Download Fuji SD card archive
+        if: steps.fuji-card-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/vcam-fixtures
+          curl --fail --location --retry 3 --output /tmp/vcam-fixtures/fuji_sd.tar.gz https://s1.danielc.dev/filedump/fuji_sd.tar.gz
+
+      - name: Prepare main card filesystem
+        run: |
+          echo 'fec5f34b8aedf49ce04c9a6f11e495ffdaadd2b51b200924f27fe3ccce932dec  /tmp/vcam-fixtures/fuji_sd.tar.gz' | sha256sum --check
+          mkdir -p bin/card
+          tar -xzf /tmp/vcam-fixtures/fuji_sd.tar.gz --strip-components=1 -C bin/card
+
       - name: Run all model regression tests
         env:
           GP_INSTALL: /usr
           GP_CLIENT: /tmp/gp_client
           SHIM: ${{ github.workspace }}/build/libusb-vcam.so
           GPHOTO2_CLI: /usr/bin/gphoto2
+          FUJI_TEST_CARD: ${{ github.workspace }}/bin/card
         run: |
           chmod +x build/libusb-vcam.so build/vcam
           bash scripts/run-all-regression-tests.sh
+
+      - name: Test Fuji capture with an empty card
+        env:
+          GP_INSTALL: /usr
+          GP_CLIENT: /tmp/gp_client
+          SHIM: ${{ github.workspace }}/build/libusb-vcam.so
+        run: bash scripts/regression-fuji-gp.sh fuji_x_a2
 
       - name: Upload regression test logs on failure
         if: failure()

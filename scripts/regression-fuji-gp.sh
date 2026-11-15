@@ -31,10 +31,16 @@ fail() {
 [ -x "$GP_CLIENT" ] || fail "gp_client not built: $GP_CLIENT (see scripts/gp_client.md)"
 [ -f "$SHIM" ] || fail "shim not built: $SHIM (run: cmake -B build && cmake --build build)"
 
-# Exercise captures on an empty card regardless of local, untracked fixtures.
+# By default exercise an empty card regardless of local, untracked fixtures.
+# FUJI_TEST_CARD selects an existing card for testing with real images.
 mkdir -p /tmp/opencode || fail "cannot create output directory"
-CARD_DIR=$(mktemp -d /tmp/opencode/fuji-card.XXXXXX) || fail "cannot create empty card"
-trap 'rmdir "$CARD_DIR"' EXIT
+if [ -n "${FUJI_TEST_CARD:-}" ]; then
+	CARD_DIR=$FUJI_TEST_CARD
+	[ -d "$CARD_DIR" ] || fail "card directory does not exist: $CARD_DIR"
+else
+	CARD_DIR=$(mktemp -d /tmp/opencode/fuji-card.XXXXXX) || fail "cannot create empty card"
+	trap 'rmdir "$CARD_DIR"' EXIT
+fi
 
 run() {
 	env VCAM_USB_ARGS="--usb --fs $CARD_DIR" \

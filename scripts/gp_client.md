@@ -168,6 +168,12 @@ Nikon, Sony and Fuji tags) against the **distro gphoto2 packages**
 (ubuntu-24.04: libgphoto2 2.5.31 / gphoto2 2.5.28) through
 `scripts/run-all-regression-tests.sh`:
 
+CI caches the Fuji SD card archive from `https://s1.danielc.dev/filedump/fuji_sd.tar.gz`,
+verifies its SHA-256, and extracts it into `bin/card`, the default card filesystem.
+The Fuji regression uses that card via `FUJI_TEST_CARD` and also runs an
+empty-card check separately. Without `FUJI_TEST_CARD`, the Fuji script uses
+an empty temporary card.
+
 ```sh
 sudo apt install -y gphoto2 libgphoto2-dev libusb-1.0-0-dev libexif-dev
 cc -o /tmp/gp_client scripts/gp_client.c -lgphoto2 -lgphoto2_port
