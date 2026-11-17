@@ -102,6 +102,8 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 		f->has_gallery_preview = 1;
 		f->has_gallery_filters = 1;
 		sprintf(cam->ap_ssid, "FUJIFILM-XT5-" FUJI_SSID_ID);
+		strcpy(cam->ap_password, "vcam12345");
+		cam->ble_pairing = "secure";
 	} else if (!strcmp(name, "fuji_gfx100_ii") || !strcmp(name, "fuji_gfx100ii") || !strcmp(name, "gfx100ii") || !strcmp(name, "gfx")) {
 		strcpy(cam->model, "GFX100 II");
 		f->image_get_version = 4;
@@ -163,12 +165,17 @@ int fuji_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 	// WiFi identity: open network, Fuji AP subnet convention. SSID is set
 	// per model above.
 	strcpy(cam->ap_gateway, "192.168.0.1");
+	if (!cam->ble_pairing)
+		cam->ble_pairing = "legacy";
 
 	f->transport = FUJI_FEATURE_WIRELESS_COMM;
 	for (int i = 0; i < argc; i++) {
 		if (vcam_parse_args(cam, argc, argv, &i)) continue;
 		if (vcam_parse_ap_args(cam, argc, argv, &i)) continue;
-		if (!strcmp(argv[i], "--usb")) {
+		if (!strcmp(argv[i], "--ble-handover")) {
+			f->ble_handover = 1;
+			cam->ap_no_subnet_shift = 1;
+		} else if (!strcmp(argv[i], "--usb")) {
 			f->transport = FUJI_FEATURE_USB_CARD_READER;
 		} else if (!strcmp(argv[i], "--rawconv")) {
 			f->transport = FUJI_FEATURE_RAW_CONV;
@@ -513,26 +520,37 @@ static int fuji_downloadable_object_count(vcam *cam) {
 	return count;
 }
 
-static int fuji_collect_downloadable_handles(vcam *cam, uint32_t **handles) {
+static int fuji_compare_import_objects(const void *a, const void *b) {
+	const struct ptp_dirent *left = *(const struct ptp_dirent *const *)a;
+	const struct ptp_dirent *right = *(const struct ptp_dirent *const *)b;
+
+	if (left->stbuf.st_mtime != right->stbuf.st_mtime)
+		return left->stbuf.st_mtime > right->stbuf.st_mtime ? -1 : 1;
+	/* Handle order is a deterministic tie-breaker, not a capture-order guarantee. */
+	return (left->id < right->id) - (left->id > right->id);
+}
+
+static int fuji_collect_downloadable_objects(vcam *cam, struct ptp_dirent ***objects) {
 	int count = fuji_downloadable_object_count(cam);
-	*handles = NULL;
+	*objects = NULL;
 	if (!count) {
 		return 0;
 	}
 
-	uint32_t *list = calloc((size_t)count, sizeof(uint32_t));
+	struct ptp_dirent **list = calloc((size_t)count, sizeof(*list));
 	if (!list) {
-		return 0;
+		return -1;
 	}
 
 	int i = 0;
 	for (struct ptp_dirent *cur = cam->first_dirent; cur; cur = cur->next) {
 		if (fuji_import_object_selected(cam, cur)) {
-			list[i++] = cur->id;
+			list[i++] = cur;
 		}
 	}
 
-	*handles = list;
+	qsort(list, (size_t)count, sizeof(*list), fuji_compare_import_objects);
+	*objects = list;
 	return count;
 }
 
@@ -639,6 +657,8 @@ static int ptp_fuji_get_extension_object_info(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam)) return 1;
 	if (vcam_check_param_count(cam, ptp, 1)) return 1;
 
+	if (fuji(cam)->ble_handover && fuji(cam)->client_state != FUJI_MODE_REMOTE_IMG_VIEW_XAPP)
+		return fuji_image_import_reject(cam, ptp, "0x9054 requires X-App function mode after BLE handover");
 	if (fuji(cam)->is_gfx100ii && !fuji_image_import_has_steps(cam, FUJI_IMPORT_BOOTSTRAP_READY)) {
 		return fuji_image_import_reject(cam, ptp, "0x9054 before function-mode/version setup");
 	}
@@ -963,9 +983,16 @@ int ptp_fuji_setdevicepropvalue_write_data(vcam *cam, ptpcontainer *ptp, unsigne
 		f->storage_slot = data[0];
 		break;
 	case PTP_DPC_FUJI_ClientState_DF01:
-		assert(len == 2);
+		if (len != 2) {
+			ptp_response(cam, PTP_RC_InvalidDevicePropFormat, 0);
+			return 1;
+		}
+		if (f->ble_handover && uint16[0] != FUJI_MODE_REMOTE_IMG_VIEW_XAPP) {
+			ptp_response(cam, PTP_RC_InvalidDevicePropValue, 0);
+			return 1;
+		}
 		f->client_state = uint16[0];
-		if (uint16[0] == 20) {
+		if (uint16[0] == FUJI_MODE_REMOTE_IMG_VIEW_XAPP) {
 			fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_CLIENT_STATE);
 		}
 		//usleep(1000 * 1000 * 3);
@@ -1145,21 +1172,25 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		if (f->is_gfx100ii && !fuji_image_import_has_steps(cam, FUJI_IMPORT_ENUM_READY)) {
 			return fuji_image_import_reject(cam, ptp, "D621 before complete image-import prelude");
 		}
-		uint32_t *handles = NULL;
-		int count = fuji_collect_downloadable_handles(cam, &handles);
+		struct ptp_dirent **objects = NULL;
+		int count = fuji_collect_downloadable_objects(cam, &objects);
+		if (count < 0) {
+			ptp_response(cam, PTP_RC_GeneralError, 0);
+			return 1;
+		}
 		unsigned char *payload = calloc(1, (size_t)(4 + count * 4));
 		if (!payload) {
-			free(handles);
+			free(objects);
 			ptp_response(cam, PTP_RC_GeneralError, 0);
 			return 1;
 		}
 		int x = 0;
 		x += put_32bit_le(payload + x, (uint32_t)count);
 		for (int i = 0; i < count; i++) {
-			x += put_32bit_le(payload + x, handles[i]);
+			x += put_32bit_le(payload + x, objects[i]->id);
 		}
 		ptp_senddata(cam, ptp->code, payload, x);
-		free(handles);
+		free(objects);
 		free(payload);
 		} break;
 	case PTP_DPC_FUJI_Unknown_D52F:

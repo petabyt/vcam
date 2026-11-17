@@ -16,3 +16,4 @@ temp.txt
 build
 bin/card/*
 build2
+scripts/__pycache__

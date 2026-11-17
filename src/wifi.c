@@ -1390,7 +1390,7 @@ static void subnet_collision_cb(struct addr_entry *addr, void *arg) {
 // Resolve the AP identity (cam->ap_*, hardcoded per model in the vendor
 // init functions, possibly CLI-overridden) into concrete values. Shifts the
 // subnet when the planned range collides with an existing interface's range.
-static void resolve_network(struct wifi_state *st, struct nlsock *n) {
+static int resolve_network(struct wifi_state *st, struct nlsock *n) {
 	const char *gw_src = st->cam->ap_overridden ? "cli override" : st->cam->ap_gateway[0] ? "model init" : "generic default";
 
 	// gateway
@@ -1412,6 +1412,10 @@ static void resolve_network(struct wifi_state *st, struct nlsock *n) {
 	struct subnet_check sc = { .planned_net = net, .shift_net = shift_net, .collide = 0 };
 	rt_iter_addrs(n, subnet_collision_cb, &sc);
 	if (sc.collide) {
+		if (st->cam->ap_no_subnet_shift) {
+			vcam_log("wifi: gateway subnet %s.0/24 is already in use; refusing to change it during BLE handover", net);
+			return -1;
+		}
 		vcam_log("wifi: subnet %s.0/24 already exists on another interface, shifting to %s.0/24", net, shift_net);
 		// keep the host part - copy it out first, composing in place
 		// from a pointer into the same buffer is UB (self-overlapping
@@ -1468,6 +1472,7 @@ static void resolve_network(struct wifi_state *st, struct nlsock *n) {
 		vcam_log("wifi: BUG - resolved gateway '%s' is not a valid IPv4 address", st->gateway);
 		st->gateway[0] = 0; // caller refuses on empty gateway
 	}
+	return 0;
 }
 
 static void print_plan(struct wifi_state *st,
@@ -1696,8 +1701,7 @@ int vcam_wifi_run(vcam *cam, int vendor) {
 	snprintf(st.cfg->iface, sizeof(st.cfg->iface), "%s", pick->name);
 	st.cam = cam;
 
-	resolve_network(&st, &n);
-	if (st.gateway[0] == 0) {
+	if (resolve_network(&st, &n) < 0 || st.gateway[0] == 0) {
 		vcam_log("wifi: cannot continue without a valid gateway address");
 		nl_close(&gn);
 		nl_close(&n);

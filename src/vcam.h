@@ -97,6 +97,9 @@ typedef struct vcam {
 	/// @brief Set when --ssid/--password/--gateway overrode the values
 	/// above from the command line
 	uint8_t ap_overridden;
+	uint8_t ap_no_subnet_shift;
+	/// @brief Default BLE pairing profile, or NULL when not configured
+	const char *ble_pairing;
 
 	/// @brief Optional override for the DeviceInfo EventsSupported list.
 	/// When NULL the standard set (ObjectAdded/ObjectRemoved/

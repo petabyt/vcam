@@ -1,0 +1,221 @@
+diff --git a/src/linux/bluez.c b/src/linux/bluez.c
+index d44611f..62ba5a3 100644
+--- a/src/linux/bluez.c
++++ b/src/linux/bluez.c
+@@ -44,6 +44,8 @@ struct PakGattServiceWrapper {
+ 
+ struct PakGattCharacteristicWrapper {
+ 	struct PakGattCharacteristic base;
++	uint8_t value[512];
++	size_t value_len;
+ 	char path[];
+ };
+ 
+@@ -296,7 +298,7 @@ int pak_bt_unref_adapter(struct PakBt *ctx, struct PakBtAdapter *adapter) {
+ 	return 0;
+ }
+ 
+-unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, uint8_t *buffer, unsigned int max) {
++unsigned int pak_bt_get_manufacturer_data(struct PakBt *ctx, struct PakBtDevice *device, int index, void *buffer, unsigned int max) {
+ 	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
+ #define min(x, y) (((x) < (y)) ? (x) : (y))
+ 	memcpy(buffer, wrapper->mfg_data, min(wrapper->mfg_data_len, max));
+@@ -436,6 +438,12 @@ int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
+ 		dbus_message_iter_next(&dict);
+ 		DBusMessageIter adapter_dict;
+ 		if (!find_dict(&dict, "org.bluez.Device1", &adapter_dict)) {
++			struct PakBtAdapterWrapper *adapter_wrapper = to_wrapper(adapter);
++			size_t path_len = strlen(adapter_wrapper->path);
++			if (strncmp(path, adapter_wrapper->path, path_len) || path[path_len] != '/') {
++				dbus_message_iter_next(&iter_arr);
++				continue;
++			}
+ 			dbus_bool_t is_connected = 0;
+ 			dbus_bool_t is_bonded = 0;
+ 			DBusMessageIter val_dict, val_dict2;
+@@ -443,11 +451,12 @@ int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
+ 			dbus_message_iter_recurse(&val_dict, &val_dict2);
+ 			dbus_message_iter_get_basic(&val_dict2, &is_connected);
+ 
+-			if (find_dict(&adapter_dict, "Bonded", &val_dict)) return -1;
+-			dbus_message_iter_recurse(&val_dict, &val_dict2);
+-			dbus_message_iter_get_basic(&val_dict2, &is_bonded);
++			if (!find_dict(&adapter_dict, "Bonded", &val_dict)) {
++				dbus_message_iter_recurse(&val_dict, &val_dict2);
++				dbus_message_iter_get_basic(&val_dict2, &is_bonded);
++			}
+ 
+-			int matches = is_connected && (filter & PAK_FILTER_CONNECTED);
++			int matches = !filter || (is_connected && (filter & PAK_FILTER_CONNECTED));
+ 			matches |= is_bonded && (filter & PAK_FILTER_BONDED);
+ 			if (matches) {
+ 				if (found == index && wrapper != NULL) {
+@@ -469,8 +478,30 @@ int pak_bt_get_object(struct PakBt *ctx, struct PakBtAdapter *adapter, struct Pa
+ }
+ 
+ int pak_bt_device_create_bond(struct PakBt *ctx, struct PakBtDevice *device, int blocking) {
+-	// TODO:
+-	return -1;
++	struct PakBtDeviceWrapper *wrapper = to_wrapper(device);
++	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.Device1", "Pair");
++	DBusPendingCall *pending = NULL;
++	if (!call) return -1;
++	if (!dbus_connection_send_with_reply(ctx->conn, call, &pending, 60000) || !pending) {
++		dbus_message_unref(call);
++		return -1;
++	}
++	dbus_message_unref(call);
++	while (!dbus_pending_call_get_completed(pending)) {
++		if (!dbus_connection_read_write_dispatch(ctx->conn, 100)) {
++			dbus_pending_call_cancel(pending);
++			dbus_pending_call_unref(pending);
++			return -1;
++		}
++	}
++	DBusMessage *reply = dbus_pending_call_steal_reply(pending);
++	dbus_pending_call_unref(pending);
++	if (!reply) return -1;
++	int ok = dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_METHOD_RETURN ||
++		dbus_message_is_error(reply, "org.bluez.Error.AlreadyExists");
++	if (!ok) fprintf(stderr, "BlueZ Pair failed: %s\n", dbus_message_get_error_name(reply));
++	dbus_message_unref(reply);
++	return ok ? 0 : -1;
+ }
+ 
+ int pak_bt_get_n_devices(struct PakBt *ctx, struct PakBtAdapter *adapter, int filter) {
+@@ -518,7 +549,13 @@ int pak_bt_device_connect(struct PakBt *ctx, struct PakBtDevice *device, int blo
+ 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.Device1", "Connect");
+ 	if (resp == NULL) return -1;
+     dbus_message_unref(resp);
+-	return 0;
++	for (int i = 0; i < 100; i++) {
++		dbus_bool_t resolved = 0;
++		if (!get_bluez_bool_property(ctx->conn, wrapper->path, "org.bluez.Device1", "ServicesResolved", &resolved) && resolved)
++			return 0;
++		usleep(100000);
++	}
++	return -1;
+ }
+ 
+ int pak_bt_device_disconnect(struct PakBt *ctx, struct PakBtDevice *device) {
+@@ -543,8 +580,8 @@ int pak_bt_device_pair(struct PakBt *ctx, struct PakBtDevice *device) {
+ 
+ // Some parameters are allowed to be NULL for different filter flags
+ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device, struct PakGattService **service, struct PakGattCharacteristic **characteristic, int index, int filter) {
+-	struct PakBtDeviceWrapper *device_wrapper = to_wrapper(device);
+-	struct PakGattServiceWrapper *service_wrapper = to_wrapper(*service);
++	struct PakBtDeviceWrapper *device_wrapper = device ? to_wrapper(device) : NULL;
++	struct PakGattServiceWrapper *service_wrapper = (filter & FILTER_GATT_CHARACTERISTIC) ? to_wrapper(*service) : NULL;
+ 	DBusMessage *resp = send_message_noargs(ctx->conn, "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+ 	if (resp == NULL) return -1;
+ 
+@@ -577,7 +614,11 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
+ 			dbus_message_iter_recurse(&val_dict, &val_dict2);
+ 			dbus_message_iter_get_basic(&val_dict2, &device_path);
+ 
+-			if (found == index && !strcmp(device_path, device_wrapper->path)) {
++			if (strcmp(device_path, device_wrapper->path)) {
++				dbus_message_iter_next(&iter_arr);
++				continue;
++			}
++			if (found == index) {
+ 				struct PakGattServiceWrapper *wrapper = alloc_priv(sizeof(struct PakGattServiceWrapper), path);
+ 
+ 				const char *uuid;
+@@ -590,6 +631,7 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
+ 				dbus_message_iter_recurse(&val_dict, &val_dict2);
+ 				dbus_message_iter_get_basic(&val_dict2, &wrapper->base.handle);
+ 				(*service) = from_wrapper(wrapper);
++				dbus_message_unref(resp);
+ 				return 0;
+ 			}
+ 			found++;
+@@ -603,7 +645,11 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
+ 			dbus_message_iter_recurse(&val_dict, &val_dict2);
+ 			dbus_message_iter_get_basic(&val_dict2, &service_path);
+ 
+-			if (found == index && !strcmp(service_path, service_wrapper->path)) {
++			if (strcmp(service_path, service_wrapper->path)) {
++				dbus_message_iter_next(&iter_arr);
++				continue;
++			}
++			if (found == index) {
+ 				struct PakGattCharacteristicWrapper *wrapper = alloc_priv(sizeof(struct PakGattCharacteristicWrapper), path);
+ 
+ 				const char *uuid;
+@@ -616,6 +662,7 @@ static int pak_bt_get_gatt_object(struct PakBt *ctx, struct PakBtDevice *device,
+ 				dbus_message_iter_recurse(&val_dict, &val_dict2);
+ 				dbus_message_iter_get_basic(&val_dict2, &wrapper->base.handle);
+ 				(*characteristic) = from_wrapper(wrapper);
++				dbus_message_unref(resp);
+ 				return 0;
+ 			}
+ 			found++;
+@@ -647,12 +694,17 @@ struct PakGattService *pak_bt_get_gatt_service(struct PakBt *ctx, struct PakBtDe
+ }
+ 
+ int pak_bt_unref_gatt_service(struct PakBt *ctx, struct PakGattService *service) {
+-	free(service->priv);
++	free(service);
+ 	return 0;
+ }
+ 
+ int pak_bt_set_watching_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v) {
+-	return -1;
++	struct PakGattCharacteristicWrapper *wrapper = to_wrapper(characteristic);
++	DBusMessage *reply = send_message_noargs(ctx->conn, "org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "StartNotify");
++	if (!reply) return -1;
++	dbus_message_unref(reply);
++	printf("Subscribed: %s\n", characteristic->uuid);
++	return 0;
+ }
+ 
+ int pak_bt_watch_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, unsigned int ms) {
+@@ -672,14 +724,25 @@ int pak_bt_read_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *
+ 	DBusMessage *resp = send_reply_and_block(ctx->conn, call);
+ 	if (resp == NULL) return -1;
+ 
+-	// TODO: Parse resp
++	DBusMessageIter value, array;
++	if (!dbus_message_iter_init(resp, &value) || dbus_message_iter_get_arg_type(&value) != DBUS_TYPE_ARRAY) {
++		dbus_message_unref(resp);
++		return -1;
++	}
++	dbus_message_iter_recurse(&value, &array);
++	wrapper->value_len = 0;
++	while (dbus_message_iter_get_arg_type(&array) == DBUS_TYPE_BYTE && wrapper->value_len < sizeof(wrapper->value)) {
++		dbus_message_iter_get_basic(&array, &wrapper->value[wrapper->value_len++]);
++		dbus_message_iter_next(&array);
++	}
+ 
+ 	dbus_message_unref(resp);
+ 
+ 	return 0;
+ }
+ 
+-int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const uint8_t *data, unsigned int length, int blocking) {
++int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, const void *bytes, unsigned int length, int blocking) {
++	const uint8_t *data = bytes;
+ 	struct PakGattCharacteristicWrapper *wrapper = to_wrapper(characteristic);
+ 	DBusMessage *call = dbus_message_new_method_call("org.bluez", wrapper->path, "org.bluez.GattCharacteristic1", "WriteValue");
+ 	DBusMessageIter iter;
+@@ -703,12 +766,16 @@ int pak_bt_write_characteristic(struct PakBt *ctx, struct PakGattCharacteristic
+ 	return 0;
+ }
+ 
+-unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, uint8_t *buffer, unsigned int max) {
+-	return 0;
++unsigned int pak_bt_read_characteristic_cached_value(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, void *buffer, unsigned int max) {
++	struct PakGattCharacteristicWrapper *wrapper = to_wrapper(characteristic);
++	unsigned int size = wrapper->value_len < max ? wrapper->value_len : max;
++	memcpy(buffer, wrapper->value, size);
++	return size;
+ }
+ 
+ int pak_bt_set_cccd(struct PakBt *ctx, struct PakGattCharacteristic *characteristic, int v) {
+-	return -1;
++	// BlueZ manages the CCCD through StartNotify.
++	return v == 1 ? 0 : -1;
+ }
+ 
+ static int get_service_channel(const char *mac_address, const char *uuid) {

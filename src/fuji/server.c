@@ -39,6 +39,8 @@ static void reset_client_bridge(vcam *cam) {
 	cam->seqnr = 0;
 	cam->nrinbulk = 0;
 	cam->nroutbulk = 0;
+	if (fuji(cam)->ble_handover)
+		fuji(cam)->client_state = 0;
 	fuji_reset_image_import_state(cam);
 }
 

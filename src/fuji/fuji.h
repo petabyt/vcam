@@ -4,6 +4,7 @@
 #include <sys/time.h>
 
 struct Fuji {
+	int ble_handover;
 	enum FujiTransport transport;
 	int do_discovery;
 	int do_discovery_wireless;

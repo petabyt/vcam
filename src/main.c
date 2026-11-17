@@ -64,6 +64,7 @@ static void print_camera_json(const vcam *cam, const char *name, const char *bac
 	fputs(",\"wifi\":{\"ssid\":", stdout); json_string(cam->ap_ssid);
 	fputs(",\"password\":", stdout); json_string(cam->ap_password);
 	fputs(",\"gateway\":", stdout); json_string(cam->ap_gateway);
+	fputs("},\"bluetooth\":{\"pairing\":", stdout); json_string(cam->ble_pairing);
 	fputs("}}\n", stdout);
 }
 
@@ -99,6 +100,7 @@ int main(int argc, char *argv[]) {
 			"--dump-camera-json\tPrint camera information as JSON and exit (includes Wi-Fi password)\n"
 			"--strict\tExit on invalid Fuji gallery object IDs\n"
 			"--discovery-wireless\tFuji AutoSave discovery with wireless communication mode\n"
+			"--ble-handover\tRequire Fuji X-App image-view function mode\n"
 			"\nWiFi backend (./vcam <model> wifi):\n"
 			"--wifi-dev <if>\tAccess point interface (default: auto-pick, never your\n"
 			"\t\t\tdefault-route/connected card)\n"

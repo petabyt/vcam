@@ -68,6 +68,7 @@ class ObjectInfo:
     thumb_size: int
     image_width: int
     image_height: int
+    modification_date: str
 
 
 def u16(data: bytes, offset: int) -> int:
@@ -147,6 +148,12 @@ def select_fixtures(fixture_dir: Path, expect_raf: str | None) -> tuple[str | No
 def parse_object_info(handle: int, payload: bytes) -> ObjectInfo:
     if len(payload) < 53:
         raise RegressionError(f"GetObjectInfo(0x{handle:x}) returned short payload: {len(payload)} bytes")
+    creation_offset = 53 + payload[52] * 2
+    if creation_offset >= len(payload):
+        raise RegressionError(f"GetObjectInfo(0x{handle:x}) returned a truncated filename")
+    modification_offset = creation_offset + 1 + payload[creation_offset] * 2
+    if modification_offset >= len(payload):
+        raise RegressionError(f"GetObjectInfo(0x{handle:x}) returned a truncated creation date")
     return ObjectInfo(
         handle=handle,
         name=ptp_string(payload, 52),
@@ -156,6 +163,7 @@ def parse_object_info(handle: int, payload: bytes) -> ObjectInfo:
         thumb_size=u32(payload, 14),
         image_width=u32(payload, 26),
         image_height=u32(payload, 30),
+        modification_date=ptp_string(payload, modification_offset),
     )
 
 
@@ -341,6 +349,12 @@ def regression_test(args: argparse.Namespace) -> None:
     try:
         handles = run_import_prelude(client)
         print(f"OK import prelude: {len(handles)} downloadable handles")
+
+        objects = [client.object_info(handle) for handle in handles]
+        expected = sorted(objects, key=lambda obj: (obj.modification_date, obj.handle), reverse=True)
+        if [obj.handle for obj in objects] != [obj.handle for obj in expected]:
+            raise RegressionError("D621 handles are not ordered newest-first by modification date")
+        print("OK gallery handles: newest-first by modification date")
 
         raf = find_object(client, handles, args.expect_raf)
         if raf.fmt != PTP_OF_RAF:
