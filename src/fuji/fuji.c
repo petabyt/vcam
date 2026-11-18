@@ -1293,31 +1293,6 @@ int ptp_fuji_get_device_info(vcam *cam, ptpcontainer *ptp) {
 	return 0;
 }
 
-int ptp_fuji_liveview(int socket) {
-	vcam_log("Broadcasting liveview");
-	FILE *file = fopen(FUJI_DUMMY_LV_JPEG, "rb");
-	if (file == NULL) {
-		vcam_log("Liveview frame %s not found, not sending anything", FUJI_DUMMY_LV_JPEG);
-		return 0;
-	}
-
-	fseek(file, 0, SEEK_END);
-	long file_size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	char *buffer = malloc(file_size);
-	fread(buffer, 1, file_size, file);
-
-	fclose(file);
-
-	int rc = send(socket, buffer, file_size, 0);
-	if (rc) return -1;
-
-	free(buffer);
-
-	return 0;
-}
-
 int ptp_fuji_getpartialobject_write(vcam *cam, ptpcontainer *ptp) {
 	int completed = 0;
 	struct ptp_dirent *cur = fuji_find_downloadable_object(cam, ptp->params[0]);

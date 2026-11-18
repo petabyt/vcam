@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <vcam.h>
 #include <canon.h>
+#include <liveview.h>
 
 void canon_register_d4_hidden(vcam *cam);
 void canon_register_base_eos(vcam *cam);
@@ -17,7 +18,6 @@ int canon_register_capture_props(vcam *cam);
 #define EOS_MAIN_STORAGE_ID 0x00010001
 #define EOS_OFC_JPEG 0x3801
 
-#define EOS_LV_JPEG "bin/eos_liveview.jpg"
 #define EOS_EVENTS_BIN "bin/eos/eos_events.bin"
 
 // Model profiles. Models with a generated dump profile (scripts/eos_dump2c.py)
@@ -319,7 +319,24 @@ static int ptp_eos_viewfinder_data(vcam *cam, ptpcontainer *ptp) {
 		return 1;
 	}
 
-	vcam_generic_send_file(EOS_LV_JPEG, cam, 0, ptp);
+	unsigned char *jpeg;
+	uint32_t size;
+	if (vcam_liveview_jpeg(VCAM_LV_WIDTH, VCAM_LV_HEIGHT, VCAM_LV_QUALITY, &jpeg, &size)) {
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+	unsigned char *data = malloc(size + 8);
+	if (!data) {
+		free(jpeg);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
+	put_32bit_le(data, size + 8);
+	put_32bit_le(data + 4, 1);
+	memcpy(data + 8, jpeg, size);
+	ptp_senddata(cam, ptp->code, data, size + 8);
+	free(jpeg);
+	free(data);
 
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;

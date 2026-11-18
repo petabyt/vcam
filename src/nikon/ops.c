@@ -32,6 +32,7 @@
 #include <time.h>
 #include <vcam.h>
 #include <nikon.h>
+#include <liveview.h>
 
 // Nikon vendor opcodes not present in src/ptp.h
 #define PTP_OC_NIKON_AfDrive			0x90C1
@@ -460,18 +461,22 @@ static int nikon_getliveviewimg_op(vcam *cam, ptpcontainer *ptp) {
 	}
 
 	unsigned char *jpeg;
-	unsigned char *raw;
 	uint32_t size;
-	if (nikon_load_jpeg(cam, &jpeg, &size, &raw)) {
+	if (vcam_liveview_jpeg(VCAM_LV_WIDTH, VCAM_LV_HEIGHT, VCAM_LV_QUALITY, &jpeg, &size)) {
 		ptp_response(cam, PTP_RC_GeneralError, 0);
 		return 1;
 	}
 
 	unsigned char *data = malloc(NIKON_LV_HEADER_SIZE + size);
+	if (!data) {
+		free(jpeg);
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
 	memset(data, 0, NIKON_LV_HEADER_SIZE);
 	put_32bit_le(data, size); /* payload size at offset 0 */
 	memcpy(data + NIKON_LV_HEADER_SIZE, jpeg, size);
-	free(raw);
+	free(jpeg);
 
 	ptp_senddata(cam, ptp->code, data, NIKON_LV_HEADER_SIZE + size);
 	free(data);

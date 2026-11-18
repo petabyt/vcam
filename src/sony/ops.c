@@ -441,6 +441,19 @@ static int sony_getstorageids_op(vcam *cam, ptpcontainer *ptp) {
 	return 1;
 }
 
+#include <liveview.h>
+
+static void sony_next_liveview(vcam *cam) {
+	struct Sony *p = sony(cam);
+	unsigned char *data;
+	uint32_t size;
+	if (vcam_liveview_jpeg(VCAM_LV_WIDTH, VCAM_LV_HEIGHT, VCAM_LV_QUALITY, &data, &size)) return;
+	free(p->lv_raw);
+	p->lv_raw = data;
+	p->lv_data = data;
+	p->lv_size = size;
+}
+
 // --- Virtual SDRAM / live view objects ------------------------------------
 
 static int sony_virtual_object_info(vcam *cam, ptpcontainer *ptp, uint32_t handle) {
@@ -452,6 +465,7 @@ static int sony_virtual_object_info(vcam *cam, ptpcontainer *ptp, uint32_t handl
 		size = p->sdram.size;
 		name = p->sdram.name;
 	} else if (handle == SONY_LIVEVIEW_HANDLE && p->lv_data != NULL) {
+		sony_next_liveview(cam);
 		size = SONY_LV_HEADER_SIZE + p->lv_size;
 		name = "livestream.jpg";
 	} else {
@@ -529,6 +543,7 @@ int sony_getobject(vcam *cam, ptpcontainer *ptp) {
 		memcpy(data + SONY_LV_HEADER_SIZE, p->lv_data, p->lv_size);
 		ptp_senddata(cam, ptp->code, data, SONY_LV_HEADER_SIZE + p->lv_size);
 		free(data);
+		sony_next_liveview(cam);
 		ptp_response(cam, PTP_RC_OK, 0);
 		return 1;
 	}

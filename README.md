@@ -35,7 +35,7 @@ Since then it has been heavily modified and improved to more closely replicate t
 
 ## Compiling
 ```
-sudo apt install libusb-1.0-0-dev libexif-dev # Ubuntu
+sudo apt install libusb-1.0-0-dev libexif-dev libjpeg-turbo8-dev # Ubuntu
 cmake -G Ninja -B build && cmake --build build
 ```
 

@@ -101,42 +101,18 @@ int prop_d18c_getvalue(vcam *cam, struct PtpPropDesc *desc, int *optional_length
 // flow: InitiateOpenCapture (0x101C) -> GetObjectInfo/GetObject(0x80000001)
 // -> DeleteObject, then TerminateOpenCapture (0x101D) on session exit.
 #define FUJI_USB_LV_HANDLE 0x80000001
-#define FUJI_USB_LV_JPEG "bin/eos_liveview.jpg"
+#include <liveview.h>
 #define FUJI_USB_STORAGE_ID 0x00010001
 
 static int fuji_usb_load_lv(vcam *cam) {
 	struct Fuji *f = fuji(cam);
-	char path[512];
-
-	snprintf(path, sizeof(path), "%s/" FUJI_USB_LV_JPEG, PWD);
-	FILE *file = fopen(path, "rb");
-	if (file == NULL) {
-		vcam_panic("fuji: cannot open fixture %s", path);
-		return -1;
-	}
-	fseek(file, 0, SEEK_END);
-	long fsize = ftell(file);
-	fseek(file, 0, SEEK_SET);
-	unsigned char *buf = malloc(fsize);
-	if (buf == NULL) vcam_panic("out of memory");
-	if (fread(buf, 1, fsize, file) != (size_t)fsize) {
-		vcam_panic("fuji: short read on %s", path);
-	}
-	fclose(file);
-
-	// The fixture carries an 8-byte EOS live-view prefix; Fuji live view is
-	// a plain JPEG (gphoto2: "no meta data wrapped around the jpeg data"),
-	// so skip to the SOI marker
-	long start = 0;
-	for (long i = 0; i + 1 < fsize; i++) {
-		if (buf[i] == 0xff && buf[i + 1] == 0xd8) {
-			start = i;
-			break;
-		}
-	}
-	f->usb_lv_raw = buf;
-	f->usb_lv_data = buf + start;
-	f->usb_lv_size = (uint32_t)(fsize - start);
+	unsigned char *data;
+	uint32_t size;
+	if (vcam_liveview_jpeg(VCAM_LV_WIDTH, VCAM_LV_HEIGHT, VCAM_LV_QUALITY, &data, &size)) return -1;
+	free(f->usb_lv_raw);
+	f->usb_lv_raw = data;
+	f->usb_lv_data = data;
+	f->usb_lv_size = size;
 	return 0;
 }
 
@@ -309,6 +285,10 @@ static int fuji_usb_getobjectinfo(vcam *cam, ptpcontainer *ptp) {
 	struct Fuji *f = fuji(cam);
 	if (ptp->params[0] != FUJI_USB_LV_HANDLE || !f->usb_liveview)
 		return ptp_getobjectinfo_write(cam, ptp);
+	if (fuji_usb_load_lv(cam)) {
+		ptp_response(cam, PTP_RC_GeneralError, 0);
+		return 1;
+	}
 
 	unsigned char *data = malloc(2000);
 	int x = 0;
@@ -354,6 +334,8 @@ static int fuji_usb_getobject(vcam *cam, ptpcontainer *ptp) {
 		return ptp_getobject_write(cam, ptp);
 
 	ptp_senddata(cam, ptp->code, f->usb_lv_data, f->usb_lv_size);
+	/* Keep ObjectInfo and GetObject consistent; prepare the next frame afterward. */
+	if (fuji_usb_load_lv(cam)) vcam_log("Failed to generate Fuji live view frame");
 	ptp_response(cam, PTP_RC_OK, 0);
 	return 1;
 }

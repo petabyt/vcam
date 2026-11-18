@@ -7,35 +7,41 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 pkg_check_modules(LIBEXIF REQUIRED libexif)
+pkg_check_modules(LIBJPEG REQUIRED IMPORTED_TARGET libjpeg)
 
 set(VCAM_CORE
+    src/liveview.c
     src/log.c
     src/vcamera.c
     src/wifi.c
     src/pack.c
     src/packet.c
     src/ops.c
-    src/canon/canon.c
-    src/canon/objects.c
-    src/fuji/fuji.c
-    src/fuji/server.c
     src/ptpip.c
-    src/canon/props.c
-    src/canon/ssdp.c
     src/data.c
     src/props.c
-    src/fuji/ssdp.c
     src/socket.c
+
+    src/fuji/fuji.c
+    src/fuji/server.c
     src/fuji/usb.c
     src/fuji/fs.c
+    src/fuji/ssdp.c
+
+    src/canon/canon.c
+    src/canon/objects.c
+    src/canon/props.c
+    src/canon/ssdp.c
+
     src/nikon/nikon.c
     src/nikon/ops.c
     src/nikon/props.c
+
     src/sony/sony.c
     src/sony/ops.c
     src/sony/props.c
-    src/usbthing.c
 
+    src/usbthing.c
     src/usb/device.c
     src/usb/usbstring.c
     src/usb/vhci.c
@@ -60,13 +66,13 @@ set(VCAM_COMMON_DEFINITIONS PWD="${VCAM_PWD}")
 set(VCAM_INCLUDE_DIRS ${PROJECT_SOURCE_DIR} src src/usb src/fuji src/canon src/nikon src/sony)
 
 add_library(usb-vcam SHARED ${VCAM_CORE} src/usb/libusb.c)
-target_link_libraries(usb-vcam ${LIBEXIF_LIBRARIES})
+target_link_libraries(usb-vcam ${LIBEXIF_LIBRARIES} PkgConfig::LIBJPEG)
 target_include_directories(usb-vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(usb-vcam PRIVATE ${VCAM_COMMON_FLAGS})
 target_compile_definitions(usb-vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})
 
 add_executable(vcam ${VCAM_CORE} src/main.c)
-target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES})
+target_link_libraries(vcam ${LIBUSB_LIBRARIES} ${LIBEXIF_LIBRARIES} PkgConfig::LIBJPEG)
 target_include_directories(vcam PRIVATE ${VCAM_INCLUDE_DIRS} ${LIBEXIF_INCLUDE_DIRS} ${LIBUSB_INCLUDE_DIRS})
 target_compile_options(vcam PRIVATE ${VCAM_COMMON_FLAGS})
 target_compile_definitions(vcam PRIVATE ${VCAM_COMMON_DEFINITIONS})

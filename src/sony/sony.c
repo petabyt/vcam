@@ -7,6 +7,7 @@
 // shim. Model prop tables live in sony/models/ and are transcribed from
 // libgphoto2's camera dumps (camlibs/ptp2/cameras/sony-*.txt).
 #include <stdlib.h>
+#include <liveview.h>
 #include <string.h>
 #include <vcam.h>
 #include <sony.h>
@@ -79,8 +80,9 @@ int sony_init_cam(vcam *cam, const char *name, int argc, char **argv) {
 
 	// Live view object is always available (PC-control mode bodies stream
 	// it at 0xffffc002 as soon as they are in remote mode)
-	if (sony_load_jpeg(cam, &p->lv_data, &p->lv_size, &p->lv_raw))
+	if (vcam_liveview_jpeg(VCAM_LV_WIDTH, VCAM_LV_HEIGHT, VCAM_LV_QUALITY, &p->lv_data, &p->lv_size))
 		return -1;
+	p->lv_raw = p->lv_data;
 
 	strcpy(cam->manufac, "Sony Corporation");
 	cam->vendor_id = 0x054c;

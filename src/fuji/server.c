@@ -15,7 +15,9 @@
 #include <netinet/tcp.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 #include <vcam.h>
+#include <liveview.h>
 #include <fujiptp.h>
 #include "fuji.h"
 
@@ -320,7 +322,36 @@ static int new_ptp_tcp_socket(int port) {
 	return server_socket;
 }
 
-int ptp_fuji_liveview(int socket);
+static int fuji_send_all(int fd, const unsigned char *data, size_t size) {
+	while (size) {
+		ssize_t n = send(fd, data, size, MSG_NOSIGNAL);
+		if (n < 0 && errno == EINTR) continue;
+		if (n <= 0) return -1;
+		data += n;
+		size -= (size_t)n;
+	}
+	return 0;
+}
+
+static int fuji_send_liveview(int fd) {
+	unsigned char *jpeg;
+	uint32_t size;
+	if (vcam_liveview_jpeg(VCAM_LV_WIDTH, VCAM_LV_HEIGHT, VCAM_LV_QUALITY, &jpeg, &size)) return -1;
+	unsigned char header[18] = {0};
+	put_32bit_le(header, size + sizeof(header));
+	header[16] = 0xfe;
+	header[17] = 0x7f;
+	int rc = fuji_send_all(fd, header, sizeof(header));
+	if (!rc) rc = fuji_send_all(fd, jpeg, size);
+	free(jpeg);
+	return rc;
+}
+
+static uint64_t fuji_monotonic_ns(void) {
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (uint64_t)now.tv_sec * 1000000000 + now.tv_nsec;
+}
 
 static void *fuji_accept_remote_ports_thread(void *arg) {
 	struct Fuji *f = arg;
@@ -359,16 +390,25 @@ static void *fuji_accept_remote_ports_thread(void *arg) {
 		format_sockaddr((struct sockaddr *)&client_address_video, client_address_length_video, client_host, sizeof(client_host), client_port, sizeof(client_port));
 		vcam_log("Video port connection accepted from %s:%s", client_host, client_port);
 
-		// TODO: Do this continuously with two frames? 
-		ptp_fuji_liveview(client_socket_video);
+		struct timeval send_timeout = { .tv_sec = 1 };
+		setsockopt(client_socket_video, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout));
 
 		struct pollfd clients[] = {
 			{ .fd = client_socket_event, .events = POLLIN },
 			{ .fd = client_socket_video, .events = POLLIN },
 		};
 		int connected = 1;
+		uint64_t next_frame = fuji_monotonic_ns();
 		while (connected) {
-			int rc = poll(clients, 2, -1);
+			uint64_t now = fuji_monotonic_ns();
+			if (now >= next_frame) {
+				if (fuji_send_liveview(client_socket_video)) break;
+				next_frame += 1000000000 / 60;
+				now = fuji_monotonic_ns();
+				if (next_frame < now) next_frame = now + 1000000000 / 60;
+			}
+			int timeout = (int)((next_frame - now + 999999) / 1000000);
+			int rc = poll(clients, 2, timeout);
 			if (rc < 0 && errno == EINTR)
 				continue;
 			if (rc < 0)
