@@ -12,6 +12,17 @@
 /* Do not print libfuji's manufacturer token. */
 void pak_debug_log(struct PakModule *mod, const char *fmt, ...) { (void)mod; (void)fmt; }
 int pak_rt_add_user_instruction(struct PakModule *mod, const char *message) { (void)mod; fprintf(stderr, "%s\n", message); return 0; }
+static int wifi_called;
+int pak_rt_add_wifi_connection(struct PakModule *mod, struct PakWiFiApFilter *filter, const char *setup_option)
+{
+	(void)mod;
+	if (strcmp(filter->ssid_pattern, "VCAM-HANDOVER-TEST") || !filter->password ||
+	    strcmp(filter->password, "testpass123") || !setup_option)
+		return -1;
+	wifi_called = 1;
+	puts("Wi-Fi handover delivered expected test credentials");
+	return 0;
+}
 
 static DBusHandlerResult agent_call(DBusConnection *bus, DBusMessage *msg, void *data)
 {
@@ -63,8 +74,12 @@ static int register_agent(void)
 
 int main(int argc, char **argv)
 {
-	int secure = argc == 2 && !strcmp(argv[1], "--secure");
-	if (argc > 2 || (argc == 2 && !secure)) return 2;
+	int secure = 0, handover = 0;
+	for (int i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "--secure")) secure = 1;
+		else if (!strcmp(argv[i], "--handover")) handover = 1;
+		else return 2;
+	}
 	struct PakBt *ctx = pak_bt_get_context();
 	struct PakBtAdapter *adapter = NULL;
 	struct PakBtDevice *dev = NULL;
@@ -88,6 +103,11 @@ int main(int argc, char **argv)
 	mod.bt = ctx; mod.priv = &priv; priv.mod = &mod;
 	int rc = fuji_connect_bluetooth(&mod, ctx, dev, NULL);
 	printf("fuji_connect_bluetooth returned %d\n", rc);
+	if (!rc && handover) {
+		rc = fuji_bluetooth_connect_to_wifi(&mod, 0, ctx, dev);
+		printf("fuji_bluetooth_connect_to_wifi returned %d\n", rc);
+		if (!wifi_called) rc = -1;
+	}
 	pak_bt_device_disconnect(ctx, dev);
 	pak_bt_unref_device(ctx, dev);
 	pak_bt_unref_adapter(ctx, adapter);

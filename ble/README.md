@@ -5,14 +5,49 @@ normal vcam build and does not use BlueZ's D-Bus GATT server.
 
 The current profile advertises a Fujifilm discovery UUID and manufacturer
 data with a four-byte legacy token. It exposes the legacy token and client-name
-write characteristics and the characteristics referenced by libfuji's legacy
-and secure subscription tables. The legacy path sends the captured initial time
+write characteristics and a captured subset of the other GATT characteristics.
+The legacy path sends the captured initial time
 and geotag notifications after both subscriptions, and accepts their associated
 writes. Without `--model`, the SSID is a placeholder and no AP is started. Several
-subscription characteristics are absent from the X-T30 capture and have
-provisional values. Token validation, name length, notification timing, and
+characteristic values are provisional. Token validation, name length, notification timing, and
 connection-state handling are provisional; this is not Bluetooth bonding or
 meaningful security. The token is sent in the clear in advertisements.
+
+GATT differences are based on the X-H1 and X-T4 firmware dumps and the X-T30
+legacy and X-T5 secure captures. `--model fuji_x_h1` with legacy pairing defaults
+to `legacy-minimal`; GFX100 II with legacy pairing defaults to `legacy-modern-gfx`;
+other legacy models default to `legacy-extended`. Secure pairing defaults to
+`secure-modern`. These defaults are provisional, not exact model databases. The secure
+discovery service is present but its additional captured characteristics are
+not implemented. The secure token and the writable network settings are
+advertised with captured properties, but writes return ATT Request Not Supported
+until their semantics are known; they do not modify the AP. `NOT8_CHR_UUID` and
+`NOT10_CHR_UUID` are exposed only in the approximate GFX variants.
+The minimal and classic profiles lack `NOT9_CHR_UUID`, which the current
+libfuji handoff expects; handoff on those profiles has not been established.
+
+Use `--gatt-profile NAME` to explicitly select an **approximate** profile and
+its pairing mode. The names describe the implemented subset, not an exact
+firmware database or a promise that every characteristic is present:
+
+| Profile | Reference family / distinguishing implemented features |
+|---|---|
+| `legacy-minimal` | v1.0: no shutter or expanded Wi-Fi group |
+| `legacy-classic` | v1.1: shutter and IND3; no expanded Wi-Fi group |
+| `legacy-extended-early` | v2.0: expanded group with reduced notification properties |
+| `legacy-extended` | v2.1: expanded Wi-Fi group |
+| `legacy-modern` | v3.0: adds NOT6 |
+| `legacy-modern-standby` | v3.1: adds NOT3 in its legacy service |
+| `legacy-modern-gfx` | v3.1gfx: adds NOT8 and NOT10 |
+| `secure-modern` | v4.0: secure pairing and secure NOT3 service |
+| `secure-modern-new` | v4.1: adds a provisional pairing characteristic |
+| `secure-modern-gfx` | v4.1gfx: adds NOT8 and NOT10 |
+
+`--gatt-profile` takes precedence over the model's default pairing mode;
+conflicting explicit `--pairing`/`--secure` options are rejected. Existing
+`--pairing` and `--secure` options still select the default profile for that
+mode. The implementation does not automatically infer a firmware version.
+See `gatt-reference/README.md` for the source profiles and limitations.
 
 Geotag writes are decoded as signed little-endian latitude/longitude in degrees
 times 10 million, signed altitude, four reserved bytes, and a seven-byte time.
@@ -59,6 +94,8 @@ currently default to legacy. These firmware-dependent choices are provisional;
 `--pairing legacy` or `--pairing secure` overrides them. Secure pairing requires
 interactive confirmation. JSON and BLE credentials must match the backend; do
 not print JSON in public logs.
+For an open network the password characteristic is omitted: the X-T30 capture
+does not contain it, and libfuji treats its presence as a secured/hidden AP.
 
 On `CHR_WIFI_TRIGGER` value `04 00`, BLE starts vcam with `--ble-handover` and
 `--wait-timeout 0`, waits for its PTP/IP listener-ready signal, and then reports
@@ -67,8 +104,10 @@ on normal shutdown. Handover mode rejects a `PTP_DPC_FUJI_ClientState_DF01`
 other than `FUJI_MODE_REMOTE_IMG_VIEW_XAPP` and gates extension object info
 until that mode is selected. The backend refuses to silently shift the gateway
 subnet on collision. Abrupt process death may require the Wi-Fi backend's
-`--cleanup` procedure. Neither AP startup nor Android/libfuji handoff has been
-verified on hardware; listener readiness does not independently verify DHCP.
+`--cleanup` procedure. AP startup and Android handoff have not been verified on
+hardware; listener readiness does not independently verify DHCP. The real
+libfuji handoff has been tested through BlueZ/VHCI with simulated Wi-Fi and a
+loopback vcam TCP listener, not an actual Wi-Fi association.
 
 `ble/test-handover.py` checks child readiness, failure and cleanup without radio
 hardware. Set `VCAM_TEST_BINARY` to a built vcam to also test JSON overrides.
@@ -83,6 +122,7 @@ python3 -m venv /tmp/bumble-venv
 /tmp/bumble-venv/bin/pip install 'bumble @ git+https://github.com/google/bumble.git@e1a21f5'
 /tmp/bumble-venv/bin/python ble/fuji-ble.py --self-test
 /tmp/bumble-venv/bin/python ble/fuji-ble.py --self-test-secure
+/tmp/bumble-venv/bin/python ble/test-gatt-profiles.py
 ```
 
 The self-test uses two in-process Bumble controllers and a virtual link. It
@@ -172,10 +212,28 @@ exits, while the emulator loses its keys; remove only that virtual device's bond
 if starting a fresh bridge prevents pairing.
 
 It invokes the real libfuji `fuji_connect_bluetooth`, not a replacement protocol
-client. The runner checks all six legacy or 13 secure subscription UUIDs as well
+client. The runner checks the six legacy or 11 captured secure subscription UUIDs as well
 as the return code: libfuji currently ignores some subscription failures.
 The test runtime stubs UI/session persistence, and this is not a reconnect or
 full libpak frontend test.
+
+To additionally exercise libfuji's real `fuji_bluetooth_connect_to_wifi` and
+the PTP function-mode selection without changing network configuration, stop the
+normal bridge and start a fresh one as follows (replace the vcam path):
+
+```sh
+/tmp/bumble-venv/bin/python ble/vhci-bridge.py --secure --handover --handover-vcam "$PWD/build/vcam"
+# Power on the virtual controller as above, then in another terminal:
+/tmp/bumble-venv/bin/python ble/run-libfuji-pak-test.py --adapter hci1 --secure --handover --ptp-loopback
+```
+
+The bridge uses synthetic test credentials and starts vcam on `127.0.0.1`, not
+an AP. The harness verifies the credentials passed to its stub Wi-Fi callback;
+the runner checks that the spawned PTP server rejects regular image-view mode
+and accepts X-App mode. Use `--handover` without `--handover-vcam` and omit
+`--ptp-loopback` to simulate the child as well. Automatic pairing confirmation
+is restricted to this virtual test; do not use it with real devices. An old
+test bond may have to be removed from the virtual adapter after bridge restart.
 
 ## Hardware test with a BlueZ client
 

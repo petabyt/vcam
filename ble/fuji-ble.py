@@ -12,7 +12,7 @@ import struct
 from dataclasses import dataclass
 
 from bumble.att import (ATT_Error, ATT_INSUFFICIENT_AUTHORIZATION_ERROR,
-                        ATT_INVALID_ATTRIBUTE_LENGTH_ERROR)
+                        ATT_INVALID_ATTRIBUTE_LENGTH_ERROR, ATT_REQUEST_NOT_SUPPORTED_ERROR)
 from bumble.controller import Controller
 from bumble.core import AdvertisingData, ProtocolError, UUID
 from bumble.device import Device, Peer
@@ -39,6 +39,7 @@ IND3 = '049ec406-ef75-4205-a390-08fe209c51f0'
 TIME_NOTIFY = 'f9150137-5d40-4801-a8dc-f7fc5b01da50'
 GEO_NOTIFY = 'ad06c7b7-f41a-46f4-a29a-712055319122'
 NOT3_SERVICE = '804daa8e-ffeb-4ab3-8e75-6edd7303208d'
+NOT3_LEGACY_SERVICE = '731893f9-744e-4899-b7e3-174106ff2b82'
 NOT3 = '7170fd5a-56d9-4c19-b043-7a7047d8e1a0'
 NOT6 = 'e6692c5c-b7cd-44f4-95fc-eda07ce32560'
 NETWORK_SERVICE = '4e941240-d01d-46b9-a5ea-67636806830b'
@@ -57,6 +58,44 @@ SHUTTER_SERVICE = '6514eb81-4e8f-458d-aa2a-e691336cdfac'
 SHUTTER = '7fcf49c6-4ff0-4777-a03d-1a79166af7a8'
 CHR_WIFI_TRIGGER = '600655e6-3637-42f1-8fb2-44efc5c63b13'
 CHR_UNKNOWN1_PASSWORD = 'e809256a-915c-4967-92e8-53b7d4cad213'
+SECURE_NEW_PAIRING = '8b5ecf55-fc6b-40d0-b4c1-76f64e5453c7'
+
+
+@dataclass(frozen=True)
+class GattProfile:
+    # Approximate feature subsets, not complete firmware GATT databases.
+    secure: bool = False
+    shutter: bool = True
+    expanded: bool = True
+    modern: bool = False
+    standby: bool = False
+    gfx: bool = False
+    early_extended: bool = False
+    secure_new: bool = False
+
+
+GATT_PROFILES = {
+    'legacy-minimal': GattProfile(shutter=False, expanded=False),
+    'legacy-classic': GattProfile(expanded=False),
+    'legacy-extended-early': GattProfile(early_extended=True),
+    'legacy-extended': GattProfile(),
+    'legacy-modern': GattProfile(modern=True),
+    'legacy-modern-standby': GattProfile(modern=True, standby=True),
+    'legacy-modern-gfx': GattProfile(modern=True, standby=True, gfx=True),
+    'secure-modern': GattProfile(secure=True, modern=True, standby=True),
+    'secure-modern-new': GattProfile(secure=True, modern=True, standby=True, secure_new=True),
+    'secure-modern-gfx': GattProfile(secure=True, modern=True, standby=True, gfx=True, secure_new=True),
+}
+
+
+def default_gatt_profile(model, secure):
+    if secure:
+        return 'secure-modern'
+    if model == 'fuji_x_h1':
+        return 'legacy-minimal'
+    if model in ('fuji_gfx100_ii', 'fuji_gfx100ii', 'gfx100ii', 'gfx'):
+        return 'legacy-modern-gfx'
+    return 'legacy-extended'
 
 
 @dataclass(frozen=True)
@@ -78,10 +117,11 @@ class Geotag:
 class LegacyProfile:
     """Only the discovery and initial legacy pairing subset; not secure pairing."""
 
-    def __init__(self, token):
+    def __init__(self, token, gatt):
         if len(token) != 4:
             raise ValueError('token must contain four bytes')
         self.token = token
+        self.gatt = gatt
         self.authenticated = set()
         self.names = {}
         self.subscriptions = {}
@@ -152,23 +192,33 @@ class LegacyProfile:
         return Characteristic(characteristic_uuid, Characteristic.Properties.READ | mode,
                               Characteristic.READABLE, value)
 
+    @staticmethod
+    def writable_notification(characteristic_uuid, read, notify=True):
+        # Write semantics for these camera settings have not been established.
+        def unsupported_write(_connection, _value):
+            raise ATT_Error(ATT_REQUEST_NOT_SUPPORTED_ERROR)
+
+        props = Characteristic.Properties.READ | Characteristic.Properties.WRITE
+        if notify:
+            props |= Characteristic.Properties.NOTIFY
+        return Characteristic(characteristic_uuid, props,
+                              Characteristic.READABLE | Characteristic.WRITEABLE,
+                              CharacteristicValue(read=read, write=unsupported_write))
+
     def install(self, device):
         device.on(device.EVENT_CONNECTION, self.connect)
         self.install_pairing(device)
-        config = [
-            self.subscribable(IND1, True, b'\x00\x80'),
-            self.subscribable(IND2, True, b'\x00\x00'),
-            self.subscribable(IND3, True, b'\x00\x00'),
-            self.subscribable(TIME_NOTIFY, False, b'\x01\x00'),
-            self.subscribable(GEO_NOTIFY, False, b'\x01\x00'),
-            # Not present in the X-T30 capture; included for libfuji's
-            # secure-path subscription list, with a provisional value.
-            self.subscribable(NOT6, False, b'\x00\x00'),
-        ]
+        ind1 = self.subscribable(IND1, True, b'\x00\x80')
+        time_chr = self.subscribable(TIME_NOTIFY, False, b'\x01\x00')
+        geo_chr = self.subscribable(GEO_NOTIFY, False, b'\x01\x00')
+        config = [ind1, self.subscribable(IND2, True, b'\x00\x00'), time_chr, geo_chr]
+        if self.gatt.shutter:
+            config.append(self.subscribable(IND3, True, b'\x00\x00'))
+        if self.gatt.modern:
+            config.append(self.subscribable(NOT6, False, b'\x00\x00'))
         device.add_service(Service(CONFIG_SERVICE, config))
         # The X-T30 capture sends these two notifications after both CCCDs
         # are enabled. Dispatch after the CCCD response, to the same peer.
-        time_chr, geo_chr = config[3], config[4]
 
         def subscribed(connection, characteristic, enabled, _indicate):
             active = self.subscriptions.setdefault(connection, set())
@@ -209,10 +259,14 @@ class LegacyProfile:
             # Zero disables requests provisionally; it is not covered by the capture.
             if interval:
                 self.geo_tasks[connection] = asyncio.create_task(request_geotags(connection, interval))
-            asyncio.create_task(device.notify_subscriber(connection, interval_chr, bytes(value)))
+            if not self.gatt.early_extended:
+                asyncio.create_task(device.notify_subscriber(connection, interval_chr, bytes(value)))
 
+        interval_props = Characteristic.Properties.READ | Characteristic.Properties.WRITE
+        if not self.gatt.early_extended:
+            interval_props |= Characteristic.Properties.NOTIFY
         interval_chr = Characteristic(
-            GEO_INTERVAL, Characteristic.Properties.READ | Characteristic.Properties.WRITE | Characteristic.Properties.NOTIFY,
+            GEO_INTERVAL, interval_props,
             Characteristic.READABLE | Characteristic.WRITEABLE,
             CharacteristicValue(read=read_interval, write=write_interval))
 
@@ -229,21 +283,36 @@ class LegacyProfile:
         def read_wifi_ready(_connection):
             return bytes([int(self.wifi is not None and self.wifi.ready)])
 
-        device.add_service(Service(NETWORK_SERVICE, [
-            self.subscribable(SSID, False, self.wifi_ssid),
-            Characteristic(CHR_UNKNOWN1_PASSWORD, Characteristic.Properties.READ,
-                           Characteristic.READABLE, CharacteristicValue(read=read_password)),
-            self.subscribable(NOT5, False, bytes(13)),
-            self.subscribable(NOT7, False, b'\x01\x00'),
-            self.subscribable(NOT8, False, b'\x00\x00'),
-            Characteristic(NOT9, Characteristic.Properties.READ | Characteristic.Properties.NOTIFY,
-                           Characteristic.READABLE, CharacteristicValue(read=read_wifi_ready)),
-            self.subscribable(NOT10, False, b'\x00\x00'),
-            interval_chr,
-        ]))
-        device.add_service(Service(NOT3_SERVICE, [self.subscribable(NOT3, False, b'\x00\x00')]))
+        if not self.gatt.expanded:
+            network = [Characteristic(SSID, Characteristic.Properties.READ, Characteristic.READABLE, self.wifi_ssid)]
+        else:
+            network = [
+                self.writable_notification(SSID, lambda _conn: self.wifi_ssid, not self.gatt.early_extended),
+                self.writable_notification(NOT5, lambda _conn: bytes(13)),
+                self.writable_notification(NOT7, lambda _conn: b'\x01\x00', not self.gatt.early_extended),
+                self.writable_notification(NOT9, read_wifi_ready, not self.gatt.early_extended),
+                interval_chr,
+            ]
+            if self.gatt.gfx:
+                network.extend([self.writable_notification(NOT8, lambda _conn: b'\x00\x00'),
+                                self.writable_notification(NOT10, lambda _conn: b'\x00\x00')])
+        # libfuji treats the presence of this characteristic as a secured,
+        # hidden network; open X-T30 captures also omit it.
+        if self.wifi_password:
+            network.append(Characteristic(CHR_UNKNOWN1_PASSWORD, Characteristic.Properties.READ,
+                                          Characteristic.READABLE, CharacteristicValue(read=read_password)))
+        device.add_service(Service(NETWORK_SERVICE, network))
+        if self.gatt.standby:
+            service_uuid = NOT3_SERVICE if self.gatt.secure else NOT3_LEGACY_SERVICE
+            device.add_service(Service(service_uuid, [self.writable_notification(NOT3, lambda _conn: b'\x00\x00')]))
+        time_write = self.writable(TIME_WRITE, lambda conn, value: self.accept_payload(conn, value, 7, 'Time'))
+        if not self.gatt.expanded:
+            time_write = Characteristic(TIME_WRITE, Characteristic.Properties.READ | Characteristic.Properties.WRITE,
+                                        Characteristic.READABLE | Characteristic.WRITEABLE,
+                                        CharacteristicValue(read=lambda _conn: bytes(7),
+                                                            write=lambda conn, value: self.accept_payload(conn, value, 7, 'Time')))
         device.add_service(Service(TIME_SERVICE, [
-            self.writable(TIME_WRITE, lambda conn, value: self.accept_payload(conn, value, 7, 'Time')),
+            time_write,
         ]))
         device.add_service(Service(GEO_SERVICE, [
             self.writable(GEO_WRITE, self.write_geotag),
@@ -260,7 +329,7 @@ class LegacyProfile:
             except (OSError, RuntimeError, asyncio.TimeoutError) as error:
                 print(f'Wi-Fi startup failed: {error}', flush=True)
                 raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR) from error
-            asyncio.create_task(device.indicate_subscriber(connection, config[0], b'\x01\x80'))
+            asyncio.create_task(device.indicate_subscriber(connection, ind1, b'\x01\x80'))
 
         def shutter_release(connection, value):
             if connection not in self.authenticated:
@@ -270,8 +339,10 @@ class LegacyProfile:
 
         # Accept the release sequence sent by libfuji before handover, but do
         # not pretend to implement shutter capture.
-        device.add_service(Service(SHUTTER_SERVICE, [self.writable(CHR_WIFI_TRIGGER, trigger_wifi),
-                                                    self.writable(SHUTTER, shutter_release)]))
+        shutter = [self.writable(CHR_WIFI_TRIGGER, trigger_wifi)]
+        if self.gatt.shutter:
+            shutter.append(self.writable(SHUTTER, shutter_release))
+        device.add_service(Service(SHUTTER_SERVICE, shutter))
 
     def install_pairing(self, device):
         device.add_service(Service(DISCOVERY, []))
@@ -310,13 +381,26 @@ class SecureProfile(LegacyProfile):
         permission = (Characteristic.READABLE | Characteristic.WRITEABLE
                       | Characteristic.READ_REQUIRES_AUTHENTICATION
                       | Characteristic.WRITE_REQUIRES_AUTHENTICATION)
-        device.add_service(Service(SECURE_PAIR_SERVICE, [
+        def unsupported_token(_connection, _value):
+            # Captured on secure X-T5, but its write semantics are unknown.
+            raise ATT_Error(ATT_REQUEST_NOT_SUPPORTED_ERROR)
+
+        device.add_service(Service(SECURE_DISCOVERY, []))
+        pairing = [
             Characteristic(SECURE_STATUS, rw, permission,
                            CharacteristicValue(read=self.read_status, write=self.write_status)),
             Characteristic(CLIENT_NAME, Characteristic.Properties.WRITE,
                            Characteristic.WRITEABLE | Characteristic.WRITE_REQUIRES_AUTHENTICATION,
                            CharacteristicValue(write=self.write_name)),
-        ]))
+            Characteristic(TOKEN, Characteristic.Properties.WRITE,
+                           Characteristic.WRITEABLE | Characteristic.WRITE_REQUIRES_AUTHENTICATION,
+                           CharacteristicValue(write=unsupported_token)),
+        ]
+        if self.gatt.secure_new:
+            pairing.append(Characteristic(SECURE_NEW_PAIRING, Characteristic.Properties.WRITE,
+                                          Characteristic.WRITEABLE | Characteristic.WRITE_REQUIRES_AUTHENTICATION,
+                                          CharacteristicValue(write=unsupported_token)))
+        device.add_service(Service(SECURE_PAIR_SERVICE, pairing))
 
 
 class ConfirmPairing(PairingDelegate):
@@ -336,8 +420,11 @@ class ConfirmPairing(PairingDelegate):
         return int(answer) if answer.isdecimal() and int(answer) < 1000000 else None
 
 
-def configure(device, token, secure=False, delegate_factory=ConfirmPairing, wifi=None, identity=None):
-    profile = SecureProfile(token) if secure else LegacyProfile(token)
+def configure(device, token, secure=False, delegate_factory=ConfirmPairing, wifi=None, identity=None, model=None, gatt_profile=None):
+    gatt = GATT_PROFILES[gatt_profile or default_gatt_profile(model, secure)]
+    if gatt.secure != secure:
+        raise ValueError('GATT profile and pairing mode do not match')
+    profile = SecureProfile(token, gatt) if secure else LegacyProfile(token, gatt)
     profile.wifi = wifi
     if identity:
         profile.wifi_ssid = identity['ssid'].encode()
@@ -397,6 +484,8 @@ async def self_test():
         peer = Peer(connection)
         await peer.discover_services()
         await peer.discover_characteristics()
+        if peer.get_characteristics_by_uuid(UUID(CHR_UNKNOWN1_PASSWORD)):
+            raise RuntimeError('open network exposes a password characteristic')
 
         def characteristic(u):
             matches = peer.get_characteristics_by_uuid(UUID(u))
@@ -425,11 +514,11 @@ async def self_test():
         if check_errors:
             await rejected(CHR_WIFI_TRIGGER, b'\x04', ATT_INVALID_ATTRIBUTE_LENGTH_ERROR)
             await rejected(CHR_WIFI_TRIGGER, b'\x03\x00', ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
+            await rejected(SSID, b'new-network', ATT_REQUEST_NOT_SUPPORTED_ERROR)
         if await characteristic(SSID).read_value() != b'FUJIFILM-VCAM':
             raise RuntimeError('unexpected SSID')
         notifications = asyncio.Queue()
-        for u in (SSID, IND1, IND2, TIME_NOTIFY, GEO_NOTIFY, IND3,
-                  NOT3, NOT5, NOT6, NOT7, NOT8, NOT9, NOT10, GEO_INTERVAL):
+        for u in (SSID, IND1, IND2, TIME_NOTIFY, GEO_NOTIFY, IND3, NOT5, NOT7, NOT9, GEO_INTERVAL):
             await characteristic(u).subscribe(lambda value, u=u: notifications.put_nowait((u, value)))
         received = [await asyncio.wait_for(notifications.get(), 5) for _ in range(2)]
         if received != [(TIME_NOTIFY, b'\x01\x00'), (GEO_NOTIFY, b'\x01\x00')]:
@@ -515,6 +604,13 @@ async def self_test_secure():
     await connection.pair()
     if not connection.is_encrypted or not connection.authenticated:
         raise RuntimeError('pairing did not establish authenticated encryption')
+    try:
+        await peer.get_characteristics_by_uuid(UUID(TOKEN))[0].write_value(bytes(4), with_response=True)
+    except ProtocolError as error:
+        if error.error_code != ATT_REQUEST_NOT_SUPPORTED_ERROR:
+            raise
+    else:
+        raise RuntimeError('unimplemented secure token write accepted')
     value = await status.read_value()
     await name.write_value(b'client', with_response=True)
     try:
@@ -640,14 +736,17 @@ async def serve(args, token):
             command.extend(('--wifi-dev', args.wifi_dev))
         wifi = WifiProcess(command)
         loop.add_signal_handler(signal.SIGUSR1, wifi.ready_signal.set)
+    if args.gatt_profile:
+        secure = GATT_PROFILES[args.gatt_profile].secure
+    profile_name = args.gatt_profile or default_gatt_profile(args.model, secure)
     stopped = asyncio.Event()
     loop.add_signal_handler(signal.SIGTERM, stopped.set)
     async with await open_transport(args.transport) as hci:
         device = Device(NAME, address=Address(args.address), host=Host(hci.source, hci.sink))
-        configure(device, token, secure=secure, wifi=wifi, identity=identity)
+        configure(device, token, secure=secure, wifi=wifi, identity=identity, model=args.model, gatt_profile=profile_name)
         await device.power_on()
         await device.start_advertising(auto_restart=True)
-        print(f'Advertising experimental Fuji {"secure" if secure else "legacy"} profile on {args.transport} at {args.address}; Ctrl-C to stop', flush=True)
+        print(f'Advertising approximate Fuji {profile_name} profile on {args.transport} at {args.address}; Ctrl-C to stop', flush=True)
         try:
             stopped_task = asyncio.create_task(stopped.wait())
             await asyncio.wait((hci.source.terminated, stopped_task), return_when=asyncio.FIRST_COMPLETED)
@@ -666,6 +765,7 @@ def main():
     parser.add_argument('--address', help='static random Bluetooth address for --transport')
     parser.add_argument('--secure', action='store_true', help='experimental secure bonding profile')
     parser.add_argument('--pairing', choices=('legacy', 'secure'), help='override the model pairing profile')
+    parser.add_argument('--gatt-profile', choices=tuple(GATT_PROFILES), help='select an approximate GATT profile and its pairing mode')
     parser.add_argument('--model', help='vcam Fuji model; enable Wi-Fi handover')
     parser.add_argument('--vcam', default='./build/vcam', help='vcam executable (default: ./build/vcam)')
     parser.add_argument('--ssid', help='override vcam AP SSID')
@@ -687,6 +787,12 @@ def main():
         parser.error('--secure conflicts with --pairing legacy')
     if args.pairing and not args.transport:
         parser.error('--pairing requires --transport')
+    if args.gatt_profile and not args.transport:
+        parser.error('--gatt-profile requires --transport')
+    if args.gatt_profile:
+        gatt_secure = GATT_PROFILES[args.gatt_profile].secure
+        if (args.secure and not gatt_secure) or (args.pairing and (args.pairing == 'secure') != gatt_secure):
+            parser.error('--gatt-profile conflicts with the requested pairing mode')
     try:
         if args.secure and not args.transport:
             parser.error('--secure requires --transport; use --self-test-secure for the virtual test')

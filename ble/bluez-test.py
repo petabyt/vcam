@@ -18,13 +18,9 @@ GEO_NOTIFY = 'ad06c7b7-f41a-46f4-a29a-712055319122'
 TIME_WRITE = 'b9bfd37f-ccad-4d36-a1ee-018e792b3edf'
 GEO_WRITE = '0f36ec14-29e5-411a-a1b6-64ee8383f090'
 ADDITIONAL_SUBSCRIPTIONS = (
-    '7170fd5a-56d9-4c19-b043-7a7047d8e1a0',
     '75823784-fbb7-4b71-abae-cd9a34072e3c',
-    'e6692c5c-b7cd-44f4-95fc-eda07ce32560',
     'aab609c4-94dd-4d89-bc60-665d5090b828',
-    '2a125640-706d-4dd1-b420-c0f4ab93c361',
     '82a9f452-c5ce-4ef5-8203-3fc9a47f8171',
-    'deef7187-3f43-4364-9e22-11a8c8a15951',
     'c95d91ae-b247-4d6d-8661-7dd5d6a0f85b',
 )
 
