@@ -710,7 +710,7 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 	if (vcam_check_session(cam))return 1;
 	if (vcam_check_param_count(cam, ptp, 1))return 1;
 
-	vcam_log("Processing thumbnail call for %d\n", ptp->params[0]);
+	vcam_log("Processing thumbnail call for %d", ptp->params[0]);
 
 	cur = cam->first_dirent;
 	while (cur) {
@@ -739,7 +739,7 @@ int ptp_getthumb_write(vcam *cam, ptpcontainer *ptp) {
 
 	ptp_response(cam, PTP_RC_OK, 0);
 
-	vcam_log("Done processing thumbnail call\n");
+	vcam_log("Done processing thumbnail call");
 
 	return 1;
 }

@@ -41,6 +41,7 @@ static void reset_client_bridge(vcam *cam) {
 	cam->seqnr = 0;
 	cam->nrinbulk = 0;
 	cam->nroutbulk = 0;
+	fuji(cam)->disconnect_client = 0;
 	if (fuji(cam)->ble_handover)
 		fuji(cam)->client_state = 0;
 	fuji_reset_image_import_state(cam);
@@ -142,6 +143,10 @@ static int tcp_receive_all(vcam *cam, int client_socket) {
 	// Route the read data into the vcam. The camera is the responder,
 	// and will be the first to write data to the app.
 	int rc = ptpip_cmd_client_write(cam, buffer, size);
+	if (fuji(cam)->disconnect_client) {
+		free(buffer);
+		return -1;
+	}
 	if (rc != size) {
 		free(buffer);
 		return -1;

@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
 			"--sig <pid>\tSpecify process to signal when TCP server is listening\n"
 			"--dump\tDump all communication data to COMM_DUMP\n"
 			"--dump-camera-json\tPrint camera information as JSON and exit (includes Wi-Fi password)\n"
-			"--strict\tExit on invalid Fuji gallery object IDs\n"
+			"--strict\tExit on invalid Fuji gallery object IDs or unverified properties\n"
 			"--discovery-wireless\tFuji AutoSave discovery with wireless communication mode\n"
 			"--ble-handover\tRequire Fuji X-App image-view function mode\n"
 			"\nWiFi backend (./vcam <model> wifi):\n"

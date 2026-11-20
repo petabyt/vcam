@@ -23,6 +23,7 @@ set(VCAM_CORE
     src/socket.c
 
     src/fuji/fuji.c
+    src/fuji/strict-properties.c
     src/fuji/server.c
     src/fuji/usb.c
     src/fuji/fs.c

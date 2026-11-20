@@ -7,6 +7,7 @@ struct Fuji {
 	int ble_handover;
 	enum FujiTransport transport;
 	int do_discovery;
+	int disconnect_client;
 	int do_discovery_wireless;
 	int do_register;
 	int do_tether;
@@ -91,6 +92,8 @@ int fuji_set_prop_supported(vcam *cam, int code);
 int fuji_set_property(vcam *cam, ptpcontainer *ptp, unsigned char *data, unsigned int len);
 int fuji_send_events(vcam *cam, ptpcontainer *ptp);
 int fuji_get_property(vcam *cam, ptpcontainer *ptp);
+/* model is cam->model; -1 denotes an unknown client state. */
+int fuji_strict_property_allowed(const char *model, int df01, uint16_t property);
 int ptp_fuji_get_device_info(vcam *cam, ptpcontainer *ptp);
 int ptp_fuji_capture(vcam *cam, ptpcontainer *ptp);
 

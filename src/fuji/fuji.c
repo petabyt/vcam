@@ -250,7 +250,7 @@ uint8_t *fuji_get_ack_packet(vcam *cam) {
 
 int vcam_fuji_setup(vcam *cam) {
 	struct Fuji *f = fuji(cam);
-	f->client_state = 2;
+	f->client_state = f->remote_version ? FUJI_REMOTE_MODE : FUJI_VIEW_ALL_IMGS;
 	f->camera_state = 0;
 	f->min_remote_version = 0;
 	f->compress_small = 0;
@@ -915,7 +915,17 @@ static int ptp_fuji_import_object(vcam *cam, ptpcontainer *ptp) {
 	}
 }
 
+static void fuji_check_strict_property(vcam *cam, ptpcontainer *ptp) {
+	if (!cam->strict || (ptp->params[0] <= UINT16_MAX && fuji_strict_property_allowed(cam->model, fuji(cam)->client_state, ptp->params[0])))
+		return;
+	vcam_log("Strict mode: %s property 0x%04x is not verified for %s in client state %d",
+		 ptp->code == PTP_OC_GetDevicePropValue ? "read" : "write",
+		 ptp->params[0], cam->model, fuji(cam)->client_state);
+	exit(EXIT_FAILURE);
+}
+
 int ptp_fuji_setdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
+	fuji_check_strict_property(cam, ptp);
 	int code = ptp->params[0];
 	struct Fuji *f = fuji(cam);
 	if (code == PTP_DPC_FUJI_StorageID_D244 && f->storage_slot)
@@ -1101,6 +1111,7 @@ void fuji_register_d212(vcam *cam) {
 }
 
 int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
+	fuji_check_strict_property(cam, ptp);
 	struct Fuji *f = fuji(cam);
 	vcam_log("Get property %X", ptp->params[0]);
 	int data = -1;
@@ -1157,6 +1168,11 @@ int ptp_fuji_getdevicepropvalue_write(vcam *cam, ptpcontainer *ptp) {
 		}
 		break;
 	case PTP_DPC_FUJI_StorageID_D244:
+		if (f->camera_state == FUJI_FULL_ACCESS) {
+			vcam_log("Fuji: disconnecting after D244 read in full access mode");
+			f->disconnect_client = 1;
+			return 1;
+		}
 		data = f->storage_slot;
 		fuji_mark_image_import_step(cam, FUJI_IMPORT_STEP_D244_GET);
 		ptp_senddata(cam, ptp->code, (unsigned char *)&data, 1);
