@@ -1,7 +1,7 @@
 FROM debian:13-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends bash meson cmake ninja-build gcc g++ pkg-config libusb-1.0-0-dev libglib2.0-dev libsoup-3.0-dev pandoc
-RUN apt-get install -y --no-install-recommends libexif-dev hostapd iptables busybox docker.io iproute2 iw rfkill udhcpd
+RUN apt-get install -y --no-install-recommends libexif-dev libjpeg-dev hostapd iptables busybox docker.io iproute2 iw rfkill udhcpd
 
 RUN mkdir -p /var/lib/misc
 

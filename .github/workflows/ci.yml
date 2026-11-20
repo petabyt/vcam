@@ -30,7 +30,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build gcc libusb-1.0-0-dev libexif-dev pkg-config
+          sudo apt-get install -y cmake ninja-build gcc libusb-1.0-0-dev libexif-dev libjpeg-dev pkg-config
 
       - name: Build
         run: |
@@ -55,7 +55,7 @@ jobs:
       - name: Install gphoto2 (distro packages)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gphoto2 libgphoto2-dev libusb-1.0-0-dev libexif-dev
+          sudo apt-get install -y gphoto2 libgphoto2-dev libusb-1.0-0-dev libexif-dev libjpeg-dev
           echo "gphoto2 CLI: $(gphoto2 --version 2>/dev/null | head -1)"
           echo "libgphoto2: $(dpkg -s libgphoto2-6t64 2>/dev/null | grep ^Version || dpkg -s libgphoto2-6 | grep ^Version)"
 
